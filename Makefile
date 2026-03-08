@@ -1,48 +1,57 @@
-# Makefile for building the project with OpenFHE options
-
 .PHONY: all build build-dynamic clean clean-openfhe help
 
 # Default target
 all: build
 
-# Build OpenFHE locally and link statically
+############
+# Building #
+############
+
+# Build OpenFHE locally and link statically (no -static flag, just static archives)
 build:
-	@echo "Building OpenFHE locally..."
+	@echo "Building OpenFHE locally (static archives)..."
 	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && make -j$(shell nproc)
-	@echo "Building project with local OpenFHE..."
+	@echo "Building project with static OpenFHE..."
 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && make -j$(shell nproc)
 
-# Install OpenFHE system-wide and link dynamically
-# For faster and smaller build on systems that already have OpenFHE installed
+# Build using vendored OpenFHE shared libraries (no sudo required)
 build-dynamic:
-	@echo "Installing OpenFHE system-wide..."
-	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc) && sudo make install
-	@echo "Building project with system OpenFHE..."
-	@mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
+	@echo "Building OpenFHE locally (shared libraries)..."
+	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
+	@echo "Building project with shared OpenFHE..."
+	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
 
-# Windows
-build-win:
-	@echo "TODO: Not implemented..."
+# 
+run: 
+	@./build/test
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning project build..."
-	@rm -rf build
+############
+# Clean-up #
+############
+
+# Clean everything
+clean-all: clean clean-openfhe
 
 # Clean OpenFHE build
 clean-openfhe:
 	@echo "Cleaning OpenFHE build..."
 	@rm -rf vendors/openfhe-development/build
 
-# Clean everything
-clean-all: clean clean-openfhe
+# Clean build artifacts
+clean-build:
+	@echo "Cleaning project build..."
+	@rm -rf build
 
-# Help target
+
+################
+# Instructions #
+################
+
 help:
 	@echo "Available targets:"
-	@echo "  build        	- Build OpenFHE locally and link project statically"
-	@echo "  build-dynamic 	- Install OpenFHE system-wide and link project dynamically"
-	@echo "  clean        	- Clean project build artifacts"
-	@echo "  clean-openfhe 	- Clean OpenFHE build artifacts"
-	@echo "  clean-all    	- Clean all build artifacts"
-	@echo "  help         	- Show this help message"
+	@echo "  build          - Build OpenFHE vendored (static archives) and link project against them"
+	@echo "  build-dynamic  - Build OpenFHE vendored (shared libs) and link project dynamically"
+	@echo "  clean          - Clean project build artifacts"
+	@echo "  clean-openfhe  - Clean OpenFHE build artifacts"
+	@echo "  clean-all      - Clean all build artifacts"
+	@echo "  help           - Show this help message"
