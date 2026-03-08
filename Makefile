@@ -3,39 +3,38 @@
 # Default target
 all: build
 
-############
-# Building #
-############
+#########
+# Build #
+#########
 
 # Build OpenFHE locally and link statically (no -static flag, just static archives)
 build:
-	@echo "Building OpenFHE locally (static archives)..."
-	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && make -j$(shell nproc)
+	@echo "Building OpenFHE as static library (local install)..."
+	@cd vendors/openfhe-development && mkdir -p build && cd build && \
+		cmake .. -DBUILD_STATIC=ON -DCMAKE_INSTALL_PREFIX=../../install && \
+		make && make install -j$(shell nproc)
 	@echo "Building project with static OpenFHE..."
 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && make -j$(shell nproc)
 
 # Build using vendored OpenFHE shared libraries (no sudo required)
-build-dynamic:
-	@echo "Building OpenFHE locally (shared libraries)..."
-	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
-	@echo "Building project with shared OpenFHE..."
-	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
+# build-dynamic:
+# 	@echo "Building OpenFHE locally (shared libraries)..."
+# 	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
+# 	@echo "Building project with shared OpenFHE..."
+# 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
 
-# 
-run: 
-	@./build/test
 
 ############
 # Clean-up #
 ############
 
 # Clean everything
-clean-all: clean clean-openfhe
+clean: clean-build clean-openfhe
 
 # Clean OpenFHE build
 clean-openfhe:
 	@echo "Cleaning OpenFHE build..."
-	@rm -rf vendors/openfhe-development/build
+	@rm -rf vendors/openfhe-development/build vendors/install
 
 # Clean build artifacts
 clean-build:

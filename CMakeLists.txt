@@ -20,8 +20,8 @@ project(sPAR CXX)
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
-# TODO: Pass as -D command line argument
-set(OpenFHE_DIR vendors/openfhe-development/build)
+# Static files are built into this directory (via -DCMAKE_INSTALL_PREFIX)
+set(OpenFHE_DIR vendors/install/lib/OpenFHE)
 
 find_package(OpenFHE CONFIG REQUIRED)
 if(OpenFHE_FOUND)
@@ -62,5 +62,6 @@ endif()
 ### ADD YOUR EXECUTABLE(s) HERE
 ### add_executable(EXECUTABLE-NAME SOURCES)
 ###
-### EXAMPLE:
-add_executable(test src/simple-real-numbers.cpp)
+add_executable(simple-real-numbers src/examples/simple-real-numbers.cpp)
+add_executable(simple-integers-bgvrns src/examples/simple-integers-bgvrns.cpp)
+add_executable(simple-integers src/examples/simple-integers.cpp)

@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/vendors/install/include/openfhe",
+                "${workspaceFolder}/vendors/install/include/openfhe/core",
+                "${workspaceFolder}/vendors/install/include/openfhe/pke",
+                "${workspaceFolder}/vendors/install/include/openfhe/binfhe"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
