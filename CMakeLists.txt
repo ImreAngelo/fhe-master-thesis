@@ -59,6 +59,11 @@ else()
     link_libraries(${OpenFHE_SHARED_LIBRARIES})
 endif()
 
+###
+### Include source files
+include_directories(src)
+
+
 ### ADD YOUR EXECUTABLE(s) HERE
 ### add_executable(EXECUTABLE-NAME SOURCES)
 ###

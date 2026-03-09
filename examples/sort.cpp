@@ -1,6 +1,8 @@
 #include "openfhe.h"
+#include "testing/Timer.h"
 
 using namespace lbcrypto;
+using namespace testing;
 
 // TODO: Pass via make test + cmake
 #define TEST
@@ -249,12 +251,18 @@ int main()
     sorted_vec.reserve(2);
 
 #ifdef TEST_ONE
+{
+    Timer t("Test #1");
     sorted_vec = Client::sort_two_unpacked(0.25, -0.5);
     std::cout << "Output #1: " << sorted_vec[0] << ", " << sorted_vec[1] << std::endl;
+}
 #endif
 #ifdef TEST_TWO
+{
+    Timer t("Test #2");
     sorted_vec = Client::sort_two(0.25, -0.5);
     std::cout << "Output #2: " << sorted_vec[0] << ", " << sorted_vec[1] << std::endl;
+}
 #endif
 
     return 0;
