@@ -62,6 +62,7 @@ endif()
 ### ADD YOUR EXECUTABLE(s) HERE
 ### add_executable(EXECUTABLE-NAME SOURCES)
 ###
-add_executable(simple-real-numbers src/examples/simple-real-numbers.cpp)
-add_executable(simple-integers-bgvrns src/examples/simple-integers-bgvrns.cpp)
-add_executable(simple-integers src/examples/simple-integers.cpp)
+add_executable(simple-real-numbers examples/simple-real-numbers.cpp)
+add_executable(simple-integers-bgvrns examples/simple-integers-bgvrns.cpp)
+add_executable(simple-integers examples/simple-integers.cpp)
+add_executable(compare examples/compare.cpp)
