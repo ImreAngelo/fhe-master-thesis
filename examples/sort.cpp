@@ -2,34 +2,12 @@
 
 using namespace lbcrypto;
 
-// TODO: Pass via make test + cmake
-#define TEST
+#define TEST_ONE
 #ifdef TEST
 #define TEST_ONE
 #define TEST_TWO
 #endif
 
-// Return wether x > 0, given that |a| < 1, by mapping x_i -> [-1, 1]
-template <typename T>
-Ciphertext<T> compare(CryptoContext<T> cc, Ciphertext<T> x, uint32_t iterations = 1)
-{
-    // TODO: Create cryptocontext independently (read serialized)
-
-    // Converges to sign(x)
-    // Newtons method
-    for(uint32_t i = 0; i < iterations; i++) {
-        auto a = cc->EvalMult(x, 0.5);
-        auto b = cc->EvalMult(x, x);
-        b = cc->EvalSub(3, b);
-        x = cc->EvalMult(a, b);
-    }
-    
-    // // Map to {0, 1}
-    // cc->EvalAddInPlace(x, 1.0);
-    // cc->EvalMultInPlace(x, 0.5);
-
-    return x;
-}
 
 // Compute minimax coefficients for domain [delta, 1]
 // p(x) = c1*x + c3*x^3 approximates sign(x) on [delta, 1]
@@ -41,11 +19,13 @@ Ciphertext<T> minimax_seed(CryptoContext<T> cc, Ciphertext<T> x, double delta)
     double c3 = -6.0 / (2*S*xs + 3*(S - 1));
     double c1 = -c3 * S;
 
-    auto x2 = cc->EvalMult(x, x);
-    auto x3 = cc->EvalMult(x2, x);
+    // 2 ciphertext multiplications = 2 levels consumed
+    auto x2     = cc->EvalMult(x, x);        // x²
+    auto x3     = cc->EvalMult(x2, x);       // x³
 
-    auto result = cc->EvalMult(x,  c1);
-    cc->EvalAddInPlace(result, cc->EvalMult(x3, c3));
+    // scalar multiplications are free (no level consumed)
+    auto result = cc->EvalMult(x,  c1);      // c₁x
+    cc->EvalAddInPlace(result, cc->EvalMult(x3, c3));  // + c₃x³
 
     return result;
 }
@@ -53,7 +33,7 @@ Ciphertext<T> minimax_seed(CryptoContext<T> cc, Ciphertext<T> x, double delta)
 // Return wether x > 0 by mapping x_i -> {-1, 1}, 
 // given that x is in [-1, -delta) U (delta, 1]
 template <typename T>
-Ciphertext<T> compare_minimax(CryptoContext<T> cc, Ciphertext<T> x, uint32_t iterations = 2, double delta = 0.01)
+Ciphertext<T> compare_minimax(CryptoContext<T> cc, Ciphertext<T> x, uint32_t iterations = 2, double delta = 0.001)
 {
     // Seed minimax
     x = minimax_seed(cc, x, delta);
@@ -141,27 +121,6 @@ int main()
     for(uint32_t i = 1; i <= (multDepth - 1)/2; i++)
     {
         auto ci = compare(cc, ciphertext, i);
-        
-        Plaintext result;
-        cc->Decrypt(keys.secretKey, ci, &result);
-    
-        result->SetLength(batchSize);
-    
-        std::cout.precision(5);
-        std::cout << i << " iterations - " << "Output: " << result;
-
-        res = result->GetRealPackedValue();
-        
-        // Mean squared error
-        auto err = mean_square_error(answer, res);
-        std::cout << "Error: " << err << std::endl;
-    }
-#endif
-#ifdef TEST_TWO
-    // Convert to vector of {-1, 1}
-    for(uint32_t i = 1; i <= (multDepth - 1)/2; i++)
-    {
-        auto ci = compare_minimax(cc, ciphertext, i);
         
         Plaintext result;
         cc->Decrypt(keys.secretKey, ci, &result);
