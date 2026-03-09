@@ -63,7 +63,8 @@ int main()
     std::cout << "Hello world!" << std::endl;
 
 #ifdef TEST
-
+{   
+    Timer t("Full test");
     uint32_t depth = 3;
 
     CCParams<CryptoContextBGVRNS> params;
@@ -85,7 +86,6 @@ int main()
         cc->EvalMultKeyGen(keys.secretKey);
     }
     {
-        Timer t("Encrypt + Test");
 
         Plaintext plaintext = cc->MakePackedPlaintext({ 10 });
         auto ciphertext = cc->Encrypt(keys.publicKey, plaintext);
@@ -103,18 +103,24 @@ int main()
         auto res = Server::HomPlacing(cc, ciphertext, bits);
 
         // Client
+        std::vector<int64_t> buckets;
+        buckets.reserve(std::pow(2, depth));
+
         std::cout << "Placing: ";
         for(auto xi : res)
         {
             Plaintext pi;
             cc->Decrypt(keys.secretKey, xi, &pi);
             pi->SetLength(1);
-            std::cout << pi->GetPackedValue()[0] << " ";
+
+            auto val = pi->GetPackedValue()[0];
+            buckets.emplace_back(val);
+            std::cout << val << " ";
         }
 
         std::cout << "\n";
     }
-
+}
 #endif
 
     return 0;
