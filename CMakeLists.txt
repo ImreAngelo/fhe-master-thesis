@@ -72,3 +72,5 @@ add_executable(simple-integers-bgvrns examples/simple-integers-bgvrns.cpp)
 add_executable(simple-integers examples/simple-integers.cpp)
 add_executable(compare examples/compare.cpp)
 add_executable(sort examples/sort.cpp)
+
+add_executable(app src/protocol/HomPlacing.cpp)
