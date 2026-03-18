@@ -64,6 +64,10 @@ endif()
 include_directories(src)
 
 
+### FHE utility library (RGSW etc.)
+add_library(fhe STATIC src/fhe/lib/RGSW.cpp)
+target_include_directories(fhe PUBLIC src)
+
 ### ADD YOUR EXECUTABLE(s) HERE
 ### add_executable(EXECUTABLE-NAME SOURCES)
 ###
@@ -72,5 +76,7 @@ add_executable(simple-integers-bgvrns examples/simple-integers-bgvrns.cpp)
 add_executable(simple-integers examples/simple-integers.cpp)
 add_executable(compare examples/compare.cpp)
 add_executable(sort examples/sort.cpp)
+add_executable(dot examples/dot.cpp)
 
 add_executable(app src/protocol/HomPlacing.cpp)
+target_link_libraries(app fhe)

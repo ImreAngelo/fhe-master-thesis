@@ -15,9 +15,10 @@
 
 <h2 id="build">Build Instructions</h2>
 
-1. Clone the repo and initialize submodules recursively
-2. Run `make build` to build the project
-3. Profit
+1. Clone the repo `git clone git@github.com:ImreAngelo/fhe-master-thesis.git` 
+2. Initialize submodules recursively `git submodule update --init --recursive`
+3. Run `make build` to build OpenFHE and the project
+4. Profit
 
 > [!IMPORTANT]
 > ```

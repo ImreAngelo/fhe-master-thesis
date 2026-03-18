@@ -1,4 +1,6 @@
-.PHONY: all build build-dynamic clean clean-openfhe help
+.PHONY: all app build build-dynamic clean clean-openfhe help
+
+TARGETS := app
 
 # Default target
 all: build
@@ -22,6 +24,9 @@ build:
 # 	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
 # 	@echo "Building project with shared OpenFHE..."
 # 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
+
+$(TARGETS):
+	cmake --build build --target $@ && ./build/$@
 
 
 ############
