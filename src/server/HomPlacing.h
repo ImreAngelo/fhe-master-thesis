@@ -60,4 +60,24 @@ namespace Server
 
         return leaves;
     }
+
+    // /**
+    //  * @brief Algorithm 2 without external product. Places value in the slot encoded in bits. 
+    //  * @tparam Element DCRTPoly
+    //  * @param cc The crypto context 
+    //  * @param value Encrypted value to ble placed in slot n
+    //  * @param A 3 encrypted values
+    //  */
+    // template <typename Element>
+    // CT<Element> HomPlacingStarNoExt(
+    //     const CC<Element>&                  cc,
+    //     const CT<Element>&                  value,
+    //     const std::vector<CTVec<Element>>   A
+    // )
+    // {
+        
+
+    //     // hasWritten
+    //     return value; 
+    // }
 }
