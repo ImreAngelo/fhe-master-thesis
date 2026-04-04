@@ -74,3 +74,4 @@ include_directories(src)
 # add_executable(sort examples/sort.cpp)
 
 add_executable(app tests/algorithm-1.cpp)
+add_executable(test-rgsw tests/test-rgsw.cpp src/core/RGSW.cpp)

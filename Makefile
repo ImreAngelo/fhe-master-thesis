@@ -1,4 +1,4 @@
-.PHONY: all app build build-dynamic clean clean-openfhe help
+.PHONY: all app build build-dynamic clean clean-openfhe help test-rgsw
 
 TARGETS := app
 
