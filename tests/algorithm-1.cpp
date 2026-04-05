@@ -1,7 +1,6 @@
 #include "testing/Timer.h"
 #include "server/HomPlacing.h"
 #include "openfhe.h"
-#include <fhe/ExpandRLWE.h>
 
 using namespace lbcrypto;
 
@@ -21,65 +20,65 @@ int main()
 
 void TestExpandRLWE() 
 {
-    using testing::Timer;
-    using Ciphertext = Ciphertext<DCRTPoly>;
+    // using testing::Timer;
+    // using Ciphertext = Ciphertext<DCRTPoly>;
 
-    constexpr uint32_t depth  = 2;
-    // constexpr int64_t  target = 2;   // target slot (binary: 10)
+    // constexpr uint32_t depth  = 2;
+    // // constexpr int64_t  target = 2;   // target slot (binary: 10)
 
-    // Set up BGV-rns
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(depth);
-    params.SetPlaintextModulus(65537);
+    // // Set up BGV-rns
+    // CCParams<CryptoContextBGVRNS> params;
+    // params.SetMultiplicativeDepth(depth);
+    // params.SetPlaintextModulus(65537);
 
-    CryptoContext<DCRTPoly> cc;
-    KeyPair<DCRTPoly>       keys;
+    // CryptoContext<DCRTPoly> cc;
+    // KeyPair<DCRTPoly>       keys;
     
-    {
-        Timer t("Setup");
-        cc = GenCryptoContext(params);
-        cc->Enable(PKE);
-        cc->Enable(LEVELEDSHE);
+    // {
+    //     Timer t("Setup");
+    //     cc = GenCryptoContext(params);
+    //     cc->Enable(PKE);
+    //     cc->Enable(LEVELEDSHE);
         
-        keys = cc->KeyGen();
-        cc->EvalMultKeyGen(keys.secretKey);
-    }    
+    //     keys = cc->KeyGen();
+    //     cc->EvalMultKeyGen(keys.secretKey);
+    // }    
 
-    std::cout << "Setup complete" << std::endl; 
+    // std::cout << "Setup complete" << std::endl; 
 
-    // Generate automorphism keys (client-side, needs secret key)
-    // uint32_t n = cc->GetRingDimension();
-    // std::cout << "Ring dimenson: " << n << std::endl;
+    // // Generate automorphism keys (client-side, needs secret key)
+    // // uint32_t n = cc->GetRingDimension();
+    // // std::cout << "Ring dimenson: " << n << std::endl;
 
-    // uint32_t n = 6;
+    // // uint32_t n = 6;
 
-    auto indices = Server::ExpandRLWEAutoIndices(cc->GetRingDimension(), depth);
+    // auto indices = Server::ExpandRLWEAutoIndices(cc->GetRingDimension(), depth);
 
-    std::cout << "Indices: ";
-    for(auto i : indices) {
-        std::cout << i << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "Indices: ";
+    // for(auto i : indices) {
+    //     std::cout << i << " ";
+    // }
+    // std::cout << std::endl;
 
-    // auto autoKeys = cc->EvalAutomorphismKeyGen(keys.secretKey, indices);
+    // // auto autoKeys = cc->EvalAutomorphismKeyGen(keys.secretKey, indices);
 
-    std::vector<uint32_t> indexList = {1, 2};
-    auto autoKeys = cc->EvalAutomorphismKeyGen(keys.secretKey, indexList);
+    // std::vector<uint32_t> indexList = {1, 2};
+    // auto autoKeys = cc->EvalAutomorphismKeyGen(keys.secretKey, indexList);
 
-    std::cout << "Generated automorphism keys" << std::endl; 
+    // std::cout << "Generated automorphism keys" << std::endl; 
 
-    // Encrypt the L index bits (binary encoding of target, MSB first)
-    Plaintext packedPt = cc->MakePackedPlaintext({ 1, 0 });
-    Ciphertext packedCt = cc->Encrypt(keys.secretKey, packedPt); 
+    // // Encrypt the L index bits (binary encoding of target, MSB first)
+    // Plaintext packedPt = cc->MakePackedPlaintext({ 1, 0 });
+    // Ciphertext packedCt = cc->Encrypt(keys.secretKey, packedPt); 
     
-    std::cout << "Encrypted message" << std::endl; 
+    // std::cout << "Encrypted message" << std::endl; 
 
-    /// ---- SERVERSIDE -----
+    // /// ---- SERVERSIDE -----
 
-    // Expand (server-side, no secret key needed)
-    auto expanded = Server::ExpandRLWE(cc, packedCt, depth, *autoKeys);
+    // // Expand (server-side, no secret key needed)
+    // auto expanded = Server::ExpandRLWE(cc, packedCt, depth, *autoKeys);
     
-    std::cout << "Expanded to RGSW" << std::endl; 
+    // std::cout << "Expanded to RGSW" << std::endl; 
 }
 
 

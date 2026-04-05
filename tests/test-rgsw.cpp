@@ -6,6 +6,11 @@
 #include <cstdint>
 #include <iostream>
 
+// Test B
+#include "openfhe.h"
+#include "core/include/params.h"
+#include "core/include/context.h"
+
 using namespace core;
 using namespace lbcrypto;
 
@@ -17,12 +22,58 @@ static int64_t centeredDiff(uint64_t a, uint64_t b, uint64_t Q) {
     return d;
 }
 
+extern void TestA();
+extern void TestB();
+
 int main() {
+    // TestA();
+    TestB();
+    return 0;
+}
+
+void TestB() {
+    std::cout << "Running Test B" << std::endl;
+
+    // Step 1: Set CryptoContext
+    CCParams<CryptoContextRGSWBGV> parameters;
+    parameters.SetPlaintextModulus(65537);
+    parameters.SetMultiplicativeDepth(2);
+    parameters.SetGadgetBase(2);
+    parameters.SetGadgetDigits(3);
+
+    // auto Q = ... 
+    // parameters.SetRGSWModulus(Q);
+
+    CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    
+    // TODO: enable when supported by the scheme
+    // cc->Enable(MULTIPARTY); 
+
+    // DO NOT: Build RGSWParams from the same CCParams when needed:
+    // DO NOT: auto rgswParams = RGSWParams::Make(params.GetRingDim(), Q, params.GetGadgetBase());
+
+    // Step 2: Key Generation
+    auto keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    // cc->RGSWSecretKeyGen(keyPair.secretKey); // TODO: Automorphism key for HomExpand ???
+
+    // Step 3: Encryption
+    Plaintext plaintext = cc->MakePackedPlaintext({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    auto rlweCiphertext = cc->Encrypt(keyPair.publicKey, plaintext);
+    auto rgswCiphertext = cc->EncryptRGSW(keyPair.publicKey, plaintext);
+}
+
+
+void TestA() {
     // -------------------------------------------------------------------------
     // Phase 1: Params sanity
     // -------------------------------------------------------------------------
     const uint32_t N     = 256;
-    const uint32_t baseB = 1 << 3; // B = 8
+    const uint32_t baseB = 2; // 1 << 3; // B = 8
 
     // LastPrime<NativeInteger>(bits, cyclotomic_order): largest prime p ≤ 2^bits
     // with p ≡ 1 (mod cyclotomic_order), required for NTT to exist.
@@ -125,7 +176,7 @@ int main() {
     uint64_t ep0c0   = decEp0[0].ConvertToInt<uint64_t>();
     int64_t  diffEp0 = centeredDiff(ep0c0, 0, Qval);
 
-    std::cout << "[Phase 4] RGSW(0) ⊡ RLWE(1) decrypt coeff[0] = " << ep0c0
+    std::cout << "[Phase 4] RGSW(0) * RLWE(1) decrypt coeff[0] = " << ep0c0
               << "  (expected ~0, diff=" << diffEp0 << ")\n";
     assert(std::abs(diffEp0) < static_cast<int64_t>(Qval / 8));
 
@@ -153,5 +204,4 @@ int main() {
     std::cout << "[Phase 5] PASSED\n\n";
 
     std::cout << "All tests passed.\n";
-    return 0;
 }
