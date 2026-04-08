@@ -49,10 +49,9 @@ public:
 
         validateParametersForCryptocontext(parameters);
 
-        // genCryptoContextBGVRNSInternal is templated on the generator type and
-        // reads all parameters through the CCParams<> interface, which
-        // CCParams<CryptoContextRGSWBGV> satisfies via inheritance from
-        // CCParams<CryptoContextBGVRNS>.
+        // genCryptoContextBGVRNSInternal is templated on the generator type and reads all parameters 
+        // through the CCParams<> interface, which CCParams<CryptoContextRGSWBGV> satisfies via inheritance 
+        // from CCParams<CryptoContextBGVRNS>.
         return genCryptoContextBGVRNSInternal<CryptoContextRGSWBGV, Element>(parameters);
     }
 };
