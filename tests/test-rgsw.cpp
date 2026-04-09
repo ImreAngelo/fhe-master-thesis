@@ -35,13 +35,20 @@ constexpr inline T Pow2(T k) {
 template <typename T>
 constexpr inline std::vector<T> ExpandRLWEIndices(T log_n) {
     std::vector<T> sizes;
-    for (uint32_t i = 1; i <= log_n; i++)
-        sizes.push_back((T(1) << (log_n - i + 1)) + 1);
+    for (uint32_t i = 0; i < log_n; i++)
+        sizes.push_back((T(1) << (log_n - i)) + 1);
     return sizes;
 }
 
 /**
  * @brief Algorithm 3 of https://eprint.iacr.org/2019/736
+ * 
+ * @param cc the crypto context
+ * @param ct the ciphertext to expand
+ * @param log_n the number of digits in the binary representation of n, where n is
+ * the number of ciphertexts in the output RGSW ciphertext
+ * @param keyMap the evaluation keys for the automorphisms index k
+ * @returns a vector of ciphertexts c[i] that encrypt n * ct[i]
  */
 template <typename C, typename T, typename N = uint32_t>
 inline std::vector<Ciphertext<T>> ExpandRLWE(
@@ -54,10 +61,13 @@ inline std::vector<Ciphertext<T>> ExpandRLWE(
     std::vector<Ciphertext<T>> c(n);
     c[0] = ct;
     
-    for(N i = 1; i <= log_n; i++) {
-        N k = Pow2(log_n - i + 1) + 1;
-        // NOTE: Original paper uses b in [0, 2^i - 1], which is probably meant to be [0, 2^{i - 1}] to not exceed n
-        for(N b = 0; b < Pow2(i - 1); b++) {
+    for(N i = 0; i < log_n; i++) {
+        N k = Pow2(log_n - i) + 1;
+        std::cout << "i: " << i << ", k: " << k << std::endl;
+        std::cout << "[0," << Pow2(i) - 1 << "]" << std::endl;
+        // NOTE: Original paper uses b in [0, 2^i - 1], which is probably meant to be [0, 2^{i - 1} - 1] to not exceed n
+        //       We also 0-index i, so we do not need to subtract 1
+        for(N b = 0; b < Pow2(i); b++) {
             auto cb = c[b];
             auto subs = cc->EvalAutomorphism(cb, k, *keyMap);
             auto diff = cc->EvalSub(cb, subs);
