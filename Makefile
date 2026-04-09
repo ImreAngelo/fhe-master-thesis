@@ -1,4 +1,6 @@
-.PHONY: all build build-dynamic clean clean-openfhe help
+.PHONY: all app build build-dynamic clean clean-openfhe help test-rgsw
+
+TARGETS := app test-rgsw
 
 # Default target
 all: build
@@ -23,6 +25,11 @@ build:
 # 	@echo "Building project with shared OpenFHE..."
 # 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
 
+$(TARGETS):
+	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON -DNATIVE_SIZE=64 && cmake --build . --target $@
+	@./build/$@
+	
+# TODO: Optimizations -j$(shell nproc)
 
 ############
 # Clean-up #
