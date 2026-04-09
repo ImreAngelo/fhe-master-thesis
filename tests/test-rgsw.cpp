@@ -27,6 +27,15 @@ constexpr inline T Pow2(T k) {
     return (T(1) << k);
 }
 
+template <typename T>
+constexpr inline T Log2(T n) {
+    T k = 0;
+    while ((T(1) << k) < n) {
+        k++;
+    }
+    return k;
+}
+
 /**
  * @brief Generates the indices used in Algorithm 3 of https://eprint.iacr.org/2019/736
  * 
@@ -36,7 +45,7 @@ template <typename T>
 constexpr inline std::vector<T> ExpandRLWEIndices(T log_n) {
     std::vector<T> sizes;
     for (uint32_t i = 0; i < log_n; i++)
-        sizes.push_back((T(1) << (log_n - i)) + 1);
+        sizes.push_back(Pow2(log_n - i) + 1);
     return sizes;
 }
 
@@ -55,7 +64,8 @@ inline std::vector<Ciphertext<T>> ExpandRLWE(
     CryptoContext<C> cc, 
     Ciphertext<T> ct, 
     N log_n,
-    std::shared_ptr<std::map<N, lbcrypto::EvalKey<T>>> keyMap
+    std::shared_ptr<std::map<N, lbcrypto::EvalKey<T>>> keyMap,
+    KeyPair<T> keys // DEBUG
 ) {
     auto n = N(1) << log_n;
     std::vector<Ciphertext<T>> c(n);
@@ -65,22 +75,49 @@ inline std::vector<Ciphertext<T>> ExpandRLWE(
         N k = Pow2(log_n - i) + 1;
         std::cout << "i: " << i << ", k: " << k << std::endl;
         std::cout << "[0," << Pow2(i) - 1 << "]" << std::endl;
+
         // NOTE: Original paper uses b in [0, 2^i - 1], which is probably meant to be [0, 2^{i - 1} - 1] to not exceed n
         //       We also 0-index i, so we do not need to subtract 1
         for(N b = 0; b < Pow2(i); b++) {
             auto cb = c[b];
+
+            Plaintext debug_cb;
+            cc->Decrypt(keys.secretKey, cb, &debug_cb);
+            debug_cb->SetLength(n * k);
+            std::cout << "cb: " << debug_cb << std::endl;
+
             auto subs = cc->EvalAutomorphism(cb, k, *keyMap);
-            auto diff = cc->EvalSub(cb, subs);
             auto sum = cc->EvalAdd(cb, subs);
+            auto diff = cc->EvalSub(cb, subs);
+            
+            // Multiply by X^{-k}
+            // NOTE: Paper is missing opening paranthesis
+            auto shifted      = cc->EvalRotate(diff, 1);
+            
+            // Debugging
+            Plaintext debug_shifted, debug_diff, debug_subs;
+            cc->Decrypt(keys.secretKey, subs, &debug_subs);
+            cc->Decrypt(keys.secretKey, diff, &debug_diff);
+            cc->Decrypt(keys.secretKey, shifted, &debug_shifted);
+            debug_subs->SetLength(n * k);
+            debug_diff->SetLength(n * k);
+            debug_shifted->SetLength(n * k);
+            std::cout << "Subs (k = " << k << "): " << debug_subs << std::endl;
+            std::cout << "Diff: " << debug_diff << std::endl;
+            std::cout << "Shifted: " << debug_shifted << std::endl;
 
-            auto r = (2 * n - k) % (2 * n);
-            std::vector<int64_t> mono(n, 0);
-            (r < n) ? (mono[r] = 1) : (mono[r - n] = -1);
-            auto ptMono   = cc->MakeCoefPackedPlaintext(mono);
-            auto shifted  = cc->EvalMult(diff, ptMono);
-
+            // Update
             c[2*b] = sum;
             c[2*b + 1] = shifted;
+
+            // Debugging
+            Plaintext debug_2b, debug_2b1;
+            cc->Decrypt(keys.secretKey, c[2*b], &debug_2b);
+            cc->Decrypt(keys.secretKey, c[2*b + 1], &debug_2b1);
+            debug_2b->SetLength(log_n * k);
+            debug_2b1->SetLength(log_n * k);
+            std::cout << "Intermediary [" << 2*b << "]:\t" << debug_2b << std::endl;
+            std::cout << "Intermediary [" << 2*b + 1 << "]:\t" << debug_2b1 << std::endl;
         }
     }
 
@@ -88,17 +125,19 @@ inline std::vector<Ciphertext<T>> ExpandRLWE(
 }
 
 void TestA() {
-    const uint32_t log_n = 3;
-    const uint32_t N = 16384; // Smallest recommended value with BGN-rns (l = 4) is 4096
+    const uint32_t n = 4;           // bits
+    const uint32_t log_n = Log2(n); // levels
+    const uint32_t N = 16384;       // Smallest recommended value with BGN-rns (l = 3)?
 
     CCParams<CryptoContextRGSWBGV> params;
     params.SetPlaintextModulus(65537);
     params.SetRingDim(N);
-    params.SetMultiplicativeDepth(4);
+    params.SetMultiplicativeDepth(2*log_n - 1);
     // params.SetGadgetBase(2);
     // params.SetGadgetDigits(log_n);
+    params.SetMaxRelinSkDeg(3);
 
-    std::cout << "Created params"<< std::endl;
+    std::cout << "Created params (depth = " << 2*log_n - 1 << ")" << std::endl;
 
     auto cc = GenCryptoContext(params);
     cc->Enable(PKE);
@@ -113,20 +152,41 @@ void TestA() {
     std::cout << "Created context" << std::endl;
 
     // Generate k-indices used in Algorithm 3 of https://eprint.iacr.org/2019/736
-    auto indices = ExpandRLWEIndices(log_n);
-    auto keyMap = cc->EvalAutomorphismKeyGen(keyPair.secretKey, indices);
+    auto indices = ExpandRLWEIndices(n);
     std::cout << "Generated indices: " << indices << std::endl;
-    
+
+    auto keyMap = cc->EvalAutomorphismKeyGen(keyPair.secretKey, indices);
     std::cout << "Created automorphism keys" << std::endl;
 
     // Encrypt a sample plaintext
-    Plaintext plaintext = cc->MakeCoefPackedPlaintext({1, 0, 1});
+    Plaintext plaintext = cc->MakeCoefPackedPlaintext({1, 1, 0, 1});
     auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
     
     std::cout << "Encrypted plaintext " << plaintext << std::endl;
 
+    auto subs = cc->EvalAutomorphism(ciphertext, 3, *keyMap); // DEBUG
+    Plaintext debug_subs;
+    cc->Decrypt(keyPair.secretKey, subs, &debug_subs);
+    debug_subs->SetLength(n * 3);
+    std::cout << "Automorphism subs: " << debug_subs << std::endl;
+
+    // cc->EvalFastRotation()
+
+    auto rotations = { 1, -1, -3, -5, -17, 17, 9, 5, 3 };
+    cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
+    // auto rotations = { -1, -2, -3, 16383, 16382, 16381, 1, 2, 3 };
+    // cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
+
+    // for(auto r : rotations) {
+    //     auto rotated = cc->EvalAtIndex(ciphertext, r);
+    //     Plaintext debug_rotated;
+    //     cc->Decrypt(keyPair.secretKey, rotated, &debug_rotated);
+    //     debug_rotated->SetLength(40);
+    //     std::cout << "Rotation " << r << ": " << debug_rotated << std::endl;
+    // }
+
     // Try expanding the ciphertext into an RGSW ciphertext using the generated automorphism keys
-    auto rgswCiphertext = ExpandRLWE(cc, ciphertext, log_n, keyMap);
+    auto rgswCiphertext = ExpandRLWE(cc, ciphertext, log_n, keyMap, keyPair); // log_n = 2 not 4 (n = number of bits?)
     
     std::cout << "Expanded RLWE" << std::endl;
 
@@ -138,7 +198,7 @@ void TestA() {
     
     for(const auto &c : rgswCiphertext) {
         cc->Decrypt(keyPair.secretKey, c, &decrypted);
-        decrypted->SetLength(3);
+        decrypted->SetLength(n);
         std::cout << decrypted << std::endl;
     }
 }
