@@ -1,33 +1,45 @@
-<h1>(Somewhat) Practical Anonymous Routing with Homomorphic Encryption</h1>
-<div style="text-align: center">
-    Many anonymous communication systems have been proposed and implemented with the goal of allowing users to exchange messages over a network without revealing who is communicating with whom. Most of these designs (e.g. Tor, I2P, mixnets) rely on the <span style="text-style: italic">threshold model</span> to provide anonymity, wherein some components of their infrastructure must be behaving honestly. Systems with stronger anonymity guarantees (e.g. DC-nets) generally suffer from poor scalability.
+# (Somewhat) Practical Anonymous Routing with Homomorphic Encryption
 
-    Some recent works have focused on creating anonymous communication systems that provide unconditional sender anonymity, even through untrusted or adversarial networks. This report explores one such proposal, sPAR, which uses fully homomorphic encryption to allow an untrusted server to shuffle encrypted messages without learning the underlying permutation. 
+Many anonymous communication systems have been proposed and implemented with the goal of allowing users to exchange messages over a network without revealing who is communicating with whom. Most of these designs (e.g., Tor, I2P, mixnets) rely on the _threshold model_ to provide anonymity, wherein some components of their infrastructure must be behaving honestly. Systems with stronger anonymity guarantees (e.g., DC-nets) generally suffer from poor scalability or are impractical to instantiate.
 
-    The report proposes a master thesis with the goal of evaluating the practicality of the design by providing a full implementation of sPAR, analysing its performance, and studying how well it scales to large networks.
-</div>
+This thesis examines a new construction called a (Somewhat) Practical Anonymous Router ([https://eprint.iacr.org/2025/860](https://eprint.iacr.org/2025/860)), which addresses the trust and practicality concerns of existing systems. The construction relies only on well-established FHE schemes, making it realistically implementable. While sPAR presents a promising new avenue for constructing anonymous communication systems, it remains a theoretical construction. A concrete implementation and a deeper investigation is therefore needed to evaluate its practical performance and viability in larger networks.
 
-<h2>Table of Contents</h2>
+In an effort to investigate sPAR's viability, this thesis aims to implement the scheme in C++ using OpenFHE and conduct a structured evaluation of its performance with respect to the number of participants in the system. 
+
+__Research Questions:__
+* What is the computational cost of sPAR, and how does it compare to the theoretical complexity described in the original paper?
+* How does the performance of sPAR scale with the number of participants, and at what point does it become impractical?
+
+
+
+## Table of Contents
 <ul>
-    <li><a href="#build">Build Instructions</a></li>
-    <li><a href="#structure">Project Structure</a></li>
+    <li><a href="#build-instructions">Build Instructions</a></li>
+    <li><a href="#project-layout">Project Layout</a></li>
 </ul>
 
-<h2 id="build">Build Instructions</h2>
+
+
+## Build Instructions
 
 1. Clone the repo `git clone git@github.com:ImreAngelo/fhe-master-thesis.git` 
 2. Initialize submodules recursively `git submodule update --init --recursive`
 3. Run `make build` to build OpenFHE and the project
 4. Profit
 
-> [!IMPORTANT]
-> ```
-> make build
+> [!NOTE]
+> Build tests with
+> 
+> ```sh
+> make test-[name of test]
 > ```
 
+<!-- TODO: -->
+<!-- 
 > [!TIP]
 > The project will statically link OpenFHE by default. 
-> To build the project using a version of OpenFHE already installed on the system, run `make build-dynamic`
+> To build the project using a version of OpenFHE already installed on the system, run `make build-dynamic` 
+-->
 
-
-<h2 id="structure">Project Structure</h2>
+## Project Layout
+Coming...
