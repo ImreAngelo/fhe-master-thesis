@@ -1,8 +1,6 @@
 #include "core/include/rgsw.h"
+#include "core/include/helpers.h"
 #include "openfhe.h"
-
-// modinv
-#include "math/nbtheory.h"
 
 #include <cassert>
 #include <cmath>
@@ -18,20 +16,6 @@ int main() {
     // TestA();
     TestB();
     return 0;
-}
-
-/**
- * @brief returns 2^n
- * @param n the exponent
- * @return 2^n
- */
-template <typename T>
-constexpr inline T Log2(T n) {
-    T k = 0;
-    while ((T(1) << k) < n) {
-        k++;
-    }
-    return k;
 }
 
 /// @brief Test ExpandRLWE
@@ -87,57 +71,6 @@ void TestA() {
     }
 }
 
-/**
- * @todo Choose integer size from (cmake) parameter
- * 
- * @param B Gadget base (defaults to 2)
- */
-template <typename T>
-std::vector<Ciphertext<T>> ScaleToGadgetLevels(
-    CryptoContext<T>& cc,
-    Ciphertext<T>& ct,
-    uint32_t ell,
-    usint B = 2
-) {
-    std::vector<Ciphertext<T>> result(ell);
-
-    // TODO: Assert overflow conditions
-    uint64_t t = (cc->GetCryptoParameters()->GetPlaintextModulus());
-
-    std::cout << "Scaling ciphertext to gadget levels with B = " << B << " and t = " << t << std::endl;
-
-#if defined(ASSERTIONS) && ASSERTIONS == 1
-    assert(GreatestCommonDivisor(B, t) == 1 && "B and t must be coprime for the modular inverse to exist");
-#endif
-
-    for (uint32_t k = 0; k < ell; k++) {
-        NativeInteger t_nat(t);
-        NativeInteger Bk(1);
-        NativeInteger B_nat(B);
-        for (uint32_t j = 0; j <= k; j++)
-            Bk = Bk.ModMul(B_nat, t_nat);
-
-        int64_t Bk_inv = static_cast<int64_t>(
-            Bk.ModInverse(t_nat).ConvertToInt<uint64_t>()
-        );
-
-        // Reduce to centered representation [-t/2, t/2]
-        if (Bk_inv > static_cast<int64_t>(t / 2))
-            Bk_inv -= static_cast<int64_t>(t);
-
-        std::cout << "Level " << k << ": B^k = " << Bk << ", B^{-k} = " << Bk_inv << std::endl;
-
-        // Scalar polynomial: just the constant term B^{-(k+1)}
-        std::vector<int64_t> scalar(ell, Bk_inv);
-
-        std::cout << "Scalar polynomial: " << scalar[0] << std::endl;
-        
-        auto pt   = cc->MakePackedPlaintext(scalar);
-        result[k] = cc->EvalMult(ct, pt);
-    }
-    return result;
-}
-
 /// @brief Test HomExpand
 void TestB() {
     const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
@@ -175,7 +108,7 @@ void TestB() {
     // cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
 
     // TODO: rename n to.. ell?
-    auto inputs = ScaleToGadgetLevels(cc, ciphertext, n);
+    auto inputs = core::server::ScaleToGadgetLevels(cc, ciphertext, n);
 
     // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
     std::cout << "Original plaintext: " << plaintext << std::endl;
@@ -186,6 +119,8 @@ void TestB() {
         plaintext->SetLength(n);
         std::cout << plaintext << std::endl;
     }
+
+    
 }
 
 /**
