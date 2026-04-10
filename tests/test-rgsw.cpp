@@ -1,6 +1,9 @@
 #include "core/include/rgsw.h"
 #include "openfhe.h"
 
+// modinv
+#include "math/nbtheory.h"
+
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -9,12 +12,19 @@
 using namespace lbcrypto;
 
 void TestA();
+void TestB();
 
 int main() {
-    TestA();
+    // TestA();
+    TestB();
     return 0;
 }
 
+/**
+ * @brief returns 2^n
+ * @param n the exponent
+ * @return 2^n
+ */
 template <typename T>
 constexpr inline T Log2(T n) {
     T k = 0;
@@ -24,16 +34,19 @@ constexpr inline T Log2(T n) {
     return k;
 }
 
+/// @brief Test ExpandRLWE
 void TestA() {
-    const uint32_t n = 4;           // bits
-    const uint32_t log_n = Log2(n); // levels
-    const uint32_t N = 16384;       // Smallest recommended value with BGN-rns (l = 3)?
+    const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
+
+    const uint32_t n = index.size(); // bits
+    const uint32_t log_n = Log2(n);  // levels
+    const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
 
     CCParams<CryptoContextBGVRNS> params;
     params.SetMultiplicativeDepth(2*log_n - 1);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(N);
-    params.SetMaxRelinSkDeg(3); // Needed for rotations (TODO: confirm with EvalFastRotate)
+    params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
     cc->Enable(PKE);
@@ -47,21 +60,21 @@ void TestA() {
 
     std::cout << "Created context" << std::endl;
 
-    // Encrypt a sample plaintext
+    // encrypt a sample plaintext
     Plaintext plaintext = cc->MakePackedPlaintext({1, 1, 0, 1});
     auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
     
     std::cout << "Encrypted plaintext " << plaintext << std::endl;
 
-    // Rotations used are [1, n)
+    // rotations used are [1, n)
     auto rotations = { 0, 1, 2, 3 };
     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
     
-    auto rgswCiphertext = core::server::ExpandRLWE(cc, ciphertext, 4, keyPair.publicKey);
+    auto rgswCiphertext = core::server::HoistedExpandRLWE(cc, ciphertext, 4, keyPair.publicKey);
     
     std::cout << "Expanded RLWE" << std::endl;
 
-    // Decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
+    // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
     Plaintext decrypted;
     
     std::cout << "Original plaintext: " << plaintext << std::endl;
@@ -71,6 +84,107 @@ void TestA() {
         cc->Decrypt(keyPair.secretKey, c, &decrypted);
         decrypted->SetLength(40);
         std::cout << decrypted << std::endl;
+    }
+}
+
+/**
+ * @todo Choose integer size from (cmake) parameter
+ * 
+ * @param B Gadget base (defaults to 2)
+ */
+template <typename T>
+std::vector<Ciphertext<T>> ScaleToGadgetLevels(
+    CryptoContext<T>& cc,
+    Ciphertext<T>& ct,
+    uint32_t ell,
+    usint B = 2
+) {
+    std::vector<Ciphertext<T>> result(ell);
+
+    // TODO: Assert overflow conditions
+    uint64_t t = (cc->GetCryptoParameters()->GetPlaintextModulus());
+
+    std::cout << "Scaling ciphertext to gadget levels with B = " << B << " and t = " << t << std::endl;
+
+#if defined(ASSERTIONS) && ASSERTIONS == 1
+    assert(GreatestCommonDivisor(B, t) == 1 && "B and t must be coprime for the modular inverse to exist");
+#endif
+
+    for (uint32_t k = 0; k < ell; k++) {
+        NativeInteger t_nat(t);
+        NativeInteger Bk(1);
+        NativeInteger B_nat(B);
+        for (uint32_t j = 0; j <= k; j++)
+            Bk = Bk.ModMul(B_nat, t_nat);
+
+        int64_t Bk_inv = static_cast<int64_t>(
+            Bk.ModInverse(t_nat).ConvertToInt<uint64_t>()
+        );
+
+        // Reduce to centered representation [-t/2, t/2]
+        if (Bk_inv > static_cast<int64_t>(t / 2))
+            Bk_inv -= static_cast<int64_t>(t);
+
+        std::cout << "Level " << k << ": B^k = " << Bk << ", B^{-k} = " << Bk_inv << std::endl;
+
+        // Scalar polynomial: just the constant term B^{-(k+1)}
+        std::vector<int64_t> scalar(ell, Bk_inv);
+
+        std::cout << "Scalar polynomial: " << scalar[0] << std::endl;
+        
+        auto pt   = cc->MakePackedPlaintext(scalar);
+        result[k] = cc->EvalMult(ct, pt);
+    }
+    return result;
+}
+
+/// @brief Test HomExpand
+void TestB() {
+    const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
+
+    const uint32_t n = index.size(); // bits
+    const uint32_t log_n = Log2(n);  // levels
+    const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
+
+    CCParams<CryptoContextBGVRNS> params;
+    params.SetMultiplicativeDepth(2*log_n - 1);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(N);
+    params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
+
+    CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
+
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    std::cout << "Created context" << std::endl;
+
+    // encrypt a sample plaintext
+    Plaintext plaintext = cc->MakePackedPlaintext(index);
+    auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
+    
+    std::cout << "Encrypted plaintext " << plaintext << std::endl;
+
+    // // rotations used are [1, n)
+    // auto rotations = { 0, 1, 2, 3 };
+    // cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
+
+    // TODO: rename n to.. ell?
+    auto inputs = ScaleToGadgetLevels(cc, ciphertext, n);
+
+    // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
+    std::cout << "Original plaintext: " << plaintext << std::endl;
+    std::cout << "Decrypted: " << std::endl; 
+    
+    for(const auto &c : inputs) {
+        cc->Decrypt(keyPair.secretKey, c, &plaintext);
+        plaintext->SetLength(n);
+        std::cout << plaintext << std::endl;
     }
 }
 
@@ -160,66 +274,102 @@ constexpr inline std::vector<T> ExpandRLWEIndices(T log_n) {
 /*
 template <typename T, typename N = uint32_t>
 inline std::vector<Ciphertext<T>> ExpandRLWE(
-    CryptoContext<T> cc, 
-    Ciphertext<T> ct, 
+    CryptoContext<T>& cc, 
+    Ciphertext<T>& ct,
     N log_n,
-    std::shared_ptr<std::map<N, lbcrypto::EvalKey<T>>> keyMap,
-    KeyPair<T> keys // DEBUG
+    std::shared_ptr<std::map<N, lbcrypto::EvalKey<T>>> keyMap
 ) {
     auto n = N(1) << log_n;
+
+    // The BGV/TFHE controversy
+    assert(n == cc->GetCryptoParameters()->GetRingDimension() && "n must be equal to the ring dimension for the ORAM expandRlwe to work");
+
     std::vector<Ciphertext<T>> c(n);
     c[0] = ct;
     
-    for(N i = 0; i < log_n; i++) {
+    // monomial X^{-2^i}
+    std::vector<int64_t> mono(n, 0);
+    
+    for(N i = 0; i < 4; i++) {
         N k = Pow2(log_n - i) + 1;
-        std::cout << "i: " << i << ", k: " << k << std::endl;
-        std::cout << "[0," << Pow2(i) - 1 << "]" << std::endl;
+        N stride = Pow2(i);
+
+        // Build X^{-stride} = -X^{ring_dim - stride}
+        mono[n - stride] = -1;
+        auto X_inv_stride = cc->MakeCoefPackedPlaintext(mono);
         
         // NOTE: Original paper uses b in [0, 2^i - 1], which is probably meant to be [0, 2^{i - 1} - 1] to not exceed n
         //       We also 0-index i, so we do not need to subtract 1
-        for(N b = 0; b < Pow2(i); b++) {
+        for(auto b = int(Pow2(i)) - 1; b >= 0; b--) {
             auto cb = c[b];
-            
-            Plaintext debug_cb;
-            cc->Decrypt(keys.secretKey, cb, &debug_cb);
-            debug_cb->SetLength(n * k);
-            std::cout << "cb: " << debug_cb << std::endl;
-            
             auto subs = cc->EvalAutomorphism(cb, k, *keyMap);
-            auto sum = cc->EvalAdd(cb, subs);
             auto diff = cc->EvalSub(cb, subs);
             
-            // Multiply by X^{-k}
-            // NOTE: Paper is missing opening paranthesis
-            auto shifted      = cc->EvalRotate(diff, 1);
-            
-            // Debugging
-            Plaintext debug_shifted, debug_diff, debug_subs;
-            cc->Decrypt(keys.secretKey, subs, &debug_subs);
-            cc->Decrypt(keys.secretKey, diff, &debug_diff);
-            cc->Decrypt(keys.secretKey, shifted, &debug_shifted);
-            debug_subs->SetLength(n * k);
-            debug_diff->SetLength(n * k);
-            debug_shifted->SetLength(n * k);
-            std::cout << "Subs (k = " << k << "): " << debug_subs << std::endl;
-            std::cout << "Diff: " << debug_diff << std::endl;
-            std::cout << "Shifted: " << debug_shifted << std::endl;
-            
-            // Update
-            c[2*b] = sum;
-            c[2*b + 1] = shifted;
-            
-            // Debugging
-            Plaintext debug_2b, debug_2b1;
-            cc->Decrypt(keys.secretKey, c[2*b], &debug_2b);
-            cc->Decrypt(keys.secretKey, c[2*b + 1], &debug_2b1);
-            debug_2b->SetLength(log_n * k);
-            debug_2b1->SetLength(log_n * k);
-            std::cout << "Intermediary [" << 2*b << "]:\t" << debug_2b << std::endl;
-            std::cout << "Intermediary [" << 2*b + 1 << "]:\t" << debug_2b1 << std::endl;
+            // Update rows
+            c[2*b] = cc->EvalAdd(cb, subs);
+            c[2*b + 1] = cc->EvalMult(diff, X_inv_stride);
         }
+        
+        mono[n - stride] = 0;
     }
     
     return c;
+}
+*/
+
+/*
+void TestB() {
+    const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
+
+    const uint32_t n = index.size(); // bits
+    const uint32_t log_n = Log2(n);  // levels
+    const uint32_t N = 65536;        // Smallest recommended value with BGN-rns (l = 3)?
+
+    CCParams<CryptoContextBGVRNS> params;
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(N);
+    params.SetMultiplicativeDepth(2*Log2(N) - 1);
+    params.SetMaxRelinSkDeg(3);
+
+    std::cout << "Created params (depth = " << 2*log_n - 1 << ")" << std::endl;
+
+    auto cc = GenCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
+
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    std::cout << "Created context" << std::endl;
+
+    // Generate k-indices used in Algorithm 3 of https://eprint.iacr.org/2019/736
+    auto indices = ExpandRLWEIndices(n);
+    std::cout << "Generated indices: " << indices << std::endl;
+
+    auto keyMap = cc->EvalAutomorphismKeyGen(keyPair.secretKey, indices);
+    std::cout << "Created automorphism keys" << std::endl;
+
+    Plaintext plaintext = cc->MakeCoefPackedPlaintext(index);
+    auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
+    
+    std::cout << "Encrypted plaintext " << plaintext << std::endl;
+
+    auto rgswCiphertext = ExpandRLWE(cc, ciphertext, n, keyMap); // n = number of bits
+ 
+    std::cout << "Expanded RLWE" << std::endl;
+
+    Plaintext decrypted;
+    
+    std::cout << "Original plaintext: " << plaintext << std::endl;
+    std::cout << "Decrypted plaintext: " << std::endl; 
+    
+    for(const auto &c : rgswCiphertext) {
+        cc->Decrypt(keyPair.secretKey, c, &decrypted);
+        decrypted->SetLength(n);
+        std::cout << decrypted << std::endl;
+    }
 }
 */
