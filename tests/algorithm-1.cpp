@@ -2,20 +2,9 @@
 #include "server/HomPlacing.h"
 #include "openfhe.h"
 
+#include <gtest/gtest.h>
+
 using namespace lbcrypto;
-
-extern void TestAlgorithm1();
-extern void TestAlgorithm2();
-extern void TestExpandRLWE();
-
-int main()
-{
-    TestAlgorithm1();
-    // TestExpandRLWE();
-    TestAlgorithm2();
-
-    return 0;
-}
 
 
 void TestExpandRLWE() 
@@ -248,3 +237,6 @@ void TestAlgorithm1()
         std::cout << "\n";
     }
 }
+
+TEST(Algorithm, HomPlacingNoExt)     { TestAlgorithm1(); }
+TEST(Algorithm, HomPlacingStarNoExt) { TestAlgorithm2(); }

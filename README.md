@@ -43,3 +43,18 @@ __Research Questions:__
 
 ## Project Layout
 Coming...
+
+
+## Unit Tests
+Unit tests are configured with [GoogleTest](https://github.com/google/googletest)
+
+> [!NOTE]
+> The make command accepts a specfic test as parameter
+>
+> ```sh
+> make test
+> make test-rgsw
+> ```
+
+> [!TIP]
+> [VSCode Extension for GoogleTest](https://github.com/matepek/vscode-catch2-test-adapter)

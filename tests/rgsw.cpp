@@ -2,21 +2,12 @@
 #include "core/include/helpers.h"
 #include "openfhe.h"
 
-#include <cassert>
+#include <gtest/gtest.h>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 
 using namespace lbcrypto;
-
-void TestA();
-void TestB();
-
-int main() {
-    TestA();
-    // TestB();
-    return 0;
-}
 
 // template <typename T>
 inline void PrintRGSW(const CryptoContext<DCRTPoly>& cc, KeyPair<DCRTPoly> keys, const std::vector<Ciphertext<DCRTPoly>>& vec, size_t columns) {
@@ -80,75 +71,77 @@ void TestA() {
 
 
 
-/// @brief Test HomExpand
-void TestB() {
-    const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
+// /// @brief Test HomExpand
+// void TestB() {
+//     const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
 
-    const uint32_t n = index.size(); // bits
-    const uint32_t log_n = Log2(n);  // levels
-    const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
+//     const uint32_t n = index.size(); // bits
+//     const uint32_t log_n = Log2(n);  // levels
+//     const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
 
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(2*log_n - 1);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(N);
-    params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
+//     CCParams<CryptoContextBGVRNS> params;
+//     params.SetMultiplicativeDepth(2*log_n - 1);
+//     params.SetPlaintextModulus(65537);
+//     params.SetRingDim(N);
+//     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
-    CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
-    cc->Enable(PKE);
-    cc->Enable(KEYSWITCH);
-    cc->Enable(LEVELEDSHE);
-    cc->Enable(ADVANCEDSHE);
+//     CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
+//     cc->Enable(PKE);
+//     cc->Enable(KEYSWITCH);
+//     cc->Enable(LEVELEDSHE);
+//     cc->Enable(ADVANCEDSHE);
 
-    KeyPair<DCRTPoly> keyPair;
-    keyPair = cc->KeyGen();
-    cc->EvalMultKeyGen(keyPair.secretKey);
+//     KeyPair<DCRTPoly> keyPair;
+//     keyPair = cc->KeyGen();
+//     cc->EvalMultKeyGen(keyPair.secretKey);
 
-    std::cout << "Created context" << std::endl;
+//     std::cout << "Created context" << std::endl;
 
-    // encrypt a sample plaintext
-    Plaintext plaintext = cc->MakePackedPlaintext(index);
-    auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
+//     // encrypt a sample plaintext
+//     Plaintext plaintext = cc->MakePackedPlaintext(index);
+//     auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
     
-    std::cout << "Encrypted plaintext " << plaintext << std::endl;
+//     std::cout << "Encrypted plaintext " << plaintext << std::endl;
 
-    // rotations used are [1, n)
-    auto rotations = { 0, 1, 2, 3 };
-    cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
+//     // rotations used are [1, n)
+//     auto rotations = { 0, 1, 2, 3 };
+//     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
 
-    // TODO: rename n to.. ell?
-    auto inputs = core::server::ScaleToGadgetLevels(cc, ciphertext, n);
+//     // TODO: rename n to.. ell?
+//     auto inputs = core::server::ScaleToGadgetLevels(cc, ciphertext, n);
 
-    // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
-    std::cout << "Original plaintext: " << plaintext << std::endl;
-    std::cout << "\nGadget scaled: " << std::endl; 
-    PrintRGSW(cc, keyPair, inputs, n);
+//     // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
+//     std::cout << "Original plaintext: " << plaintext << std::endl;
+//     std::cout << "\nGadget scaled: " << std::endl; 
+//     PrintRGSW(cc, keyPair, inputs, n);
 
-    auto rgswCiphertexts = std::vector<std::vector<Ciphertext<DCRTPoly>>>(n);
-    for(size_t i = 0; i < n; i++) {
-        rgswCiphertexts[i] = core::server::HoistedExpandRLWE(cc, inputs[i], n, keyPair.publicKey);
-        std::cout << std::endl << "RGSW Ciphertext " << i << ":" << std::endl;
-        PrintRGSW(cc, keyPair, rgswCiphertexts[i], n);
-    }
+//     auto rgswCiphertexts = std::vector<std::vector<Ciphertext<DCRTPoly>>>(n);
+//     for(size_t i = 0; i < n; i++) {
+//         rgswCiphertexts[i] = core::server::HoistedExpandRLWE(cc, inputs[i], n, keyPair.publicKey);
+//         std::cout << std::endl << "RGSW Ciphertext " << i << ":" << std::endl;
+//         PrintRGSW(cc, keyPair, rgswCiphertexts[i], n);
+//     }
 
-    // TODO: Create RGSW(-s)
-    auto rgsw_s = core::server::CreateRGSW_NegS(cc, keyPair, n, 2);
+//     // TODO: Create RGSW(-s)
+//     auto rgsw_s = core::server::CreateRGSW_NegS(cc, keyPair, n, 2);
 
-    // Print secret key
-    auto sk_poly = keyPair.secretKey->GetPrivateElement();
-    sk_poly.SetFormat(Format::EVALUATION);
-    auto& sk_eval = sk_poly.GetElementAtIndex(0);
+//     // Print secret key
+//     auto sk_poly = keyPair.secretKey->GetPrivateElement();
+//     sk_poly.SetFormat(Format::EVALUATION);
+//     auto& sk_eval = sk_poly.GetElementAtIndex(0);
 
-    std::cout << "Secret key: " << sk_eval << std::endl;
+//     std::cout << "Secret key: " << sk_eval << std::endl;
 
-    // Print RGSW encryption of secret key
-    std::cout << "RGSW(-s): " << std::endl;
-    PrintRGSW(cc, keyPair, rgsw_s, n);
+//     // Print RGSW encryption of secret key
+//     std::cout << "RGSW(-s): " << std::endl;
+//     PrintRGSW(cc, keyPair, rgsw_s, n);
 
-    // Final loop: external product RGSW(-s) with the expanded RLWE ciphertexts 
-    
-    // TODO: decrypt to check that we get the original plaintext back
-}
+//     // Final loop: external product RGSW(-s) with the expanded RLWE ciphertexts
+
+//     // TODO: decrypt to check that we get the original plaintext back
+// }
+
+TEST(RGSW, ExpandRLWEHoisted) { TestA(); }
 
 /**
  * @brief returns 2^n

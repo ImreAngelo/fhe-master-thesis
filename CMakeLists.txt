@@ -63,15 +63,15 @@ endif()
 ### Include source files
 include_directories(src)
 
+# ── Production binaries ──────────────────────────────────────────────────────
+# Uncomment each line when the corresponding source exists.
+# "make" / "make all" builds only what is listed here — tests are excluded.
+#
+# add_executable(app    src/main.cpp)
+# add_executable(client src/client/main.cpp)
+# add_executable(server src/server/main.cpp)
 
-### ADD YOUR EXECUTABLE(s) HERE
-### add_executable(EXECUTABLE-NAME SOURCES)
-###
-# add_executable(simple-real-numbers examples/simple-real-numbers.cpp)
-# add_executable(simple-integers-bgvrns examples/simple-integers-bgvrns.cpp)
-# add_executable(simple-integers examples/simple-integers.cpp)
-# add_executable(compare examples/compare.cpp)
-# add_executable(sort examples/sort.cpp)
-
-add_executable(app tests/algorithm-1.cpp)
-add_executable(test-rgsw tests/test-rgsw.cpp)
+# ── Test suite ───────────────────────────────────────────────────────────────
+# EXCLUDE_FROM_ALL keeps every test binary out of the default "make" target.
+# Use "make check" to build + run all tests, or "make run-<name>" for one test.
+add_subdirectory(tests EXCLUDE_FROM_ALL)

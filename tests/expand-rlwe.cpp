@@ -1,8 +1,6 @@
 #include "core/include/rgsw.h"
 #include "core/include/helpers.h"
-#include "openfhe.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -10,15 +8,6 @@
 
 using namespace lbcrypto;
 
-template <typename T>
-inline void PrintRGSW(const CryptoContext<T>& cc, KeyPair<T> keys, const std::vector<Ciphertext<T>>& vec, size_t columns) {
-    Plaintext plaintext;
-    for(const auto &c : vec) {
-        cc->Decrypt(keys.secretKey, c, &plaintext);
-        plaintext->SetLength(columns);
-        std::cout << plaintext << std::endl;
-    }
-}
 
 /**
  * @file tests/expand-rlwe.cpp
@@ -27,7 +16,7 @@ inline void PrintRGSW(const CryptoContext<T>& cc, KeyPair<T> keys, const std::ve
  * Should take an RLWE packed ciphertext with n slots and output 
  * n RLWE ciphertexts, each encrypting one slot
  */
-int main() {
+TEST(ExpandRLWE, HoistedExpandRLWE) {
 
     const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
 
@@ -75,6 +64,4 @@ int main() {
     PrintRGSW(cc, keyPair, rgswCiphertext, n);
 
     // TODO: Assert correctness
-
-    return 0;
 }
