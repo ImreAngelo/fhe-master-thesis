@@ -1,7 +1,4 @@
 #include "server/HomPlacing.h"
-#include "openfhe.h"
-
-#include <gtest/gtest.h>
 
 
 void TestAlgorithm1(const uint32_t depth = 2, const int64_t target = 2)
