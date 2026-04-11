@@ -98,6 +98,85 @@ void TestRGSW_NegS(
     std::cout << "\nRGSW(-s) test: " << (all_pass ? "ALL PASS" : "FAILED") << "\n";
 }
 
+
+namespace core::server {
+    using namespace lbcrypto;
+
+    template <typename T>
+    using RGSWCiphertext = std::vector<Ciphertext<T>>;
+
+    // /**
+    //  * 
+    //  */
+    // RGSWCiphertext<DCRTPoly> EncryptRGSW(
+    //     CryptoContext<DCRTPoly>& cc,
+    //     KeyPair<DCRTPoly>& keys,
+    //     Plaintext& msg,
+    //     uint32_t l,
+    //     uint64_t B = 2
+    // ) {
+    //     uint32_t N = cc->GetRingDimension();
+    //     uint64_t t = cc->GetCryptoParameters()->GetPlaintextModulus();
+    //     NativeInteger t_nat(t);
+
+    //     assert(msg.size() <= ring_dim);       
+    // }
+
+    RGSWCiphertext<DCRTPoly> CreateRGSW_NegS(
+        CryptoContext<DCRTPoly>& cc,
+        KeyPair<DCRTPoly>& keys,
+        uint32_t ell,
+        uint64_t B)
+    {
+        uint32_t ring_dim = cc->GetRingDimension();
+        uint64_t t = cc->GetCryptoParameters()->GetPlaintextModulus();
+        NativeInteger t_nat(t);
+
+        // Get secret key in EVALUATION format — these ARE the NTT slot values
+        auto sk_poly = keys.secretKey->GetPrivateElement();
+        sk_poly.SetFormat(Format::EVALUATION);
+        auto& sk_eval = sk_poly.GetElementAtIndex(0);  // first RNS limb
+
+        RGSWCiphertext<DCRTPoly> result(2 * ell);
+
+        for (uint32_t k = 0; k < ell; k++) {
+            // Compute B^{-(k+1)} mod t
+            NativeInteger Bk(1), B_nat(B);
+            for (uint32_t j = 0; j <= k; j++)
+                Bk = Bk.ModMul(B_nat, t_nat);
+            NativeInteger Bk_inv = Bk.ModInverse(t_nat);
+
+            // ── Top half: packed slots = NTT(-s) * B^{-(k+1)} ────────────────
+            std::vector<int64_t> neg_s_slots(ring_dim);
+            for (uint32_t i = 0; i < ring_dim; i++) {
+                NativeInteger v = sk_eval[i];
+                // Negate: (-s) mod t
+                NativeInteger neg_v = (v == NativeInteger(0))
+                    ? NativeInteger(0)
+                    : t_nat - v;
+                // Scale by B^{-(k+1)}
+                NativeInteger scaled = neg_v.ModMul(Bk_inv, t_nat);
+                int64_t c = static_cast<int64_t>(scaled.ConvertToInt<uint64_t>());
+                if (c > static_cast<int64_t>(t / 2)) c -= static_cast<int64_t>(t);
+                neg_s_slots[i] = c;
+            }
+            auto pt_neg_s = cc->MakePackedPlaintext(neg_s_slots);
+            result[k] = cc->Encrypt(keys.publicKey, pt_neg_s);
+
+            // ── Bottom half: NTT(B^{-(k+1)}) = constant vector ───────────────
+            int64_t Bk_inv_c = static_cast<int64_t>(Bk_inv.ConvertToInt<uint64_t>());
+            if (Bk_inv_c > static_cast<int64_t>(t / 2))
+                Bk_inv_c -= static_cast<int64_t>(t);
+            // NTT of a constant scalar is that scalar repeated in every slot
+            auto pt_one = cc->MakePackedPlaintext(
+                std::vector<int64_t>(ring_dim, Bk_inv_c));
+            result[k + ell] = cc->Encrypt(keys.publicKey, pt_one);
+        }
+
+        return result;
+    }
+}
+
 int main() {
     
     return 0;
