@@ -19,9 +19,10 @@ namespace core::server {
         uint32_t n,
         PublicKey<T> publicKey
     ) {
-        auto ciphertext_n = cc->Encrypt(publicKey, cc->MakePackedPlaintext({ n }));
+        auto ciphertext_n = cc->Encrypt(publicKey, cc->MakePackedPlaintext({ 1 })); // { n }
         
         std::vector<Ciphertext<T>> c(n);
+        // c[0] = ciphertext; // 
         c[0] = cc->EvalMult(ciphertext, ciphertext_n);
         
         // TODO: Confirm that this doesn't use secret keys/that all necessary key material is included in serialization
@@ -29,7 +30,8 @@ namespace core::server {
         for(uint32_t i = 1; i < n; i++) {
             auto rotated = cc->EvalFastRotation(ciphertext, i, precomputed);
             // We do not need to account for the scaling being 1/n * B^{-(k + 1)}, we can assume natively the scaling is b^{-(k + 1)}
-            // c[i] = cc->EvalMult(rotated, ciphertext_n);
+            // But it does not currently work without this line [openfhe-development/src/pke/lib/cryptocontext.cpp:l.558:Decrypt(): ciphertext is empty]
+            c[i] = cc->EvalMult(rotated, ciphertext_n);
         }
 
         return c;
@@ -52,7 +54,10 @@ namespace core::server {
         std::vector<Ciphertext<T>> result(ell);
 
         // TODO: Assert overflow conditions
-        NativeInteger t(cc->GetCryptoParameters()->GetPlaintextModulus());
+        auto t_int = cc->GetCryptoParameters()->GetPlaintextModulus();
+        auto bound = static_cast<int64_t>(t_int >> 1);
+
+        NativeInteger t(t_int);
         NativeInteger b(B);
 
         #if defined(ASSERTIONS) && ASSERTIONS == 1
@@ -64,10 +69,7 @@ namespace core::server {
             int64_t Bk_inv = Bk.ModInverse(t).ConvertToInt<uint64_t>();
 
             // Reduce to centered representation [-t/2, t/2]
-            if (Bk_inv > static_cast<int64_t>(t >> 1))
-                Bk_inv -= static_cast<int64_t>(t);
-
-            std::cout << "Level " << k << ": B^k = " << Bk << ", B^{-k} = " << Bk_inv << std::endl;
+            if (Bk_inv > bound) Bk_inv -= (bound << 1);
 
             std::vector<int64_t> scalar(ell, Bk_inv);        
             auto pt   = cc->MakePackedPlaintext(scalar);

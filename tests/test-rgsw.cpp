@@ -18,6 +18,16 @@ int main() {
     return 0;
 }
 
+template <typename T>
+inline void PrintRGSW(const CryptoContext<T>& cc, KeyPair<T> keys, const std::vector<Ciphertext<T>>& vec, size_t columns) {
+    Plaintext plaintext;
+    for(const auto &c : vec) {
+        cc->Decrypt(keys.secretKey, c, &plaintext);
+        plaintext->SetLength(columns);
+        std::cout << plaintext << std::endl;
+    }
+}
+
 /// @brief Test ExpandRLWE
 void TestA() {
     const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
@@ -63,13 +73,12 @@ void TestA() {
     
     std::cout << "Original plaintext: " << plaintext << std::endl;
     std::cout << "Decrypted plaintext: " << std::endl; 
-    
-    for(const auto &c : rgswCiphertext) {
-        cc->Decrypt(keyPair.secretKey, c, &decrypted);
-        decrypted->SetLength(40);
-        std::cout << decrypted << std::endl;
-    }
+    PrintRGSW(cc, keyPair, rgswCiphertext, n);
 }
+
+
+
+
 
 /// @brief Test HomExpand
 void TestB() {
@@ -103,24 +112,29 @@ void TestB() {
     
     std::cout << "Encrypted plaintext " << plaintext << std::endl;
 
-    // // rotations used are [1, n)
-    // auto rotations = { 0, 1, 2, 3 };
-    // cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
+    // rotations used are [1, n)
+    auto rotations = { 0, 1, 2, 3 };
+    cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
 
     // TODO: rename n to.. ell?
     auto inputs = core::server::ScaleToGadgetLevels(cc, ciphertext, n);
 
     // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
     std::cout << "Original plaintext: " << plaintext << std::endl;
-    std::cout << "Decrypted: " << std::endl; 
-    
-    for(const auto &c : inputs) {
-        cc->Decrypt(keyPair.secretKey, c, &plaintext);
-        plaintext->SetLength(n);
-        std::cout << plaintext << std::endl;
+    std::cout << "\nGadget scaled: " << std::endl; 
+    PrintRGSW(cc, keyPair, inputs, n);
+
+    auto rgswCiphertexts = std::vector<std::vector<Ciphertext<DCRTPoly>>>(n);
+    for(size_t i = 0; i < n; i++) {
+        rgswCiphertexts[i] = core::server::HoistedExpandRLWE(cc, inputs[i], n, keyPair.publicKey);
+        std::cout << std::endl << "RGSW Ciphertext " << i << ":" << std::endl;
+        PrintRGSW(cc, keyPair, rgswCiphertexts[i], n);
     }
 
+    // TODO: Create RGSW(-s)
+    // Final loop: external product RGSW(-s) with the expanded RLWE ciphertexts 
     
+    // TODO: decrypt to check that we get the original plaintext back
 }
 
 /**
