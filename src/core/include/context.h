@@ -20,7 +20,11 @@ namespace Server {
             : CryptoContextImpl<T>(base) {}
 
 
-    // protected: // only used by HomExpand and tests
+    protected:
+#if defined(TEST_INTERNAL_FUNCTIONS)
+    // only used by HomExpand *and tests*
+    public:
+#endif
         /**
          * @brief Takes an RLWE encryption with l slots and converts it to l RLWE ciphertexts,
          * where ciphertext c[i] encrypts b[i]

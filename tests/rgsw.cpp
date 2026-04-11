@@ -1,29 +1,25 @@
+#define TEST_INTERNAL_FUNCTIONS
+
 #include "core/include/context.h"
 #include "core/include/helpers.h"
-#include "openfhe.h"
 
-#include <gtest/gtest.h>
 #include <cstdint>
 #include <cmath>
 #include <iostream>
 
-#define PRINT_RGSW_IMPL
-#include "common.h"
-
-using namespace lbcrypto;
-
-/// @brief Test ExpandRLWE
-void TestA() {
-    const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
-
+/**
+ * @brief Tests the internal functions of HomExpand
+ */
+void TestA(const std::vector<int64_t>& index) {
+    using namespace lbcrypto;
+    
     const uint32_t n = index.size(); // bits
     const uint32_t log_n = Log2(n);  // levels
-    const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
 
     CCParams<CryptoContextBGVRNS> params;
     params.SetMultiplicativeDepth(2*log_n - 1);
     params.SetPlaintextModulus(65537);
-    params.SetRingDim(N);
+    params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
     auto cc = Server::GenExtendedCryptoContext(params);
@@ -36,32 +32,51 @@ void TestA() {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
 
-    std::cout << "Created context" << std::endl;
-
     // encrypt a sample plaintext
-    Plaintext plaintext = cc->MakePackedPlaintext({1, 1, 0, 1});
+    Plaintext plaintext = cc->MakePackedPlaintext(index);
     auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
     
+    #if defined(DEBUG_LOGGING)
     std::cout << "Encrypted plaintext " << plaintext << std::endl;
+    #endif
 
     // rotations used are [1, n)
     auto rotations = { 0, 1, 2, 3 };
     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
     
     auto rgswCiphertext = cc->ExpandRLWEHoisted(ciphertext, keyPair.publicKey, n);
-    
-    std::cout << "Expanded RLWE" << std::endl;
 
     // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
     Plaintext decrypted;
     
+    #if defined(DEBUG_LOGGING)
     std::cout << "Original plaintext: " << plaintext << std::endl;
     std::cout << "Decrypted plaintext: " << std::endl; 
     PrintRGSW(cc, keyPair, rgswCiphertext, n);
+    #endif
+
+    // SUBTEST: Check correctness
+    for(uint32_t i = 0; i < n; i++) {
+        Plaintext p;
+        cc->Decrypt(keyPair.secretKey, rgswCiphertext[i], &p);
+        p->SetLength(n);
+
+        SCOPED_TRACE("RGSW row " + std::to_string(i));
+        ASSERT_EQ(index[i], p->GetPackedValue()[0]);
+        
+        // Check the remaining values are 0
+        for(uint32_t j = 1; j < n; j++) {
+            SCOPED_TRACE("Column " + std::to_string(j));
+            ASSERT_EQ(0, p->GetPackedValue()[j]) << "RGSW row " << i << " did not have trailing 0's.";
+        }
+    }   
 }
 
-TEST(RGSW, ExpandRLWEHoisted) { TestA(); }
-
+TEST(RGSW, ExpandRLWEHoisted) { 
+    TestA({ 1, 1, 0, 1 }); 
+    TestA({ 1, 0, 0, 0 }); 
+    TestA({ 0, 0, 0, 1 });
+}
 
 
 // /// @brief Test HomExpand

@@ -17,6 +17,8 @@ cmake_minimum_required(VERSION 3.16.3)
 ### If you need your application to be linked statically, then run "cmake .. -DBUILD_STATIC=ON"
 
 project(sPAR CXX)
+# NOTE: Upgrading to C++20 might be better
+# set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
