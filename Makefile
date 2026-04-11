@@ -1,6 +1,5 @@
-.PHONY: all build clean clean-build clean-openfhe help test
+.PHONY: all build clean clean-build clean-cmake clean-openfhe help test
 
-# Default target
 all: build
 
 #########
@@ -27,6 +26,7 @@ build:
 # app client server:
 # 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && cmake --build . --target $@ -j$(shell nproc)
 
+
 #########
 # Tests #
 #########
@@ -44,22 +44,29 @@ test:
 test-%:
 	@mkdir -p build && $(_CMAKE) && cmake --build . --target run-test-$* -j$(shell nproc)
 
+
 ############
 # Clean-up #
 ############
 
 # Clean everything
-clean: clean-build clean-openfhe
+clean: clean-cmake clean-build
 
-# Clean OpenFHE build
-clean-openfhe:
-	@echo "Cleaning OpenFHE build..."
-	@rm -rf vendors/openfhe-development/build vendors/install
-
-# Clean build artifacts
+# Remove build artifacts
 clean-build:
 	@echo "Cleaning project build..."
 	@rm -rf build
+
+# Clean CMake cache
+clean-cmake:
+	@echo "Removing CMake cache..."
+	@rm -rf build/CMakeCache.txt
+
+# Why would you need this..? Rebuild time is very long! 
+# clean-openfhe:
+# 	@echo "Cleaning OpenFHE build..."
+# 	@rm -rf vendors/openfhe-development/build 
+# 	@rm -rf vendors/install
 
 
 ################

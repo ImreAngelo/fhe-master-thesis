@@ -1,7 +1,7 @@
 #pragma once
 
-#include "openfhe.h"
 #include "scheme/bgvrns/gen-cryptocontext-bgvrns-params.h"
+#include "openfhe.h"
 
 
 /**
@@ -38,8 +38,3 @@ public:
 };
 
 }  // namespace lbcrypto
-
-// Bring lbcrypto symbols into core.
-namespace core {
-using namespace lbcrypto;
-}  // namespace core

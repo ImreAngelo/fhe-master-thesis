@@ -16,6 +16,7 @@ __Research Questions:__
 <ul>
     <li><a href="#build-instructions">Build Instructions</a></li>
     <li><a href="#project-layout">Project Layout</a></li>
+    <li><a href="#unit-tests">Unit Tests</a></li>
 </ul>
 
 
@@ -46,14 +47,15 @@ Coming...
 
 
 ## Unit Tests
-Unit tests are configured with [GoogleTest](https://github.com/google/googletest)
+Unit tests are located inside the `tests` directory.
+Configured with [GoogleTest](https://github.com/google/googletest).
 
 > [!NOTE]
-> The make command accepts a specfic test as parameter
+> Each test has a make target
 >
 > ```sh
-> make test
-> make test-rgsw
+> make test         # run all tests
+> make test-rgsw    # run rgsw test
 > ```
 
 > [!TIP]

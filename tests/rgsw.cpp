@@ -1,23 +1,16 @@
-#include "core/include/rgsw.h"
+#include "core/include/context.h"
 #include "core/include/helpers.h"
 #include "openfhe.h"
 
 #include <gtest/gtest.h>
-#include <cmath>
 #include <cstdint>
+#include <cmath>
 #include <iostream>
 
-using namespace lbcrypto;
+#define PRINT_RGSW_IMPL
+#include "common.h"
 
-// template <typename T>
-inline void PrintRGSW(const CryptoContext<DCRTPoly>& cc, KeyPair<DCRTPoly> keys, const std::vector<Ciphertext<DCRTPoly>>& vec, size_t columns) {
-    Plaintext plaintext;
-    for(const auto &c : vec) {
-        cc->Decrypt(keys.secretKey, c, &plaintext);
-        plaintext->SetLength(columns);
-        std::cout << plaintext << std::endl;
-    }
-}
+using namespace lbcrypto;
 
 /// @brief Test ExpandRLWE
 void TestA() {
@@ -67,7 +60,7 @@ void TestA() {
     PrintRGSW(cc, keyPair, rgswCiphertext, n);
 }
 
-
+TEST(RGSW, ExpandRLWEHoisted) { TestA(); }
 
 
 
@@ -140,8 +133,6 @@ void TestA() {
 
 //     // TODO: decrypt to check that we get the original plaintext back
 // }
-
-TEST(RGSW, ExpandRLWEHoisted) { TestA(); }
 
 /**
  * @brief returns 2^n

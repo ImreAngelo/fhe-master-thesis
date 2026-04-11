@@ -35,6 +35,12 @@ function(register_test name)
     # We only need to add the GTest runner here.
     target_link_libraries(${name} PRIVATE GTest::gtest_main)
 
+    # Force-include common.h before every translation unit in this target.
+    # This makes gtest, openfhe, and shared helpers available without explicit includes.
+    target_compile_options(${name} PRIVATE
+        -include ${CMAKE_CURRENT_SOURCE_DIR}/common.h
+    )
+
     # Register individual TEST() cases with CTest.
     gtest_discover_tests(${name})
 
@@ -51,7 +57,7 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
-register_test(test-rgsw)
+register_test(test-rgsw         SOURCE rgsw)
 register_test(test-expand-rlwe  SOURCE expand-rlwe)
 register_test(test-algorithm-1  SOURCE algorithm-1)
 

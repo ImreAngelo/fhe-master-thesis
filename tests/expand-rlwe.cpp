@@ -1,12 +1,21 @@
-#include "core/include/rgsw.h"
+#include "core/include/context.h"
 #include "core/include/helpers.h"
 
+#include <gtest/gtest.h>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 
 
 using namespace lbcrypto;
+
+class TestProtectedFunctions : public Server::ExtendedCryptoContext<DCRTPoly>
+{
+public:
+    void ExpandRLWEHoisted() {
+        return this->ExpandRLWEHoisted();
+    }
+}
 
 
 /**
@@ -30,7 +39,7 @@ TEST(ExpandRLWE, HoistedExpandRLWE) {
     params.SetRingDim(N);
     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
-    Server::ExtendedCryptoContext<DCRTPoly> cc = Server::GenExtendedCryptoContext(params);
+    auto cc = TestProtectedFunctions(Server::GenExtendedCryptoContext(params));
     cc->Enable(PKE);
     cc->Enable(KEYSWITCH);
     cc->Enable(LEVELEDSHE);
@@ -52,7 +61,7 @@ TEST(ExpandRLWE, HoistedExpandRLWE) {
     auto rotations = { 0, 1, 2, 3 };
     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
     
-    auto rgswCiphertext = core::server::HoistedExpandRLWE(cc, ciphertext, 4, keyPair.publicKey);
+    auto rgswCiphertext = cc->ExpandRLWEHoisted(cc, ciphertext, 4, keyPair.publicKey);
     
     std::cout << "Expanded RLWE" << std::endl;
 
@@ -60,7 +69,7 @@ TEST(ExpandRLWE, HoistedExpandRLWE) {
     Plaintext decrypted;
     
     std::cout << "Original plaintext: " << plaintext << std::endl;
-    std::cout << "Decrypted plaintext: " << std::endl; 
+    std::cout << "Decrypted plaintext: " << std::endl;
     PrintRGSW(cc, keyPair, rgswCiphertext, n);
 
     // TODO: Assert correctness

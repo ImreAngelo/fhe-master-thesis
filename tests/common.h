@@ -3,15 +3,18 @@
  */
 #pragma once
 
-#include <gtest/gtest.h>
 #include "openfhe.h"
+#include <gtest/gtest.h>
+
 #include <vector>
 
-template <typename T>
+/// @brief Print a list of ciphertexts 
+template <typename CC, typename T>
 inline void PrintRGSW(
-    const lbcrypto::CryptoContext<T>& cc, 
+    const CC& cc, 
     const lbcrypto::KeyPair<T> keys, 
-    const std::vector<lbcrypto::Ciphertext<T>>& vec, size_t columns
+    const std::vector<lbcrypto::Ciphertext<T>>& vec, 
+    size_t columns
 ) {
     lbcrypto::Plaintext plaintext;
     for(const auto &c : vec) {

@@ -20,6 +20,9 @@ project(sPAR CXX)
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
+# Emit compile_commands.json so IDEs (VSCode, clangd, etc.) resolve all includes
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Static files are built into this directory (via -DCMAKE_INSTALL_PREFIX)
 set(OpenFHE_DIR vendors/install/lib/OpenFHE)
 
