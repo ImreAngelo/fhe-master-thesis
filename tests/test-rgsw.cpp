@@ -13,13 +13,13 @@ void TestA();
 void TestB();
 
 int main() {
-    // TestA();
-    TestB();
+    TestA();
+    // TestB();
     return 0;
 }
 
-template <typename T>
-inline void PrintRGSW(const CryptoContext<T>& cc, KeyPair<T> keys, const std::vector<Ciphertext<T>>& vec, size_t columns) {
+// template <typename T>
+inline void PrintRGSW(const CryptoContext<DCRTPoly>& cc, KeyPair<DCRTPoly> keys, const std::vector<Ciphertext<DCRTPoly>>& vec, size_t columns) {
     Plaintext plaintext;
     for(const auto &c : vec) {
         cc->Decrypt(keys.secretKey, c, &plaintext);
@@ -42,7 +42,7 @@ void TestA() {
     params.SetRingDim(N);
     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
-    CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
+    auto cc = Server::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(KEYSWITCH);
     cc->Enable(LEVELEDSHE);
@@ -64,7 +64,7 @@ void TestA() {
     auto rotations = { 0, 1, 2, 3 };
     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
     
-    auto rgswCiphertext = core::server::HoistedExpandRLWE(cc, ciphertext, 4, keyPair.publicKey);
+    auto rgswCiphertext = cc->ExpandRLWEHoisted(ciphertext, keyPair.publicKey, n);
     
     std::cout << "Expanded RLWE" << std::endl;
 
@@ -132,6 +132,19 @@ void TestB() {
     }
 
     // TODO: Create RGSW(-s)
+    auto rgsw_s = core::server::CreateRGSW_NegS(cc, keyPair, n, 2);
+
+    // Print secret key
+    auto sk_poly = keyPair.secretKey->GetPrivateElement();
+    sk_poly.SetFormat(Format::EVALUATION);
+    auto& sk_eval = sk_poly.GetElementAtIndex(0);
+
+    std::cout << "Secret key: " << sk_eval << std::endl;
+
+    // Print RGSW encryption of secret key
+    std::cout << "RGSW(-s): " << std::endl;
+    PrintRGSW(cc, keyPair, rgsw_s, n);
+
     // Final loop: external product RGSW(-s) with the expanded RLWE ciphertexts 
     
     // TODO: decrypt to check that we get the original plaintext back
