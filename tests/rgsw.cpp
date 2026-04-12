@@ -2,6 +2,7 @@
 
 #include "core/include/context.h"
 #include "core/include/helpers.h"
+#include "core/include/params.h"
 
 #include <cstdint>
 #include <cmath>
@@ -15,14 +16,19 @@
 inline void TestA(const std::vector<int64_t>& index) {
     using namespace lbcrypto;
     
+    // Note: n is not number of users but log(number of users)
     const uint32_t n = index.size(); // bits
     const uint32_t log_n = Log2(n);  // levels
 
-    CCParams<CryptoContextBGVRNS> params;
+    CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(2*log_n - 1);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
+
+    // RGSW-specific parameters
+    params.SetGadgetLevels(log_n);
+    params.SetGadgetBase(2);
 
     auto cc = Server::GenExtendedCryptoContext(params);
     cc->Enable(PKE);

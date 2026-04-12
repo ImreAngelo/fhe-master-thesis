@@ -1,5 +1,6 @@
 #include <vector>
 #include "openfhe.h"
+#include "params.h"
 
 // modinv // todo: include only necessary parts?
 // #include "math/nbtheory.h"
@@ -15,9 +16,11 @@ namespace Server {
      */
     template <typename T>
     class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {
+        CCParams<CryptoContextRGSWBGV> m_params;
+
     public:
-        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base)
-            : CryptoContextImpl<T>(base) {}
+        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
+            : CryptoContextImpl<T>(base), m_params(params) {}
 
 
     protected:
@@ -34,13 +37,13 @@ namespace Server {
          * 
          * @param ciphertext RLWE(sum(b[i] X^i) for 0 <= i < len)
          * @param publicKey The public key
-         * @param len Number of slots
          */
         inline RingGSWCiphertext<T> ExpandRLWEHoisted(
             const Ciphertext<T>& ciphertext,
             const PublicKey<T>& publicKey,
-            const uint32_t len // TODO: Maybe make a CCParam?
+            const uint32_t len
         ) {
+            // const auto len = (uint32_t(1) << m_params.GetGadgetLevels()); // Only works if number of bits is power of 2
             const auto ciphertext_n = this->Encrypt(publicKey, this->MakePackedPlaintext({ 1 }));
             
             RingGSWCiphertext<T> c(len);
@@ -57,18 +60,16 @@ namespace Server {
         }
 
         /**
-         * @brief Scales 
-         * 
+         * @brief Scales
+         *
          * @todo Choose integer size from (cmake) parameter
+         * @todo Unify integer types
          * @todo Optimize
-         * 
-         * @param B Gadget base (defaults to 2)
          */
-        inline RingGSWCiphertext<T> ScaleToGadgetLevels(
-            Ciphertext<T>& ct,
-            uint32_t ell,
-            usint B = 2  // todo: pull from this->GetCryptoParameters()->GetGadgetBase();
-        ) {
+        inline RingGSWCiphertext<T> ScaleToGadgetLevels(Ciphertext<T>& ct) {
+            const uint32_t ell = m_params.GetGadgetLevels();
+            const usint B      = m_params.GetGadgetBase();
+
             std::vector<Ciphertext<T>> result(ell);
 
             // TODO: Assert overflow conditions
@@ -117,15 +118,15 @@ namespace Server {
     };
 
     /**
-     * @brief Constructs an ExtendedCryptoContext from CCParams, mirroring GenCryptoContext.
+     * @brief Constructs an ExtendedCryptoContext from CCParams<CryptoContextRGSWBGV>, mirroring GenCryptoContext.
      *
      * Internally calls GenCryptoContext, copy-constructs an ExtendedCryptoContextImpl from
      * the result, then registers the new object with OpenFHE's context registry so that
      * operations like KeyGen/Encrypt/EvalMult resolve back to the right context.
      */
-    template <typename P>
-    ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<P>& params) {
-        auto ext = std::make_shared<ExtendedCryptoContextImpl<DCRTPoly>>(*GenCryptoContext(params));
+    inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextRGSWBGV>& params) {
+        auto ext = std::make_shared<ExtendedCryptoContextImpl<DCRTPoly>>(
+            *GenCryptoContext(static_cast<const CCParams<CryptoContextBGVRNS>&>(params)), params);
         ContextRegistrar<DCRTPoly>::Register(ext);
         return ext;
     }
