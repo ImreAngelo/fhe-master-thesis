@@ -56,8 +56,8 @@ void TestAlgorithm1(const uint32_t depth = 2, const int64_t target = 2)
     }
 }
 
-TEST(Algorithm, HomPlacingNotPackedNoExt) { TestAlgorithm1(2, 2); }
-// TEST(Algorithm, HomPlacingStarNoExt) { TestAlgorithm2(); }
+TEST(Algorithm1, HomPlacingNotPackedNoExt) { TestAlgorithm1(2, 2); }
+// TEST(Algorithm1, HomPlacingStarNoExt) { TestAlgorithm2(); }
 
 // void TestAlgorithm2()
 // {

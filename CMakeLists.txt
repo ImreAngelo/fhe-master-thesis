@@ -84,6 +84,9 @@ target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 # add_executable(server src/server/main.cpp)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
-# EXCLUDE_FROM_ALL keeps every test binary out of the default "make" target.
-# Use "make check" to build + run all tests, or "make run-<name>" for one test.
+# enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
+# Without it gtest_discover_tests() has nowhere to register tests and CTest reports
+# "No tests were found".  EXCLUDE_FROM_ALL on the subdirectory still keeps every test
+# binary out of the default "make" target.
+enable_testing()
 add_subdirectory(tests EXCLUDE_FROM_ALL)
