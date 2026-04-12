@@ -16,6 +16,7 @@ __Research Questions:__
 <ul>
     <li><a href="#build-instructions">Build Instructions</a></li>
     <li><a href="#project-layout">Project Layout</a></li>
+    <li><a href="#unit-tests">Unit Tests</a></li>
 </ul>
 
 
@@ -43,3 +44,22 @@ __Research Questions:__
 
 ## Project Layout
 Coming...
+
+
+## Unit Tests
+Unit tests are located inside the `tests` directory.
+Configured with [GoogleTest](https://github.com/google/googletest).
+
+> [!IMPORTANT]
+> The unit tests require C++20, while the rest of the project uses C++17
+
+> [!NOTE]
+> Each test has a make target
+>
+> ```sh
+> make test         # run all tests
+> make test-rgsw    # run rgsw test
+> ```
+
+> [!TIP]
+> [VSCode Extension for GoogleTest](https://github.com/matepek/vscode-catch2-test-adapter)

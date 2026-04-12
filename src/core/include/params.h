@@ -1,7 +1,7 @@
 #pragma once
 
-#include "openfhe.h"
 #include "scheme/bgvrns/gen-cryptocontext-bgvrns-params.h"
+#include "openfhe.h"
 
 
 /**
@@ -20,7 +20,7 @@ class CryptoContextRGSWBGV;
 template <>
 class CCParams<CryptoContextRGSWBGV> : public CCParams<CryptoContextBGVRNS> {
     uint32_t gadgetBase   = 2;  // B: gadget base (must be a power of 2)
-    uint32_t gadgetDigits = 8;  // ℓ: levels
+    uint32_t gadgetLevels = 8;  // ℓ: levels
 
 public:
     CCParams() : CCParams<CryptoContextBGVRNS>() {}
@@ -30,16 +30,11 @@ public:
 
     // ----- RGSW-specific getters -----
     uint32_t GetGadgetBase() const { return gadgetBase; }
-    uint32_t GetGadgetDigits() const { return gadgetDigits; }
+    uint32_t GetGadgetLevels() const { return gadgetLevels; }
 
     // ----- RGSW-specific setters -----
-    void SetGadgetBase(uint32_t gadgetBase0) { gadgetBase = gadgetBase0; }
-    void SetGadgetDigits(uint32_t gadgetDigits0) { gadgetDigits = gadgetDigits0; }
+    void SetGadgetBase(uint32_t gadgetBase) { this->gadgetBase = gadgetBase; }
+    void SetGadgetLevels(uint32_t gadgetLevels) { this->gadgetLevels = gadgetLevels; }
 };
 
 }  // namespace lbcrypto
-
-// Bring lbcrypto symbols into core.
-namespace core {
-using namespace lbcrypto;
-}  // namespace core

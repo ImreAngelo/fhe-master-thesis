@@ -17,8 +17,14 @@ cmake_minimum_required(VERSION 3.16.3)
 ### If you need your application to be linked statically, then run "cmake .. -DBUILD_STATIC=ON"
 
 project(sPAR CXX)
+# C++17 is the global default — keeps OpenFHE and FetchContent deps (GTest, …) happy.
+# Our own src/ and tests/ targets link against `project_cxx20` (defined below)
+# which bumps them to C++20 without touching the dependency standard.
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
+
+# Emit compile_commands.json so IDEs (VSCode, clangd, etc.) resolve all includes
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Static files are built into this directory (via -DCMAKE_INSTALL_PREFIX)
 set(OpenFHE_DIR vendors/install/lib/OpenFHE)
@@ -63,15 +69,24 @@ endif()
 ### Include source files
 include_directories(src)
 
+# ── C++20 for our own code ────────────────────────────────────────────────────
+# Link any src/ or tests/ target against this to get C++20 without changing the
+# global standard (which would break OpenFHE / GTest).
+add_library(project_cxx20 INTERFACE)
+target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 
-### ADD YOUR EXECUTABLE(s) HERE
-### add_executable(EXECUTABLE-NAME SOURCES)
-###
-# add_executable(simple-real-numbers examples/simple-real-numbers.cpp)
-# add_executable(simple-integers-bgvrns examples/simple-integers-bgvrns.cpp)
-# add_executable(simple-integers examples/simple-integers.cpp)
-# add_executable(compare examples/compare.cpp)
-# add_executable(sort examples/sort.cpp)
+# ── Production binaries ──────────────────────────────────────────────────────
+# Uncomment each line when the corresponding source exists.
+# "make" / "make all" builds only what is listed here — tests are excluded.
+#
+# add_executable(app    src/main.cpp)
+# add_executable(client src/client/main.cpp)
+# add_executable(server src/server/main.cpp)
 
-add_executable(app tests/algorithm-1.cpp)
-add_executable(test-rgsw tests/test-rgsw.cpp)
+# ── Test suite ───────────────────────────────────────────────────────────────
+# enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
+# Without it gtest_discover_tests() has nowhere to register tests and CTest reports
+# "No tests were found".  EXCLUDE_FROM_ALL on the subdirectory still keeps every test
+# binary out of the default "make" target.
+enable_testing()
+add_subdirectory(tests EXCLUDE_FROM_ALL)

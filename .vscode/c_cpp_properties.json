@@ -2,6 +2,7 @@
     "configurations": [
         {
             "name": "Linux",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/vendors/install/include/openfhe",
@@ -11,7 +12,7 @@
             ],
             "defines": [],
             "compilerPath": "/usr/bin/g++",
-            "cppStandard": "c++17",
+            "cppStandard": "c++20",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],

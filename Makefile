@@ -1,8 +1,5 @@
-.PHONY: all app build build-dynamic clean clean-openfhe help test-rgsw
+.PHONY: all build clean clean-build clean-cmake clean-openfhe help test
 
-TARGETS := app test-rgsw
-
-# Default target
 all: build
 
 #########
@@ -25,28 +22,51 @@ build:
 # 	@echo "Building project with shared OpenFHE..."
 # 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
 
-$(TARGETS):
-	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON -DNATIVE_SIZE=64 && cmake --build . --target $@
-	@./build/$@
-	
-# TODO: Optimizations -j$(shell nproc)
+# Future production binaries — uncomment when add_executable() exists in CMakeLists.txt
+# app client server:
+# 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && cmake --build . --target $@ -j$(shell nproc)
+
+
+#########
+# Tests #
+#########
+
+_CMAKE = cd build && cmake .. -DBUILD_STATIC=ON -DNATIVE_SIZE=64
+
+# Build and run all tests
+test:
+	@mkdir -p build && $(_CMAKE) && cmake --build . --target check -j$(shell nproc)
+
+# Build and run a specific test:
+#   make test-rgsw
+#   make test-expand-rlwe
+#   make test-algorithm-1
+test-%:
+	@mkdir -p build && $(_CMAKE) && cmake --build . --target run-test-$* -j$(shell nproc)
+
 
 ############
 # Clean-up #
 ############
 
 # Clean everything
-clean: clean-build clean-openfhe
+clean: clean-cmake clean-build
 
-# Clean OpenFHE build
-clean-openfhe:
-	@echo "Cleaning OpenFHE build..."
-	@rm -rf vendors/openfhe-development/build vendors/install
-
-# Clean build artifacts
+# Remove build artifacts
 clean-build:
 	@echo "Cleaning project build..."
 	@rm -rf build
+
+# Clean CMake cache
+clean-cmake:
+	@echo "Removing CMake cache..."
+	@rm -rf build/CMakeCache.txt
+
+# Why would you need this..? Rebuild time is very long! 
+# clean-openfhe:
+# 	@echo "Cleaning OpenFHE build..."
+# 	@rm -rf vendors/openfhe-development/build 
+# 	@rm -rf vendors/install
 
 
 ################
@@ -55,9 +75,9 @@ clean-build:
 
 help:
 	@echo "Available targets:"
-	@echo "  build          - Build OpenFHE vendored (static archives) and link project against them"
-	@echo "  build-dynamic  - Build OpenFHE vendored (shared libs) and link project dynamically"
-	@echo "  clean          - Clean project build artifacts"
-	@echo "  clean-openfhe  - Clean OpenFHE build artifacts"
-	@echo "  clean-all      - Clean all build artifacts"
-	@echo "  help           - Show this help message"
+	@echo "  build              - Build OpenFHE (static) and link project against it"
+	@echo "  test               - Build and run all tests"
+	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
+	@echo "  clean              - Clean project build artifacts"
+	@echo "  clean-openfhe      - Clean OpenFHE build artifacts"
+	@echo "  help               - Show this help message"

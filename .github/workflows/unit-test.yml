@@ -1,0 +1,46 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Use the openfhe submodule commit as the cache key so the cache is
+      # invalidated automatically whenever the submodule is bumped.
+      - name: Get OpenFHE submodule hash
+        id: openfhe
+        run: |
+          echo "hash=$(git submodule status vendors/openfhe-development \
+            | awk '{print $1}' | tr -d '+-')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OpenFHE install
+        id: cache-openfhe
+        uses: actions/cache@v4
+        with:
+          path: vendors/install
+          key: openfhe-${{ runner.os }}-${{ steps.openfhe.outputs.hash }}
+
+      - name: Build and install OpenFHE
+        if: steps.cache-openfhe.outputs.cache-hit != 'true'
+        run: |
+          cmake -S vendors/openfhe-development \
+                -B vendors/openfhe-development/build \
+                -DBUILD_STATIC=ON \
+                -DCMAKE_INSTALL_PREFIX="${GITHUB_WORKSPACE}/vendors/install"
+          cmake --build vendors/openfhe-development/build -j$(nproc)
+          cmake --install vendors/openfhe-development/build
+
+      - name: Configure project
+        run: cmake -B build -DBUILD_STATIC=ON
+
+      - name: Run tests
+        run: cmake --build build --target check -j$(nproc)
