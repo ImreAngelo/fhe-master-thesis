@@ -50,6 +50,9 @@ Coming...
 Unit tests are located inside the `tests` directory.
 Configured with [GoogleTest](https://github.com/google/googletest).
 
+> [!IMPORTANT]
+> The unit tests require C++20, while the rest of the project uses C++17
+
 > [!NOTE]
 > Each test has a make target
 >
