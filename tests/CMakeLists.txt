@@ -32,8 +32,8 @@ function(register_test name)
     add_executable(${name} ${_src})
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
-    # We only need to add the GTest runner here.
-    target_link_libraries(${name} PRIVATE GTest::gtest_main)
+    # project_cxx20 bumps this target (only) to C++20; GTest stays at C++17.
+    target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20)
 
     # Force-include common.h before every translation unit in this target.
     # This makes gtest, openfhe, and shared helpers available without explicit includes.

@@ -17,8 +17,9 @@ cmake_minimum_required(VERSION 3.16.3)
 ### If you need your application to be linked statically, then run "cmake .. -DBUILD_STATIC=ON"
 
 project(sPAR CXX)
-# NOTE: Upgrading to C++20 might be better
-# set(CMAKE_CXX_STANDARD 20)
+# C++17 is the global default — keeps OpenFHE and FetchContent deps (GTest, …) happy.
+# Our own src/ and tests/ targets link against `project_cxx20` (defined below)
+# which bumps them to C++20 without touching the dependency standard.
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
@@ -67,6 +68,12 @@ endif()
 ###
 ### Include source files
 include_directories(src)
+
+# ── C++20 for our own code ────────────────────────────────────────────────────
+# Link any src/ or tests/ target against this to get C++20 without changing the
+# global standard (which would break OpenFHE / GTest).
+add_library(project_cxx20 INTERFACE)
+target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.

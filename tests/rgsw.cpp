@@ -7,10 +7,12 @@
 #include <cmath>
 #include <iostream>
 
+#include <ranges>
+
 /**
  * @brief Tests the internal functions of HomExpand
  */
-void TestA(const std::vector<int64_t>& index) {
+inline void TestA(const std::vector<int64_t>& index) {
     using namespace lbcrypto;
     
     const uint32_t n = index.size(); // bits
@@ -41,7 +43,8 @@ void TestA(const std::vector<int64_t>& index) {
     #endif
 
     // rotations used are [1, n)
-    auto rotations = { 0, 1, 2, 3 };
+    std::vector<int> rotations(n - 1);
+    std::iota(rotations.begin(), rotations.end(), 1);
     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
     
     auto rgswCiphertext = cc->ExpandRLWEHoisted(ciphertext, keyPair.publicKey, n);
@@ -72,11 +75,13 @@ void TestA(const std::vector<int64_t>& index) {
     }   
 }
 
-TEST(RGSW, ExpandRLWEHoisted) { 
-    TestA({ 1, 1, 0, 1 }); 
-    TestA({ 1, 0, 0, 0 }); 
-    TestA({ 0, 0, 0, 1 });
-}
+TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestA({ 0, 0, 0, 1 }); }
+TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestA({ 1, 0, 0, 0 }); }
+TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
+
+TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestA({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
+TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestA({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
+TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestA({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
 
 
 // /// @brief Test HomExpand
