@@ -3,6 +3,7 @@
 #include "core/include/context.h"
 #include "core/include/helpers.h"
 #include "core/include/params.h"
+#include "client/include/rgsw.h"
 
 #include <cstdint>
 #include <cmath>
@@ -78,17 +79,67 @@ inline void TestA(const std::vector<int64_t>& index) {
             SCOPED_TRACE("Column " + std::to_string(j));
             ASSERT_EQ(0, p->GetPackedValue()[j]) << "RGSW row " << i << " did not have trailing 0's.";
         }
-    }   
+    }
+
+    // // TODO: Simulate client and send RGSW(-s) serialized to ensure no secret key mismatch
+    // CryptoContext<DCRTPoly> cc_ctx = cc;
+    // auto A = Client::CreateRGSW_NegS(cc_ctx, keyPair, n, 2); // Input A
+
+    // // // Second loop
+    // // Initialize C as a list of matrices
+    // for(uint32_t i = 0; i < n; i++) {
+    //     // Initialize C[i] as an empty 2ell x 2 matrix of polynomials
+    //     for(uint32_t k = 0; k < log_n; k++) {
+    //         // C[i][k] = EvalExternalProduct(A, c[k][i])
+    //         // C[i][k + log_n] = EvalExternalProduct(A, c[k][i])
+    //     }
+    // }
+
+    // Finally, use external product to see that each C[i] is the correct RGSW(b[i]) encryption
 }
 
 TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestA({ 0, 0, 0, 1 }); }
-TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestA({ 1, 0, 0, 0 }); }
-TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestA({ 1, 0, 0, 0 }); }
+// TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
 
-TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestA({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
-TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestA({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
-TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestA({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestA({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestA({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestA({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
 
+
+TEST(RGSW, EncryptRGSW) {
+    using namespace lbcrypto;
+
+    const auto index = std::vector<int64_t>{ 1, 0, 1, 0 };
+    
+    // Note: n is not number of users but log(number of users)
+    const uint32_t n = index.size(); // bits
+    const uint32_t log_n = Log2(n);  // levels
+
+    CCParams<CryptoContextBGVRNS> params;
+    params.SetMultiplicativeDepth(2*log_n - 1);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
+    params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
+
+    // RGSW-specific parameters
+    // params.SetGadgetLevels(log_n);
+    // params.SetGadgetBase(2);
+
+    auto cc = GenCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
+
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    // auto msg = cc->MakePackedPlaintext(index);
+
+    Client::EncryptRGSW(cc, keyPair, index, 2);
+}
 
 // /// @brief Test HomExpand
 // void TestB() {

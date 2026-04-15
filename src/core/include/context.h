@@ -14,7 +14,7 @@ namespace Server {
     /**
      * @brief Actual implementation of ExtendedCryptoContext
      */
-    template <typename T>
+    template <typename T = DCRTPoly>
     class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {
         CCParams<CryptoContextRGSWBGV> m_params;
 
@@ -34,6 +34,8 @@ namespace Server {
          * 
          * We do not need to account for the scaling being 1/n * B^{-(k + 1)}, we can assume 
          * natively the scaling is b^{-(k + 1)}
+         * 
+         * Uses EvalFastRotation from https://eprint.iacr.org/2018/244.
          * 
          * @param ciphertext RLWE(sum(b[i] X^i) for 0 <= i < len)
          * @param publicKey The public key
