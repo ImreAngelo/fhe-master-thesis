@@ -65,6 +65,6 @@ register_test(test-homplacing       SOURCE homplacing)
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)
 add_custom_target(check
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS ${_all_tests}
 )
