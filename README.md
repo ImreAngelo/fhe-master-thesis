@@ -28,22 +28,13 @@ __Research Questions:__
 3. Run `make build` to build OpenFHE and the project
 4. Profit
 
-> [!NOTE]
-> Build tests with
-> 
-> ```sh
-> make test-[name of test]
-> ```
-
-<!-- TODO: -->
-<!-- 
-> [!TIP]
+> [!NOTE] <!-- TODO: -->
 > The project will statically link OpenFHE by default. 
-> To build the project using a version of OpenFHE already installed on the system, run `make build-dynamic` 
--->
+> To build the project using a version of OpenFHE already installed on the system, ... <!-- run `make build-dynamic` -->
+
 
 ## Project Layout
-Coming...
+TBD...
 
 
 ## Unit Tests

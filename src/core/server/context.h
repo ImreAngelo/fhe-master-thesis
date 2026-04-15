@@ -14,7 +14,7 @@ namespace Server {
     /**
      * @brief Actual implementation of ExtendedCryptoContext
      */
-    template <typename T>
+    template <typename T = DCRTPoly>
     class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {
         CCParams<CryptoContextRGSWBGV> m_params;
 
@@ -22,11 +22,9 @@ namespace Server {
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
             : CryptoContextImpl<T>(base), m_params(params) {}
 
-
+#if !defined(TEST_INTERNAL_FUNCTIONS)
+// only used by HomExpand *and tests*
     protected:
-#if defined(TEST_INTERNAL_FUNCTIONS)
-    // only used by HomExpand *and tests*
-    public:
 #endif
         /**
          * @brief Takes an RLWE encryption with l slots and converts it to l RLWE ciphertexts,
@@ -34,6 +32,8 @@ namespace Server {
          * 
          * We do not need to account for the scaling being 1/n * B^{-(k + 1)}, we can assume 
          * natively the scaling is b^{-(k + 1)}
+         * 
+         * Uses EvalFastRotation from https://eprint.iacr.org/2018/244.
          * 
          * @param ciphertext RLWE(sum(b[i] X^i) for 0 <= i < len)
          * @param publicKey The public key
@@ -84,10 +84,11 @@ namespace Server {
             #endif
 
             for (uint32_t k = 0; k < ell; k++) {
+                // TODO: Optimize; keep Bk outsde the loop and just do Bk = Bk.ModMul(b, t);
                 NativeInteger Bk(1); for (uint32_t j = 0; j <= k; j++) Bk = Bk.ModMul(b, t);
                 int64_t Bk_inv = Bk.ModInverse(t).ConvertToInt<uint64_t>();
 
-                // Reduce to centered representation [-t/2, t/2]
+                // Reduce to centered representation [-t/2, t/2] // (TODO: unnecessary!)
                 if (Bk_inv > bound) Bk_inv -= (bound << 1); // -= t_int
 
                 std::vector<int64_t> scalar(ell, Bk_inv);        

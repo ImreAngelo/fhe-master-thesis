@@ -1,183 +1,95 @@
-#pragma once
-
-#include "openfhe.h"
-
-#include <vector>
-#include <stdint.h>
+#include "core/include/context.h"
+#include "core/include/helpers.h"
+#include "core/include/params.h"
+#include "client/include/rgsw.h"
 
 using namespace lbcrypto;
-using RGSWCiphertext = std::vector<Ciphertext<DCRTPoly>>;
 
-void TestRGSW_NegS(
-    CryptoContext<DCRTPoly>& cc,
-    KeyPair<DCRTPoly>& keys,
-    const RGSWCiphertext& rgsw,
-    uint32_t ell,
-    uint64_t B)
-{
-    uint32_t ring_dim = cc->GetRingDimension();
-    uint64_t t = cc->GetCryptoParameters()->GetPlaintextModulus();
+TEST(RGSW, NegS) {
+    const uint32_t ell = 4;
+    const uint64_t B   = 2;
+
+    CCParams<CryptoContextRGSWBGV> params;
+    params.SetMultiplicativeDepth(1);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(16384);
+    params.SetMaxRelinSkDeg(3);
+    params.SetGadgetLevels(ell);
+    params.SetGadgetBase(B);
+
+    auto cc = Server::GenExtendedCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
+
+    auto keys = cc->KeyGen();
+
+    CryptoContext<DCRTPoly> cc_ctx = cc;
+    auto rgsw = Client::CreateRGSW_NegS(cc_ctx, keys, ell, B);
+    ASSERT_EQ(rgsw.size(), size_t{2 * ell});
+
+    const uint32_t ring_dim = cc->GetRingDimension();
+    const uint64_t t        = cc->GetCryptoParameters()->GetPlaintextModulus();
     NativeInteger t_nat(t);
 
-    // Extract ground truth: NTT(-s) slot values
+    // Ground truth: NTT(-s) per slot, in [0, t)
     auto sk_poly = keys.secretKey->GetPrivateElement();
     sk_poly.SetFormat(Format::EVALUATION);
     auto& sk_eval = sk_poly.GetElementAtIndex(0);
 
-    std::vector<int64_t> neg_s_slots(ring_dim);
+    std::vector<uint64_t> neg_s(ring_dim);
     for (uint32_t i = 0; i < ring_dim; i++) {
         NativeInteger v = sk_eval[i];
-        NativeInteger neg_v = (v == NativeInteger(0)) ? NativeInteger(0) : t_nat - v;
-        int64_t c = static_cast<int64_t>(neg_v.ConvertToInt<uint64_t>());
-        if (c > static_cast<int64_t>(t / 2)) c -= static_cast<int64_t>(t);
-        neg_s_slots[i] = c;
+        neg_s[i] = (v == NativeInteger(0)) ? 0 : (t_nat - v).ConvertToInt<uint64_t>();
     }
-
-    bool all_pass = true;
 
     for (uint32_t k = 0; k < ell; k++) {
-        // Compute B^{-(k+1)} centered
-        NativeInteger Bk(1), B_nat(B);
+        SCOPED_TRACE("k=" + std::to_string(k));
+
+        // B^{-(k+1)} mod t
+        NativeInteger Bk(1);
         for (uint32_t j = 0; j <= k; j++)
-            Bk = Bk.ModMul(B_nat, t_nat);
+            Bk = Bk.ModMul(NativeInteger(B), t_nat);
         NativeInteger Bk_inv = Bk.ModInverse(t_nat);
-        int64_t bk_inv_c = static_cast<int64_t>(Bk_inv.ConvertToInt<uint64_t>());
-        if (bk_inv_c > static_cast<int64_t>(t / 2)) bk_inv_c -= static_cast<int64_t>(t);
 
-        // ── Test top half row k: should decrypt to -s * B^{-(k+1)} ──────
-        Plaintext pt_top;
-        cc->Decrypt(keys.secretKey, rgsw[k], &pt_top);
-        pt_top->SetLength(ring_dim);
-        auto& top_vals = pt_top->GetPackedValue();
+        // Center a value in [0, t) to [-t/2, t/2]
+        auto center = [&](uint64_t v) -> int64_t {
+            int64_t c = static_cast<int64_t>(v);
+            if (c > static_cast<int64_t>(t / 2)) c -= static_cast<int64_t>(t);
+            return c;
+        };
 
-        bool top_pass = true;
-        for (uint32_t i = 0; i < ring_dim; i++) {
-            // Expected: neg_s_slots[i] * bk_inv_c mod t, centered
-            int64_t expected = static_cast<int64_t>(
-                NativeInteger(
-                    (neg_s_slots[i] < 0)
-                        ? static_cast<uint64_t>(neg_s_slots[i] + t)
-                        : static_cast<uint64_t>(neg_s_slots[i])
-                ).ModMul(Bk_inv, t_nat).ConvertToInt<uint64_t>()
-            );
-            if (expected > static_cast<int64_t>(t / 2)) expected -= static_cast<int64_t>(t);
+        // Top half row k: each slot i should decrypt to center(-s[i] * B^{-(k+1)} mod t)
+        {
+            Plaintext pt;
+            cc->Decrypt(keys.secretKey, rgsw[k], &pt);
+            pt->SetLength(ring_dim);
+            const auto& vals = pt->GetPackedValue();
 
-            if (top_vals[i] != expected) {
-                std::cout << "FAIL top row k=" << k
-                          << " slot=" << i
-                          << " got=" << top_vals[i]
-                          << " expected=" << expected << "\n";
-                top_pass = false;
-                break;
-            }
-        }
-        std::cout << "Top row k=" << k << ": " << (top_pass ? "PASS" : "FAIL") << "\n";
-        all_pass &= top_pass;
-
-        // ── Test bottom half row k: should decrypt to B^{-(k+1)} everywhere ──
-        Plaintext pt_bot;
-        cc->Decrypt(keys.secretKey, rgsw[k + ell], &pt_bot);
-        pt_bot->SetLength(ring_dim);
-        auto& bot_vals = pt_bot->GetPackedValue();
-
-        bool bot_pass = true;
-        for (uint32_t i = 0; i < ring_dim; i++) {
-            if (bot_vals[i] != bk_inv_c) {
-                std::cout << "FAIL bottom row k=" << k
-                          << " slot=" << i
-                          << " got=" << bot_vals[i]
-                          << " expected=" << bk_inv_c << "\n";
-                bot_pass = false;
-                break;
-            }
-        }
-        std::cout << "Bottom row k=" << k << ": " << (bot_pass ? "PASS" : "FAIL") << "\n";
-        all_pass &= bot_pass;
-    }
-
-    std::cout << "\nRGSW(-s) test: " << (all_pass ? "ALL PASS" : "FAILED") << "\n";
-}
-
-
-namespace core::server {
-    using namespace lbcrypto;
-
-    template <typename T>
-    using RGSWCiphertext = std::vector<Ciphertext<T>>;
-
-    // /**
-    //  * 
-    //  */
-    // RGSWCiphertext<DCRTPoly> EncryptRGSW(
-    //     CryptoContext<DCRTPoly>& cc,
-    //     KeyPair<DCRTPoly>& keys,
-    //     Plaintext& msg,
-    //     uint32_t l,
-    //     uint64_t B = 2
-    // ) {
-    //     uint32_t N = cc->GetRingDimension();
-    //     uint64_t t = cc->GetCryptoParameters()->GetPlaintextModulus();
-    //     NativeInteger t_nat(t);
-
-    //     assert(msg.size() <= ring_dim);       
-    // }
-
-    RGSWCiphertext<DCRTPoly> CreateRGSW_NegS(
-        CryptoContext<DCRTPoly>& cc,
-        KeyPair<DCRTPoly>& keys,
-        uint32_t ell,
-        uint64_t B)
-    {
-        uint32_t ring_dim = cc->GetRingDimension();
-        uint64_t t = cc->GetCryptoParameters()->GetPlaintextModulus();
-        NativeInteger t_nat(t);
-
-        // Get secret key in EVALUATION format — these ARE the NTT slot values
-        auto sk_poly = keys.secretKey->GetPrivateElement();
-        sk_poly.SetFormat(Format::EVALUATION);
-        auto& sk_eval = sk_poly.GetElementAtIndex(0);  // first RNS limb
-
-        RGSWCiphertext<DCRTPoly> result(2 * ell);
-
-        for (uint32_t k = 0; k < ell; k++) {
-            // Compute B^{-(k+1)} mod t
-            NativeInteger Bk(1), B_nat(B);
-            for (uint32_t j = 0; j <= k; j++)
-                Bk = Bk.ModMul(B_nat, t_nat);
-            NativeInteger Bk_inv = Bk.ModInverse(t_nat);
-
-            // ── Top half: packed slots = NTT(-s) * B^{-(k+1)} ────────────────
-            std::vector<int64_t> neg_s_slots(ring_dim);
+            SCOPED_TRACE("top");
             for (uint32_t i = 0; i < ring_dim; i++) {
-                NativeInteger v = sk_eval[i];
-                // Negate: (-s) mod t
-                NativeInteger neg_v = (v == NativeInteger(0))
-                    ? NativeInteger(0)
-                    : t_nat - v;
-                // Scale by B^{-(k+1)}
-                NativeInteger scaled = neg_v.ModMul(Bk_inv, t_nat);
-                int64_t c = static_cast<int64_t>(scaled.ConvertToInt<uint64_t>());
-                if (c > static_cast<int64_t>(t / 2)) c -= static_cast<int64_t>(t);
-                neg_s_slots[i] = c;
+                int64_t expected = center(
+                    NativeInteger(neg_s[i]).ModMul(Bk_inv, t_nat).ConvertToInt<uint64_t>()
+                );
+                ASSERT_EQ(vals[i], expected) << "slot " << i;
             }
-            auto pt_neg_s = cc->MakePackedPlaintext(neg_s_slots);
-            result[k] = cc->Encrypt(keys.publicKey, pt_neg_s);
-
-            // ── Bottom half: NTT(B^{-(k+1)}) = constant vector ───────────────
-            int64_t Bk_inv_c = static_cast<int64_t>(Bk_inv.ConvertToInt<uint64_t>());
-            if (Bk_inv_c > static_cast<int64_t>(t / 2))
-                Bk_inv_c -= static_cast<int64_t>(t);
-            // NTT of a constant scalar is that scalar repeated in every slot
-            auto pt_one = cc->MakePackedPlaintext(
-                std::vector<int64_t>(ring_dim, Bk_inv_c));
-            result[k + ell] = cc->Encrypt(keys.publicKey, pt_one);
         }
 
-        return result;
-    }
-}
+        // Bottom half row k: every slot should decrypt to center(B^{-(k+1)} mod t)
+        {
+            Plaintext pt;
+            cc->Decrypt(keys.secretKey, rgsw[k + ell], &pt);
+            pt->SetLength(ring_dim);
+            const auto& vals = pt->GetPackedValue();
 
-int main() {
+            int64_t expected = center(Bk_inv.ConvertToInt<uint64_t>());
+            SCOPED_TRACE("bottom");
+            for (uint32_t i = 0; i < ring_dim; i++) {
+                ASSERT_EQ(vals[i], expected) << "slot " << i;
+            }
+        }
+    }
+
     
-    return 0;
 }
