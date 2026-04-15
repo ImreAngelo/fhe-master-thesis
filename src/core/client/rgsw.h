@@ -6,12 +6,15 @@ namespace Client {
     template <typename T>
     using RGSWCiphertext = std::vector<Ciphertext<T>>;
 
-// protected:
+// #if !defined(TEST_INTERNAL_FUNCTIONS)
+//  protected: 
+// #endif
     /**
-     * @brief Encrypt RGSW
+     * @brief Encrypt message as RGSW ciphertext
      * 
      * @todo Look into SIMD operations for constructing (top) rows
      * 
+     * @param keys Public/private keys needed
      * @param msg Packed plaintext message to encrypt
      * @param B Gadget base (default 2)
      */
@@ -19,7 +22,7 @@ namespace Client {
         CryptoContext<DCRTPoly>& cc,
         KeyPair<DCRTPoly>& keys,
         std::vector<int64_t> msg,
-        uint64_t B = 2      // todo: create test for different bases
+        uint64_t B = 2 // todo: create tests for different bases
     ) {
         auto t = NativeInteger(cc->GetCryptoParameters()->GetPlaintextModulus());
         auto ell = msg.size();
@@ -81,5 +84,26 @@ namespace Client {
 
         return G;
     }
+}
 
+namespace Server {
+    using namespace lbcrypto;
+    
+    template <typename T>
+    using RLWECiphertext = Ciphertext<T>;
+
+    template <typename T>
+    using RGSWCiphertext = std::vector<Ciphertext<T>>;
+
+    /**
+     * @brief Evaluate external product homomorphically
+     */
+    Ciphertext<DCRTPoly> EvalExternalProduct(
+        CryptoContext<DCRTPoly>& cc,
+        PublicKey<DCRTPoly>& publicKey,
+        RLWECiphertext<DCRTPoly> rlwe,
+        RGSWCiphertext<DCRTPoly> rgsw
+    ) {
+        
+    }
 }

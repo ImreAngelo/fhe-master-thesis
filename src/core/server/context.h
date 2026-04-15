@@ -22,11 +22,9 @@ namespace Server {
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
             : CryptoContextImpl<T>(base), m_params(params) {}
 
-
+#if !defined(TEST_INTERNAL_FUNCTIONS)
+// only used by HomExpand *and tests*
     protected:
-#if defined(TEST_INTERNAL_FUNCTIONS)
-    // only used by HomExpand *and tests*
-    public:
 #endif
         /**
          * @brief Takes an RLWE encryption with l slots and converts it to l RLWE ciphertexts,

@@ -1,14 +1,13 @@
 #define TEST_INTERNAL_FUNCTIONS
 
-#include "core/include/context.h"
-#include "core/include/helpers.h"
-#include "core/include/params.h"
-#include "client/include/rgsw.h"
+#include "core/server/context.h"
+#include "core/server/helpers.h"
+#include "core/server/params.h"
+#include "core/client/rgsw.h"
 
 #include <cstdint>
 #include <cmath>
 #include <iostream>
-
 #include <ranges>
 
 /**
@@ -98,10 +97,12 @@ inline void TestA(const std::vector<int64_t>& index) {
     // Finally, use external product to see that each C[i] is the correct RGSW(b[i]) encryption
 }
 
-TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestA({ 0, 0, 0, 1 }); }
+// Small power-of-2 base
+// TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestA({ 0, 0, 0, 1 }); }
 // TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestA({ 1, 0, 0, 0 }); }
-// TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
+TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
 
+// Non-power-of-2 base
 // TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestA({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
 // TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestA({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
 // TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestA({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
@@ -136,9 +137,12 @@ TEST(RGSW, EncryptRGSW) {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
 
-    // auto msg = cc->MakePackedPlaintext(index);
+    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair, index, 2);
 
-    Client::EncryptRGSW(cc, keyPair, index, 2);
+    Plaintext pt = cc->MakePackedPlaintext(index);
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+
+    Server::EvalExternalProduct(cc, keyPair.publicKey, rlwe_ct, rgsw_ct);
 }
 
 // /// @brief Test HomExpand
