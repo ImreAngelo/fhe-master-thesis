@@ -86,10 +86,11 @@ namespace Server {
             #endif
 
             for (uint32_t k = 0; k < ell; k++) {
+                // TODO: Optimize; keep Bk outsde the loop and just do Bk = Bk.ModMul(b, t);
                 NativeInteger Bk(1); for (uint32_t j = 0; j <= k; j++) Bk = Bk.ModMul(b, t);
                 int64_t Bk_inv = Bk.ModInverse(t).ConvertToInt<uint64_t>();
 
-                // Reduce to centered representation [-t/2, t/2]
+                // Reduce to centered representation [-t/2, t/2] // (TODO: unnecessary!)
                 if (Bk_inv > bound) Bk_inv -= (bound << 1); // -= t_int
 
                 std::vector<int64_t> scalar(ell, Bk_inv);        
