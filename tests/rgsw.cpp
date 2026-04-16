@@ -142,6 +142,12 @@ TEST(RGSW, EncryptRGSW) {
     Plaintext pt = cc->MakePackedPlaintext(index);
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
+    // NTT
+    auto rgsw_ct_ntt = Client::EncryptRGSW_NTT(cc, keyPair.secretKey, index, 2);
+
+    Plaintext pt_ntt = cc->MakePackedPlaintext(index);
+    auto rlwe_ct_ntt = cc->Encrypt(keyPair.publicKey, pt);
+
     Server::EvalExternalProduct(cc, keyPair.publicKey, rlwe_ct, rgsw_ct);
 }
 
