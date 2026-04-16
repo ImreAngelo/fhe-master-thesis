@@ -35,43 +35,36 @@ namespace Client {
         // Extract secret s
         // Elements of RLWE is represented as (b, a) so s = element[0]
         auto sk_poly = keys.secretKey->GetPrivateElement();
-        sk_poly.SetFormat(Format::EVALUATION);
+        sk_poly.SetFormat(Format::EVALUATION); // TODO: probably is evaluation already.. (confirm)
         auto& s = sk_poly.GetElementAtIndex(0);
 
+        // NOTE: code is 0-index, formulas are 1-indexed so i = i + 1
         for (size_t i = 0; i < ell; i++) {
-            // Find 1/B^{i + 1} mod t
+            // Find 1/B^i mod t
             b_ctr = b_ctr.ModMul(B, t);
             gi = b_ctr.ModInverse(t);
-            
-            // First L rows
-            std::vector<int64_t> mu;
-            mu.reserve(ell);
 
-            // -s * msg / B^i = -msg * s/B^i
-            // NOTE: in the formula i is 1-index
+            // Bottom L rows: msg/B^i
+            std::vector<int64_t> row(ell);
             for(size_t j = 0; j < ell; j++) {
-                auto neg = (msg[j] > 0) ? t - NativeInteger(msg[j]) : NativeInteger(msg[j]);
-                auto muj = s[j].ModMul(neg, t).ModMul(gi, t);
-
-                auto mujint = muj.ConvertToInt<uint64_t>();
-                // assert(...); // TODO: Check overflow etc. in conversion to signed
-                mu.emplace_back(static_cast<int64_t>(mujint));
+                auto val = gi.ModMul(NativeInteger(msg[j]), t);
+                row[j] = val.ConvertToInt<int64_t>();
             }
 
-            Plaintext row_i = cc->MakePackedPlaintext(mu);
-            G[i] = cc->Encrypt(keys.secretKey, row_i);
-
-            // Last L rows
-            auto b_int = static_cast<int64_t>(gi.ConvertToInt<uint64_t>());
+            Plaintext bottom = cc->MakePackedPlaintext(row);
+            G[i + ell] = cc->Encrypt(keys.secretKey, bottom);
             
+            // Top L rows: -s * msg/B^i
             for(size_t j = 0; j < ell; j++) {
-                mu[j] = b_int * msg[j];
+                auto val = (t - s[j]).ModMul(row[j], t);
+                row[j] = val.ConvertToInt<int64_t>();
             }
 
-            Plaintext row_il = cc->MakePackedPlaintext(mu);
-            G[i + ell] = cc->Encrypt(keys.secretKey, row_il);
+            Plaintext top = cc->MakePackedPlaintext(row);
+            G[i] = cc->Encrypt(keys.secretKey, top);
         }
         
+// #define DEBUG_LOGGING
 #if defined(DEBUG_LOGGING)
         std::cout << "G: " << std::endl;
         for(const auto& row : G) {
