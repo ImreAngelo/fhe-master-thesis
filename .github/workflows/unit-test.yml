@@ -1,4 +1,4 @@
-name: Run Tests
+name: Unit Test
 
 on:
   push:
@@ -63,8 +63,22 @@ jobs:
           path: vendors/install
           key: openfhe-${{ runner.os }}-${{ needs.build-openfhe.outputs.hash }}
 
+      - name: Restore gtest cache
+        id: cache-gtest
+        uses: actions/cache/restore@v5
+        with:
+          path: build/_deps
+          key: gtest-${{ runner.os }}-${{ hashFiles('tests/CMakeLists.txt') }}
+
       - name: Configure project
         run: cmake -B build -DBUILD_STATIC=ON
+
+      - name: Save gtest cache
+        if: steps.cache-gtest.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: build/_deps
+          key: gtest-${{ runner.os }}-${{ hashFiles('tests/CMakeLists.txt') }}
 
       - name: Run tests
         run: cmake --build build --target check -j$(nproc)
