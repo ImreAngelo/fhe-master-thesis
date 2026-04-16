@@ -28,7 +28,8 @@ __Research Questions:__
 3. Run `make build` to build OpenFHE and the project
 4. Profit
 
-> [!NOTE] <!-- TODO: -->
+<!-- TODO: -->
+> [!NOTE] 
 > The project will statically link OpenFHE by default. 
 > To build the project using a version of OpenFHE already installed on the system, ... <!-- run `make build-dynamic` -->
 
