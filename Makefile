@@ -1,10 +1,26 @@
-.PHONY: all build clean clean-build clean-cmake clean-openfhe help test
+.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help test
 
 all: build
 
 #########
 # Build #
 #########
+
+# Build OpenFHE with CI flags (no benchmarks/tests/examples) and install to vendors/install
+# TODO: https://github.com/openfheorg/openfhe-development/blob/main/docs/static_docs/Best_Performance.md
+ci:
+	@echo "Building OpenFHE (CI mode)..."
+	@cmake -S vendors/openfhe-development \
+	       -B vendors/openfhe-development/build \
+	       -DBUILD_STATIC=ON \
+	       -DBUILD_BENCHMARKS=OFF \
+	       -DBUILD_UNITTESTS=OFF \
+	       -DBUILD_EXAMPLES=OFF \
+	       -DBUILD_EXTRAS=OFF \
+		   -DCMAKE_BUILD_TYPE=Release \
+	       -DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
+	@cmake --build vendors/openfhe-development/build -j$(shell nproc)
+	@cmake --install vendors/openfhe-development/build
 
 # Build OpenFHE locally and link statically (no -static flag, just static archives)
 build:
