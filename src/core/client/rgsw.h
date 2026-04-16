@@ -104,6 +104,6 @@ namespace Server {
         RLWECiphertext<DCRTPoly> rlwe,
         RGSWCiphertext<DCRTPoly> rgsw
     ) {
-        
+        return rlwe;
     }
 }

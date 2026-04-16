@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  build-openfhe:
     runs-on: ubuntu-latest
+    outputs:
+      hash: ${{ steps.openfhe.outputs.hash }}
 
     steps:
       - uses: actions/checkout@v6
@@ -46,7 +48,21 @@ jobs:
           path: vendors/install
           key: openfhe-${{ runner.os }}-${{ steps.openfhe.outputs.hash }}
 
-      # Run tests
+  test:
+    runs-on: ubuntu-latest
+    needs: build-openfhe
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Restore OpenFHE cache
+        uses: actions/cache/restore@v5
+        with:
+          path: vendors/install
+          key: openfhe-${{ runner.os }}-${{ needs.build-openfhe.outputs.hash }}
+
       - name: Configure project
         run: cmake -B build -DBUILD_STATIC=ON
 
