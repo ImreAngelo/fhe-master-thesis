@@ -1,6 +1,6 @@
 #include "openfhe.h"
 
-#define DEBUG_LOGGING
+// #define DEBUG_LOGGING
 
 namespace Client {
     using namespace lbcrypto;
@@ -14,6 +14,8 @@ namespace Client {
     /**
      * @brief Encrypt message as RGSW ciphertext
      * 
+     * @todo Optimize: EncryptBatch and/or construct b in top row directly
+     * @todo Set noise scale for each row
      * @todo Look into setting ell automatically
      * @todo Look into SIMD operations for constructing (top) rows
      * 
@@ -38,7 +40,10 @@ namespace Client {
         int64_t gi = 1;
 
         for (size_t i = 0; i < ell; i++, gi = (gi * B) % t) {
+            
+            #if defined(DEBUG_LOGGING)
             std::cout << "B^" << i << " = " << gi << " mod " << t << std::endl;
+            #endif
 
             // Bottom L rows: msg * B^i
             // TODO: Use SIMD for scalar * vector (mod t if possible)
@@ -97,16 +102,58 @@ namespace Server {
      * @brief Evaluate external product homomorphically
      */
     Ciphertext<DCRTPoly> EvalExternalProduct(
-        CryptoContext<DCRTPoly>& cc,
-        PublicKey<DCRTPoly>& publicKey,
-        RLWECiphertext<DCRTPoly> rlwe,
-        RGSWCiphertext<DCRTPoly> rgsw,
-        size_t ell = 4,
-        uint64_t B = 2 // TODO: get all params from m_params
-
+        const CryptoContext<DCRTPoly>& cc,  // TODO: Make ->encryptRGSW member of ClientImpl
+        // const PublicKey<DCRTPoly>& publicKey,
+        RLWECiphertext<DCRTPoly> x,
+        RGSWCiphertext<DCRTPoly> Y,
+        const uint64_t log_B = 5,           // TODO: Make crypto parameter
+        const size_t ell = 9                // TODO: Make crypto parameter
     ) {
+        // Scalar-multiply a ciphertext by a polynomial
+        auto scalarMult = [](const Ciphertext<DCRTPoly>& ct, const DCRTPoly& poly) {
+            auto result = ct->Clone();
+            auto& elems = result->GetElements();
+            DCRTPoly p = poly;
+            p.SetFormat(elems[0].GetFormat());
+            elems[0] *= p;
+            elems[1] *= p;
+            return result;
+        };
 
+        // Base-B decomposition of x_0 and x_1
+        // Produces digit polynomials {u_i}, {v_i} with small coefficients
+        // such that  Σ u_i·B^i ≡ x_0 (mod q)  and  Σ v_i·B^i ≡ x_1 (mod q).
+        DCRTPoly x0 = x->GetElements()[0];
+        DCRTPoly x1 = x->GetElements()[1];
+        x0.SetFormat(Format::COEFFICIENT);
+        x1.SetFormat(Format::COEFFICIENT);
 
-        return rlwe;
+        auto u = x0.BaseDecompose(log_B, /*evalModeAnswer=*/true);
+        auto v = x1.BaseDecompose(log_B, /*evalModeAnswer=*/true);
+
+        // BaseDecompose returns ⌈log_B q⌉ digits. If ell is smaller, high-order
+        // digits are dropped here — which IS an error (see caveat below).
+        auto zero = DCRTPoly(x0.GetParams(), Format::EVALUATION, /*zero=*/true);
+        u.resize(ell, zero);
+        v.resize(ell, zero);
+
+        // ── Step 2: out = Σ u_i · Y[i+ℓ]  -  Σ v_i · Y[i] ────────────────────
+        //   Y[i]     (0 ≤ i < ℓ): Enc(-μ·B^i·s)   ["top"    rows, our labeling]
+        //   Y[i+ℓ]   (0 ≤ i < ℓ): Enc( μ·B^i )    ["bottom" rows, our labeling]
+        //
+        // Decryption check:
+        //   out_0 + out_1·s
+        //     = Σ u_i·(μ·B^i)  -  Σ v_i·(-μ·B^i·s)       (+ t·noise)
+        //     = μ·(Σ u_i·B^i) + μ·s·(Σ v_i·B^i)
+        //     = μ·(x_0 + x_1·s) = μ·m_x                  ✓
+        auto out = scalarMult(Y[ell], u[0]);
+        for (size_t i = 1; i < ell; i++) {
+            out = cc->EvalAdd(out, scalarMult(Y[i + ell], u[i]));
+        }
+        for (size_t i = 0; i < ell; i++) {
+            out = cc->EvalSub(out, scalarMult(Y[i], v[i]));
+        }
+
+        return out;
     }
 }

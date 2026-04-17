@@ -121,7 +121,6 @@ TEST(RGSW, EncryptRGSW) {
     params.SetMultiplicativeDepth(2*log_n - 1);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
-    params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
     // RGSW-specific parameters
     // params.SetGadgetLevels(log_n);
@@ -136,13 +135,30 @@ TEST(RGSW, EncryptRGSW) {
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
+
+    const uint64_t log_B = 15;
+    const size_t ell = 16;
     
-    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index);
+    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index, log_B, ell);
+    
+    std::cout << "G: " << std::endl;
+    for(const auto& row : rgsw_ct) {
+        Plaintext decrytedRow;
+        cc->Decrypt(keyPair.secretKey, row, &decrytedRow);
+        decrytedRow->SetLength(n);
+        std::cout << decrytedRow << std::endl;
+        // TODO: Assert bottom rows are correct
+    }
 
     Plaintext pt = cc->MakePackedPlaintext(index);
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
-    Server::EvalExternalProduct(cc, keyPair.publicKey, rlwe_ct, rgsw_ct);
+    auto ext = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct);
+    
+    Plaintext res;
+    cc->Decrypt(keyPair.secretKey, ext, &res);
+
+    std::cout << "Final result: " << res << std::endl;
 }
 
 // /// @brief Test HomExpand
