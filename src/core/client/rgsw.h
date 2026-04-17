@@ -14,147 +14,71 @@ namespace Client {
     /**
      * @brief Encrypt message as RGSW ciphertext
      * 
+     * @todo Look into setting ell automatically
      * @todo Look into SIMD operations for constructing (top) rows
      * 
      * @param keys Public/private keys needed
      * @param msg Packed plaintext message to encrypt
-     * @param B Gadget base (default 2)
+     * @param log_B Gadget base power (e.g., 5 gives B = 2^5)
      */
-    RGSWCiphertext<DCRTPoly> EncryptRGSW(
-        CryptoContext<DCRTPoly>& cc,
-        KeyPair<DCRTPoly>& keys, // TODO: Only needs secret key
+    RGSWCiphertext<DCRTPoly> EncryptRGSW_new(
+        const CryptoContext<DCRTPoly>& cc,
+        const KeyPair<DCRTPoly>& keys,
         std::vector<int64_t> msg,
-        uint64_t B = 2 // TODO: create tests for different bases
+        const uint64_t log_B = 5,
+        const size_t ell = 9
     ) {
-        auto t = NativeInteger(cc->GetCryptoParameters()->GetPlaintextModulus());
-        auto ell = msg.size();
+        const auto& params = cc->GetCryptoParameters();
+
+        const auto t = params->GetPlaintextModulus();
+        const auto B = (1ULL << log_B);
+        
+        const auto msgSlots = msg.size();
         
         RGSWCiphertext<DCRTPoly> G(2*ell);
-        NativeInteger b_ctr(1), gi;
+        int64_t gi = 1;
 
-        // Extract secret s
-        // Elements of RLWE is represented as (b, a) so s = element[0]
-        auto sk_poly = keys.secretKey->GetPrivateElement();
-        sk_poly.SetFormat(Format::EVALUATION); // TODO: probably is evaluation already.. (confirm)
-        auto& s = sk_poly.GetElementAtIndex(0);
+        for (size_t i = 0; i < ell; i++, gi = (gi * B) % t) {
+            std::cout << "B^" << i << " = " << gi << " mod " << t << std::endl;
 
-        // NOTE: code is 0-index, formulas are 1-indexed so i = i + 1
-        for (size_t i = 0; i < ell; i++) {
-            // Find 1/B^i mod t
-            b_ctr = b_ctr.ModMul(B, t);
-            gi = b_ctr.ModInverse(t);
-
-            // Bottom L rows: msg/B^i
-            std::vector<int64_t> row(ell);
-            for(size_t j = 0; j < ell; j++) {
-                auto val = gi.ModMul(NativeInteger(msg[j]), t);
-                row[j] = val.ConvertToInt<int64_t>();
+            // Bottom L rows: msg * B^i
+            // TODO: Use SIMD for scalar * vector (mod t if possible)
+            std::vector<int64_t> row = msg;
+            for(size_t j = 0; j < msgSlots; j++) {
+                row[j] *= gi;
+                row[j] %= t;
             }
 
-            Plaintext bottom = cc->MakePackedPlaintext(row);
-            G[i + ell] = cc->Encrypt(keys.secretKey, bottom);
+            Plaintext mBi = cc->MakePackedPlaintext(row);
+            G[i + ell] = cc->Encrypt(keys.secretKey, mBi);
             
-            // Top L rows: -s * msg/B^i
-            for(size_t j = 0; j < ell; j++) {
-                auto val = (t - s[j]).ModMul(row[j], t);
-                row[j] = val.ConvertToInt<int64_t>();
-            }
+            // Top L rows: -s * msg * B^i
+            // enc(-s * msg * B^i) = Enc(0) - Enc(msg * B^i)
+            // TODO: Confirm identity in main doc, it should follow directly from Z - \mu G with Z = 0!
+            auto zeroPt = cc->MakePackedPlaintext(std::vector<int64_t>(msgSlots, 0));
+            auto topCt = cc->Encrypt(keys.secretKey, zeroPt);
+            if(!mBi->Encode())  // ensure DCRTPoly form is populated
+                throw "Error 1";
+            auto mBiPoly = mBi->GetElement<DCRTPoly>();
 
-            Plaintext top = cc->MakePackedPlaintext(row);
-            G[i] = cc->Encrypt(keys.secretKey, top);
+            auto& elems = topCt->GetElements();
+            mBiPoly.SetFormat(elems[1].GetFormat());  // match NTT/coeff form of c1
+            elems[1] -= mBiPoly;
+
+            G[i] = topCt;
         }
-        
-#if defined(DEBUG_LOGGING)
-        // TODO: move to test
+    
+    #if defined(DEBUG_LOGGING)
         std::cout << "G: " << std::endl;
         for(const auto& row : G) {
             Plaintext decrytedRow;
             cc->Decrypt(keys.secretKey, row, &decrytedRow);
-            decrytedRow->SetLength(ell);
+            decrytedRow->SetLength(msgSlots);
             std::cout << decrytedRow << std::endl;
         }
-#endif
+    #endif
 
         return G;
-    }
-
-    RGSWCiphertext<DCRTPoly> EncryptRGSW_NTT(
-        CryptoContext<DCRTPoly>&    cc,
-        const PrivateKey<DCRTPoly>& sk,
-        const std::vector<int64_t>& msg,
-        uint64_t B = 2
-    ) {
-        const auto& cryptoParams = cc->GetCryptoParameters();
-        const uint64_t t      = cryptoParams->GetPlaintextModulus();
-        const size_t   N      = cc->GetRingDimension();
-        const size_t   nSlots = cryptoParams->GetEncodingParams()->GetBatchSize();
-        const size_t   ell    = cryptoParams->GetElementParams()->GetParams().size();
-
-        RGSWCiphertext<DCRTPoly> Y(2 * ell);
-
-        // ── s in coefficient domain, balanced ────────────────────────────────
-        auto sk_poly = sk->GetPrivateElement();
-        sk_poly.SetFormat(Format::COEFFICIENT);
-        const auto& s_elem = sk_poly.GetElementAtIndex(0);
-        const int64_t q0   = s_elem.GetModulus().ConvertToInt<int64_t>();
-
-        std::vector<int64_t> s_coeffs(N);
-        for (size_t k = 0; k < N; k++) {
-            int64_t c = s_elem[k].ConvertToInt<int64_t>();
-            if (c > q0 / 2) c -= q0;
-            s_coeffs[k] = c;
-        }
-
-        // ── s in slot domain: build NativePoly in Z_t[X]/(X^N+1), then NTT ──
-        // FIX: construct ILNativeParams directly instead of extracting from
-        // a DCRTPoly plaintext (which crashes with GetElement<NativePoly>()).
-        // t ≡ 1 (mod 2N) guarantees the NTT roots exist in Z_t.
-        auto pt_params = std::make_shared<ILNativeParams>(2 * N, NativeInteger(t));
-        NativePoly s_plain(pt_params, Format::COEFFICIENT, true);
-        for (size_t k = 0; k < N; k++) {
-            s_plain[k] = (s_coeffs[k] < 0)
-                    ? NativeInteger(t - 1)   // -1 mod t (ternary key)
-                    : NativeInteger((uint64_t)s_coeffs[k]);
-        }
-        s_plain.SetFormat(Format::EVALUATION);
-        // s_plain[j] is now s(ω^j) mod t, consistent with packed slot j
-
-        // ── pad msg to nSlots ─────────────────────────────────────────────────
-        std::vector<int64_t> mu(nSlots, 0);
-        for (size_t j = 0; j < std::min(msg.size(), nSlots); j++)
-            mu[j] = ((msg[j] % (int64_t)t) + t) % t;
-
-        // ── gadget rows ───────────────────────────────────────────────────────
-        uint64_t Bi = 1;
-        for (size_t i = 0; i < ell; i++) {
-            if (i > 0) Bi = Bi * B % t;
-
-            std::vector<int64_t> bot_slots(nSlots), top_slots(nSlots);
-            for (size_t j = 0; j < nSlots; j++) {
-                const uint64_t bot_j  = (uint64_t)mu[j] * Bi % t;
-                const uint64_t s_j    = s_plain.GetValues()[j].ConvertToInt<uint64_t>();
-                const uint64_t neg_sj = (t - s_j) % t;
-
-                bot_slots[j] = (int64_t)bot_j;
-                top_slots[j] = (int64_t)(neg_sj * bot_j % t);
-            }
-
-            Y[i]       = cc->Encrypt(sk, cc->MakePackedPlaintext(top_slots));
-            Y[i + ell] = cc->Encrypt(sk, cc->MakePackedPlaintext(bot_slots));
-        }
-        
-#if defined(DEBUG_LOGGING)
-        // TODO: move to test
-        std::cout << "G: " << std::endl;
-        for(const auto& row : Y) {
-            Plaintext decrytedRow;
-            cc->Decrypt(sk, row, &decrytedRow);
-            decrytedRow->SetLength(ell);
-            std::cout << decrytedRow << std::endl;
-        }
-#endif
-
-        return Y;
     }
 }
 
@@ -179,27 +103,7 @@ namespace Server {
         uint64_t B = 2 // TODO: get all params from m_params
 
     ) {
-        // auto t = NativeInteger(cc->GetCryptoParameters()->GetPlaintextModulus());
-        // // auto ell = msg.size(); // TODO: Get from parameters!
-        
-        // NativeInteger g_inv(B);
-        
-        // // TODO:
-        // // TEST: Verify that G^{-1}(x) * G = RLWE(x)
-        // //       (a * g^{-1} * g = )
-        
-        // // Extract (a, b) from RLWE
-        // auto elements = rlwe->GetElements();
-        // auto a = elements[1]; // .ToNativePoly()
-        // auto b = elements[0]; // TODO: Use native vector for optimization
 
-        // for (size_t i = 0; i < ell; i++, g_inv = g_inv.ModMul(B, t)) {
-        //     auto el = a.GetElementAtIndex(i).ToNativePoly();
-        //     auto v = g_inv.ModMul(el, t);
-            
-        //     // .. * Y
-        //     // auto row = rgsw[i]; // top row i
-        // }
 
         return rlwe;
     }
