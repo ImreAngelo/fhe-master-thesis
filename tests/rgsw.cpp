@@ -136,21 +136,13 @@ TEST(RGSW, EncryptRGSW) {
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-
-    // auto rgsw_ct = Client::EncryptRGSW(cc, keyPair, index, 2);
     
-    auto rgsw_ct = Client::EncryptRGSW_new(cc, keyPair, index);
+    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index);
 
     Plaintext pt = cc->MakePackedPlaintext(index);
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
     Server::EvalExternalProduct(cc, keyPair.publicKey, rlwe_ct, rgsw_ct);
-
-    // NTT
-    // auto rgsw_ct_ntt = Client::EncryptRGSW_NTT(cc, keyPair.secretKey, index, 2);
-
-    // Plaintext pt_ntt = cc->MakePackedPlaintext(index);
-    // auto rlwe_ct_ntt = cc->Encrypt(keyPair.publicKey, pt);
 }
 
 // /// @brief Test HomExpand
