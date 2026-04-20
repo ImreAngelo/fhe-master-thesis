@@ -50,7 +50,8 @@ Configured with [GoogleTest](https://github.com/google/googletest).
 >
 > ```sh
 > make test         # run all tests
-> make test-rgsw    # run rgsw test
+> make test-rgsw    # test external product
+> make homplacing   # test homomorphic placing
 > ```
 
 > [!TIP]

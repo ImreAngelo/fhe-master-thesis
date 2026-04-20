@@ -1,9 +1,8 @@
 #define TEST_INTERNAL_FUNCTIONS
-// #define DEBUG_LOGGING
 
-#include "core/server/context.h"
-#include "core/server/helpers.h"
-#include "core/server/params.h"
+#include "core/context.h"
+#include "core/helpers.h"
+#include "core/params.h"
 
 using namespace lbcrypto;
 
@@ -22,12 +21,11 @@ inline void TestInternals(const std::vector<int64_t>& index) {
     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
 
     // RGSW-specific parameters
-    params.SetGadgetLevels(log_n);
+    params.SetGadgetDecomposition(log_n);
     params.SetGadgetBase(2);
 
-    auto cc = Server::GenExtendedCryptoContext(params);
+    auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
-    cc->Enable(KEYSWITCH);
     cc->Enable(LEVELEDSHE);
     cc->Enable(ADVANCEDSHE);
 
