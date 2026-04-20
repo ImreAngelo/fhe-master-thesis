@@ -4,16 +4,172 @@
 #include "core/server/helpers.h"
 #include "core/server/params.h"
 #include "core/client/rgsw.h"
+#include "server/HomPlacing.h"
 
 #include <cstdint>
 #include <cmath>
 #include <iostream>
 #include <ranges>
 
+using namespace lbcrypto;
+
+/**
+ * @brief Test the external product
+ * Should result in input value
+ */
+inline void TestExternalProduct(const std::vector<int64_t>& value) {
+    // const auto index = std::vector<int64_t>{ 1, 0, 1, 0 };
+    
+    // Note: n is not number of users but log(number of users)
+    // const uint32_t n = value.size(); // bits
+    // const uint32_t log_n = Log2(n);  // levels
+    
+    // const uint64_t log_B = 30;
+    // const size_t ell = 11;
+    
+    const uint64_t log_B = 15;
+    const size_t ell = 21;
+
+    CCParams<CryptoContextBGVRNS> params;
+    // params.SetMultiplicativeDepth(2*ell - 1);
+    // params.SetPlaintextModulus((1 << 17) + 1);
+    // params.SetRingDim(1 << 16);     // 16384 = smallest recommended value with BGN-rns (l = 3)
+    //                                 // 65535 for l = 17
+    params.SetMultiplicativeDepth(7);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
+    // params.SetMaxRelinSkDeg(3);
+
+#if defined(DEBUG_LOGGING)
+    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
+    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
+    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
+#endif
+
+    // RGSW-specific parameters
+    // params.SetGadgetLevels(log_n);
+    // params.SetGadgetBase(2);
+
+    auto cc = GenCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    // cc->Enable(ADVANCEDSHE);
+
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    
+    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, value, log_B, ell);
+    
+#if defined(DEBUG_LOGGING)
+    std::cout << "G: " << std::endl;
+    for(const auto& row : rgsw_ct) {
+        Plaintext decrytedRow;
+        cc->Decrypt(keyPair.secretKey, row, &decrytedRow);
+        decrytedRow->SetLength(n);
+        std::cout << decrytedRow << std::endl;
+        // TODO: Assert bottom rows are correct
+    }
+#endif
+
+    Plaintext pt = cc->MakePackedPlaintext(value);
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+
+    Plaintext res_a;
+    auto ntt = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    cc->Decrypt(keyPair.secretKey, ntt, &res_a);
+    std::cout << "Final result (NTT): " << res_a << std::endl;
+    
+    Plaintext res_b;
+    auto cof = Server::EvalCoeffExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    cc->Decrypt(keyPair.secretKey, cof, &res_b);
+    std::cout << "Final result (CoF): " << res_b << std::endl;
+    
+    Plaintext res_c;
+    auto acc = Server::EvalAccExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    cc->Decrypt(keyPair.secretKey, acc, &res_c);
+    std::cout << "Final result (Acc): " << res_c << std::endl;
+
+    const auto& result_slot = res_a->GetPackedValue();
+    for(size_t i = 0; i < value.size(); i++) {
+        ASSERT_EQ(value[i], result_slot[i]);
+    }
+}
+
+/**
+ * @brief Test Homomorphic Placing (single user)
+ * Should place value in slot 2^index
+ */
+inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& value) {
+    const uint64_t log_B = 15;
+    const size_t ell = 21;
+
+    CCParams<CryptoContextBGVRNS> params;
+    params.SetMultiplicativeDepth(7);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(16384);
+
+#if defined(DEBUG_LOGGING)
+    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
+    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
+    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
+#endif
+
+    auto cc = GenCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index, log_B, ell);
+
+    std::vector<Client::RGSWCiphertext<DCRTPoly>> bits(1);
+    bits[0] = rgsw_ct;
+
+    Plaintext pt = cc->MakePackedPlaintext({ value });
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+
+    auto res_cts = Server::HomPlacing(cc, rlwe_ct, bits, log_B, ell);
+    
+#if defined(DEBUG_LOGGING)
+    std::cout << "Final placing: ";
+    for(const auto& v : res_cts) {
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, v, &res);
+        std::cout << res << ", ";    
+    }
+#endif
+
+    std::cout << std::endl;
+
+    // Currently only correct for bit = 0
+    const auto slot = std::accumulate(index.begin(), index.end(), 0, 
+        [](int acc, bool bit) { return (acc << 1) | bit; });
+    std::vector<int64_t> expected(1 << index.size());
+    expected[slot] = value;
+
+#if defined(DEBUG_LOGGING)
+    std::cout << "Placing '" << value << "' in slot " << slot << std::endl;
+#endif
+
+    ASSERT_EQ(expected.size(), res_cts.size());
+
+    for(size_t i = 0; i < expected.size(); i++) {
+        Plaintext slot_val;
+        cc->Decrypt(keyPair.secretKey, res_cts[i], &slot_val);
+        ASSERT_EQ(expected[i], slot_val->GetPackedValue()[0]);
+    }
+}
+
 /**
  * @brief Tests the internal functions of HomExpand
  */
-inline void TestA(const std::vector<int64_t>& index) {
+inline void TestHomExpand(const std::vector<int64_t>& index) {
     using namespace lbcrypto;
     
     // Note: n is not number of users but log(number of users)
@@ -97,172 +253,23 @@ inline void TestA(const std::vector<int64_t>& index) {
     // Finally, use external product to see that each C[i] is the correct RGSW(b[i]) encryption
 }
 
+// Basic test
+TEST(RGSW, EncryptRGSW) { TestExternalProduct({ 1, 0, 1, 0 }); } // fails
+
+// Basic test
+TEST(RGSW, HomPlacing_0) { TestHomPlacing({0}, 4); } // works 
+TEST(RGSW, HomPlacing_1) { TestHomPlacing({1}, 4); } // fails because of external product
+
 // Small power-of-2 base
-// TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestA({ 0, 0, 0, 1 }); }
-// TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestA({ 1, 0, 0, 0 }); }
-TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestA({ 1, 1, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestHomExpand({ 0, 0, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestHomExpand({ 1, 0, 0, 0 }); }
+// TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestHomExpand({ 1, 1, 0, 1 }); }
 
 // Non-power-of-2 base
-// TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestA({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
-// TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestA({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
-// TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestA({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestHomExpand({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestHomExpand({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
+// TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestHomExpand({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
 
-
-TEST(RGSW, EncryptRGSW) {
-    using namespace lbcrypto;
-
-    const auto index = std::vector<int64_t>{ 1, 0, 1, 0 };
-    
-    // Note: n is not number of users but log(number of users)
-    // const uint32_t n = index.size(); // bits
-    // const uint32_t log_n = Log2(n);  // levels
-    
-    // const uint64_t log_B = 30;
-    // const size_t ell = 11;
-    
-    const uint64_t log_B = 15;
-    const size_t ell = 21;
-
-    CCParams<CryptoContextBGVRNS> params;
-    // params.SetMultiplicativeDepth(2*ell - 1);
-    // params.SetPlaintextModulus((1 << 17) + 1);
-    // params.SetRingDim(1 << 16);     // 16384 = smallest recommended value with BGN-rns (l = 3)
-    //                                 // 65535 for l = 17
-    params.SetMultiplicativeDepth(7);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
-    // params.SetMaxRelinSkDeg(3);
-
-    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
-    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
-    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
-
-    // RGSW-specific parameters
-    // params.SetGadgetLevels(log_n);
-    // params.SetGadgetBase(2);
-
-    auto cc = GenCryptoContext(params);
-    cc->Enable(PKE);
-    cc->Enable(KEYSWITCH);
-    cc->Enable(LEVELEDSHE);
-    cc->Enable(ADVANCEDSHE);
-
-    KeyPair<DCRTPoly> keyPair;
-    keyPair = cc->KeyGen();
-    cc->EvalMultKeyGen(keyPair.secretKey);
-
-    
-    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index, log_B, ell);
-    
-    // std::cout << "G: " << std::endl;
-    // for(const auto& row : rgsw_ct) {
-    //     Plaintext decrytedRow;
-    //     cc->Decrypt(keyPair.secretKey, row, &decrytedRow);
-    //     decrytedRow->SetLength(n);
-    //     std::cout << decrytedRow << std::endl;
-    //     // TODO: Assert bottom rows are correct
-    // }
-
-    Plaintext pt = cc->MakePackedPlaintext(index);
-    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
-
-    Plaintext res_a;
-    auto ntt = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell, keyPair);
-    cc->Decrypt(keyPair.secretKey, ntt, &res_a);
-    std::cout << "Final result (NTT): " << res_a << std::endl;
-    
-    Plaintext res_b;
-    auto cof = Server::EvalCoeffExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
-    cc->Decrypt(keyPair.secretKey, cof, &res_b);
-    std::cout << "Final result (CoF): " << res_b << std::endl;
-    
-    Plaintext res_c;
-    auto acc = Server::EvalAccExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
-    cc->Decrypt(keyPair.secretKey, acc, &res_c);
-    std::cout << "Final result (Acc): " << res_c << std::endl;
-}
-
-// /// @brief Test HomExpand
-// void TestB() {
-//     const auto index = std::vector<int64_t>{ 1, 1, 0, 1 };
-
-//     const uint32_t n = index.size(); // bits
-//     const uint32_t log_n = Log2(n);  // levels
-//     const uint32_t N = 16384;        // Smallest recommended value with BGN-rns (l = 3)?
-
-//     CCParams<CryptoContextBGVRNS> params;
-//     params.SetMultiplicativeDepth(2*log_n - 1);
-//     params.SetPlaintextModulus(65537);
-//     params.SetRingDim(N);
-//     params.SetMaxRelinSkDeg(3); // for rotations (TODO: confirm needed by EvalFastRotate)
-
-//     CryptoContext<DCRTPoly> cc = GenCryptoContext(params);
-//     cc->Enable(PKE);
-//     cc->Enable(KEYSWITCH);
-//     cc->Enable(LEVELEDSHE);
-//     cc->Enable(ADVANCEDSHE);
-
-//     KeyPair<DCRTPoly> keyPair;
-//     keyPair = cc->KeyGen();
-//     cc->EvalMultKeyGen(keyPair.secretKey);
-
-//     std::cout << "Created context" << std::endl;
-
-//     // encrypt a sample plaintext
-//     Plaintext plaintext = cc->MakePackedPlaintext(index);
-//     auto ciphertext = cc->Encrypt(keyPair.publicKey, plaintext);
-    
-//     std::cout << "Encrypted plaintext " << plaintext << std::endl;
-
-//     // rotations used are [1, n)
-//     auto rotations = { 0, 1, 2, 3 };
-//     cc->EvalRotateKeyGen(keyPair.secretKey, rotations);
-
-//     // TODO: rename n to.. ell?
-//     auto inputs = core::server::ScaleToGadgetLevels(cc, ciphertext, n);
-
-//     // decrypt the first ciphertext in the expanded RGSW ciphertext and check that it matches the original plaintext
-//     std::cout << "Original plaintext: " << plaintext << std::endl;
-//     std::cout << "\nGadget scaled: " << std::endl; 
-//     PrintRGSW(cc, keyPair, inputs, n);
-
-//     auto rgswCiphertexts = std::vector<std::vector<Ciphertext<DCRTPoly>>>(n);
-//     for(size_t i = 0; i < n; i++) {
-//         rgswCiphertexts[i] = core::server::HoistedExpandRLWE(cc, inputs[i], n, keyPair.publicKey);
-//         std::cout << std::endl << "RGSW Ciphertext " << i << ":" << std::endl;
-//         PrintRGSW(cc, keyPair, rgswCiphertexts[i], n);
-//     }
-
-//     // TODO: Create RGSW(-s)
-//     auto rgsw_s = core::server::CreateRGSW_NegS(cc, keyPair, n, 2);
-
-//     // Print secret key
-//     auto sk_poly = keyPair.secretKey->GetPrivateElement();
-//     sk_poly.SetFormat(Format::EVALUATION);
-//     auto& sk_eval = sk_poly.GetElementAtIndex(0);
-
-//     std::cout << "Secret key: " << sk_eval << std::endl;
-
-//     // Print RGSW encryption of secret key
-//     std::cout << "RGSW(-s): " << std::endl;
-//     PrintRGSW(cc, keyPair, rgsw_s, n);
-
-//     // Final loop: external product RGSW(-s) with the expanded RLWE ciphertexts
-
-//     // TODO: decrypt to check that we get the original plaintext back
-// }
-
-/**
- * @brief returns 2^n
- * @param n the exponent
- * @return 2^n
- */
-/*
-template <typename T>
-constexpr inline T Pow2(T k) {
-    return (T(1) << k);
-}
-*/
 
 /*
 void BFVrnsEvalRotate2n() {

@@ -1,3 +1,4 @@
+#pragma once
 #include "openfhe.h"
 
 // #define DEBUG_LOGGING
@@ -106,8 +107,8 @@ namespace Server {
         const Ciphertext<DCRTPoly>& x,
         const RGSWCiphertext<DCRTPoly>& Y,
         const uint64_t log_B,
-        const size_t ell,
-        const KeyPair<DCRTPoly>& keys
+        const size_t ell
+        // const KeyPair<DCRTPoly>& keys
     ) {
         // const auto& elems = x->GetElements(); // {c0=b, c1=a}
 
@@ -134,15 +135,15 @@ namespace Server {
         // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
         auto result = ScalarMultCiphertext(Y[0], u[0]);
         for (size_t i = 1; i < ell; i++) {
-            Plaintext step;
-            cc->Decrypt(keys.secretKey, result, &step);
-            std::cout << step << std::endl;
+            // Plaintext step;
+            // cc->Decrypt(keys.secretKey, result, &step);
+            // std::cout << step << std::endl;
             result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i],       u[i]));
         }
         for (size_t i = 0; i < ell; i++) {
-            Plaintext step;
-            cc->Decrypt(keys.secretKey, result, &step);
-            std::cout << step << std::endl;
+            // Plaintext step;
+            // cc->Decrypt(keys.secretKey, result, &step);
+            // std::cout << step << std::endl;
             result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i + ell], v[i]));
         }
 
