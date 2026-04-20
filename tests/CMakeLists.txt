@@ -33,7 +33,7 @@ function(register_test name)
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
     # project_cxx20 bumps this target (only) to C++20; GTest stays at C++17.
-    target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20)
+    target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20 server_lib)
 
     # Force-include common.h before every translation unit in this target.
     # This makes gtest, openfhe, and shared helpers available without explicit includes.
@@ -57,6 +57,7 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
+register_test(test-main             SOURCE main)
 register_test(test-rgsw             SOURCE rgsw)
 register_test(test-homplacing       SOURCE homplacing)
 register_test(test-homexpand        SOURCE homexpand)

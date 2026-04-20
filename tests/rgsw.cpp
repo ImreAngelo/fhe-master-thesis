@@ -1,9 +1,9 @@
 #define TEST_INTERNAL_FUNCTIONS
 
-#include "core/server/context.h"
-#include "core/server/helpers.h"
-#include "core/server/params.h"
-#include "core/client/rgsw.h"
+#include "core/context.h"
+#include "core/helpers.h"
+#include "core/params.h"
+#include "core/rgsw.h"
 
 #include <cstdint>
 #include <cmath>
@@ -20,19 +20,17 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     // Note: n is not number of users but log(number of users)
     // const uint32_t n = value.size(); // bits
     // const uint32_t log_n = Log2(n);  // levels
-    
-    // TODO: Use params.SetGadgetBase(...) etc.
-    const uint64_t log_B = 15;
-    const size_t ell = 6; // TODO: Auto select
 
-    CCParams<CryptoContextBGVRNS> params;
+    CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(1);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);
 
     // Avoid per-level scaling factor 
     // RGSW rows are built by hand, so we need S_L = 1
-    params.SetScalingTechnique(FIXEDAUTO);  
+    params.SetScalingTechnique(FIXEDAUTO);
+    params.SetGadgetBase(15);               // NOTE: base = 2^base
+    params.SetGadgetDecomposition(6);       // TODO: set automatically
 
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
@@ -40,16 +38,15 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
 #endif
 
-    auto cc = GenCryptoContext(params);
+    auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
 
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-
     
-    auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, value, log_B, ell);
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
     
 #if defined(DEBUG_LOGGING)
     std::cout << "G: " << std::endl;
@@ -60,11 +57,11 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
     Plaintext res;
-    auto res_ct = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
     cc->Decrypt(keyPair.secretKey, res_ct, &res);
     
 #if defined(DEBUG_LOGGING)
-    std::cout << "Final result: " << res_a << std::endl;
+    std::cout << "Final result: " << res << std::endl;
 #endif
 
     const auto& result_slot = res->GetPackedValue();

@@ -6,10 +6,8 @@
 
 /**
  * @file params.h
- * @brief This file defines the parameters required for generating a CryptoContext.
+ * @brief This file defines the parameters required for generating an ExtendedCryptoContext.
  */
-
-// C++ only permits specializing a template in the namespace where it was originally declared (or an enclosing one).
 namespace lbcrypto {
 
 class CryptoContextRGSWBGV;
@@ -19,22 +17,23 @@ class CryptoContextRGSWBGV;
  */
 template <>
 class CCParams<CryptoContextRGSWBGV> : public CCParams<CryptoContextBGVRNS> {
-    uint32_t gadgetBase   = 2;  // B: gadget base (must be a power of 2)
-    uint32_t gadgetLevels = 8;  // ℓ: levels
-
 public:
     CCParams() : CCParams<CryptoContextBGVRNS>() {}
     CCParams(const CCParams& obj) = default;
     CCParams(CCParams&& obj)      = default;
     ~CCParams()                   = default;
-
+    
     // ----- RGSW-specific getters -----
     uint32_t GetGadgetBase() const { return gadgetBase; }
-    uint32_t GetGadgetLevels() const { return gadgetLevels; }
-
+    uint32_t GetGadgetDecomposition() const { return gadgetDecomposition; }
+    
     // ----- RGSW-specific setters -----
     void SetGadgetBase(uint32_t gadgetBase) { this->gadgetBase = gadgetBase; }
-    void SetGadgetLevels(uint32_t gadgetLevels) { this->gadgetLevels = gadgetLevels; }
+    void SetGadgetDecomposition(uint32_t gadgetDecomposition) { this->gadgetDecomposition = gadgetDecomposition; }
+    
+protected:
+    uint32_t gadgetBase   = 2;          // B: gadget base (must be a power of 2)
+    uint32_t gadgetDecomposition = 8;   // ℓ: levels
 };
 
 }  // namespace lbcrypto

@@ -14,7 +14,7 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     
     // Avoid per-level scaling factor 
     // RGSW rows are built by hand, so we need S_L = 1
-    // TODO: Set automatically in RGSW encrypt!
+    // TODO: Set automatically in RGSW encrypt?
     params.SetScalingTechnique(FIXEDAUTO);
     params.SetGadgetBase(15);
     params.SetGadgetDecomposition(14);
@@ -77,8 +77,8 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
 // TODO: Test HomPlacing without RGSW
 
 // Basic test
-TEST(HomPlacing, b0) { TestHomPlacing({0}, 4); }
-TEST(HomPlacing, b1) { TestHomPlacing({1}, 4); }
+TEST(HomPlacing2, b0) { TestHomPlacing({0}, 4); }
+TEST(HomPlacing2, b1) { TestHomPlacing({1}, 4); }
 
-TEST(HomPlacing, x4_1) { TestHomPlacing({1, 0},    4); }
-TEST(HomPlacing, x4_3) { TestHomPlacing({0, 1, 1}, 4); }
+TEST(HomPlacing2, x4_1) { TestHomPlacing({1, 0},    4); }
+TEST(HomPlacing2, x4_3) { TestHomPlacing({0, 1, 1}, 4); }

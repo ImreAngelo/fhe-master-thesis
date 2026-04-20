@@ -3,7 +3,7 @@
 using namespace lbcrypto;
 
 
-std::vector<Ciphertext<DCRTPoly>> Server::HomPlacing(const CryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &value, const std::vector<RGSWCiphertext<DCRTPoly>> &bits, const uint64_t log_B, const size_t ell)
+std::vector<Ciphertext<DCRTPoly>> Server::HomPlacing(const Context::ExtendedCryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &value, const std::vector<RGSWCiphertext<DCRTPoly>> &bits)
 {
     // Levels in tree L = log(n)
     const uint64_t L = bits.size();
@@ -25,7 +25,7 @@ std::vector<Ciphertext<DCRTPoly>> Server::HomPlacing(const CryptoContext<DCRTPol
 
             const auto& parent = b[(1u << i) - 1 + j];
 
-            b[idx_right] = EvalExternalProduct(cc, parent, bit, log_B, ell);
+            b[idx_right] = cc->EvalExternalProduct(parent, bit);
             b[idx_left] = cc->EvalSub(parent, b[idx_right]);
         }
     }

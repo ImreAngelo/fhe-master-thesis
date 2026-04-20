@@ -17,9 +17,6 @@ cmake_minimum_required(VERSION 3.16.3)
 ### If you need your application to be linked statically, then run "cmake .. -DBUILD_STATIC=ON"
 
 project(sPAR CXX)
-# C++17 is the global default — keeps OpenFHE and FetchContent deps (GTest, …) happy.
-# Our own src/ and tests/ targets link against `project_cxx20` (defined below)
-# which bumps them to C++20 without touching the dependency standard.
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
@@ -82,6 +79,10 @@ target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 # add_executable(app    src/main.cpp)
 # add_executable(client src/client/main.cpp)
 # add_executable(server src/server/main.cpp)
+
+# ── Server library ───────────────────────────────────────────────────────────
+add_library(server_lib STATIC src/server/HomPlacing.cpp)
+target_link_libraries(server_lib PUBLIC project_cxx20)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.

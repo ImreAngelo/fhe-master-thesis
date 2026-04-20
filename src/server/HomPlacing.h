@@ -1,25 +1,30 @@
 #pragma once
 #include "openfhe.h"
-#include "core/client/rgsw.h"
+#include "core/rgsw.h"
+#include "core/context.h"
 
 namespace Server 
 {   
+    using namespace lbcrypto;
+
     /**
-     * @brief Algorithm 1 without external product. Places value in the slot encoded in bits. 
+     * @brief Algorithm 1 without external product. 
+     *        Places value in the slot encoded in bits. 
+     * 
      * @tparam Element DCRTPoly
      * @param cc The crypto context 
      * @param value Encrypted value to ble placed in slot n
      * @param c The encrypted bits of n
      */
     template <typename Element>
-    std::vector<lbcrypto::Ciphertext<Element>> HomPlacingNoExt(
-        const lbcrypto::CryptoContext<Element>&          cc,
-        const lbcrypto::Ciphertext<Element>&             value,
-        const std::vector<lbcrypto::Ciphertext<Element>> c
+    std::vector<Ciphertext<Element>> HomPlacingNoExt(
+        const CryptoContext<Element>&          cc,
+        const Ciphertext<Element>&             value,
+        const std::vector<Ciphertext<Element>> c
     )
     {
-        using RLWE = lbcrypto::Ciphertext<Element>;
-        using Vec = std::vector<lbcrypto::Ciphertext<Element>>;
+        using RLWE = Ciphertext<Element>;
+        using Vec = std::vector<Ciphertext<Element>>;
 
         // Levels in tree L = log(n)
         const uint32_t L = c.size();
@@ -40,7 +45,7 @@ namespace Server
                 const uint32_t idx_left = idx_right - 1;
 
                 const auto& parent = b[(1u << i) - 1 + j];
-
+                
                 b[idx_right] = cc->EvalMult(parent, bit);
                 b[idx_left] = cc->EvalSub(parent, b[idx_right]);
             }
@@ -55,35 +60,20 @@ namespace Server
     }
 
     /**
-     * @brief Algorithm 1 without external product. Places value in the slot encoded in bits. 
+     * @brief Algorithm 1 without external product. 
+     *        Places value in the slot encoded in bits. 
+     * 
      * @tparam Element DCRTPoly
      * @param cc The crypto context 
      * @param value Encrypted value to ble placed in slot n
      * @param c The encrypted bits of n
      */
     std::vector<Ciphertext<DCRTPoly>> HomPlacing(
-        const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&      cc,
-        const lbcrypto::Ciphertext<DCRTPoly>&                   value,
-        const std::vector<RGSWCiphertext<lbcrypto::DCRTPoly>>&  bits,
-        const uint64_t log_B,   // TODO: crypto param
-        const size_t ell        // TODO: crypto param
+        const Context::ExtendedCryptoContext<DCRTPoly>& cc,
+        const Ciphertext<DCRTPoly>&                     value,
+        const std::vector<RGSWCiphertext<DCRTPoly>>&    bits
     );
-    
 
-    // /**
-    //  * @brief Algorithm 2 from the sPAR paper (no external product).
-    //  *        Obliviously writes value into the first available slot among 3 candidate
-    //  *        bins. The server maintains data matrix L and availability matrix I (both
-    //  *        η × 3), which are updated in place.
-    //  *
-    //  * @tparam Element DCRTPoly
-    //  * @param cc         The crypto context
-    //  * @param value      Encrypted value V_r to write
-    //  * @param A          A[d][i]: encrypted bits of the d-th candidate address (d ∈ {0,1,2})
-    //  * @param dataMatrix dataMatrix[i][k] = L_{i,k}: server data matrix (η × 3), modified in place
-    //  * @param availMatrix availMatrix[i][k] = I_{i,k}: server availability matrix (η × 3), modified in place
-    //  * @return           Encryption of hasWritten (1 if write succeeded, 0 otherwise)
-    //  */
     // template <typename Element>
     // CT<Element> HomPlacingStarNoExt(
     //     const CC<Element>&                  cc,
