@@ -2,14 +2,16 @@
 #include <iostream>
 #include <iomanip>
 
-namespace testing {
+namespace utils {
 
     using Clock = std::chrono::high_resolution_clock;
     using Ms    = std::chrono::duration<double, std::milli>;
     
     /**
-     * RAII timer: starts on construction, prints elapsed on destruction.
+     * @brief RAII timer. Starts on construction, prints elapsed time on destruction.
      * { Timer t("label"); foo(); }
+     * 
+     * @todo Include timings in plot-friendly format
      */
     struct Timer {
         explicit Timer(const char* label)
@@ -21,7 +23,7 @@ namespace testing {
                     << std::fixed << std::setprecision(2) << ms << " ms\n";
         }
 
-        // Call this to get an intermediate reading without stopping the timer.
+        /// @brief Call this to get an intermediate reading without stopping the timer.
         double elapsed_ms() const {
             return std::chrono::duration_cast<Ms>(Clock::now() - start_).count();
         }
