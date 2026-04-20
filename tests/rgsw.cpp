@@ -255,23 +255,23 @@ inline void TestHomExpand(const std::vector<int64_t>& index) {
 }
 
 // Basic test
-TEST(ExtProduct, Val_0)   { TestExternalProduct({ 0 }); }
-TEST(ExtProduct, Val_1)   { TestExternalProduct({ 1 }); } // fails
-TEST(ExtProduct, Val_10)  { TestExternalProduct({ 1, 0, 1, 0 }); } // fails
+TEST(ExtProduct, b0)    { TestExternalProduct({ 0 }); }
+TEST(ExtProduct, b1)    { TestExternalProduct({ 1 }); } // fails
+TEST(ExtProduct, b1010) { TestExternalProduct({ 1, 0, 1, 0 }); } // fails
 
 // Basic test
-TEST(HomPlacing, Val_0) { TestHomPlacing({0}, 4); } // works 
-TEST(HomPlacing, Val_1) { TestHomPlacing({1}, 4); } // fails because of external product
+TEST(HomPlacing, b0) { TestHomPlacing({0}, 4); }
+TEST(HomPlacing, b1) { TestHomPlacing({1}, 4); } // fails because of external product
 
 // Small power-of-2 base
-// TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestHomExpand({ 0, 0, 0, 1 }); }
-// TEST(RGSW, ExpandRLWEHoisted_4bit_08) { TestHomExpand({ 1, 0, 0, 0 }); }
-// TEST(RGSW, ExpandRLWEHoisted_4bit_13) { TestHomExpand({ 1, 1, 0, 1 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_4bit_01) { TestHomExpand({ 0, 0, 0, 1 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_4bit_08) { TestHomExpand({ 1, 0, 0, 0 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_4bit_13) { TestHomExpand({ 1, 1, 0, 1 }); }
 
 // Non-power-of-2 base
-// TEST(RGSW, ExpandRLWEHoisted_12bit_0425) { TestHomExpand({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
-// TEST(RGSW, ExpandRLWEHoisted_12bit_2224) { TestHomExpand({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
-// TEST(RGSW, ExpandRLWEHoisted_12bit_3493) { TestHomExpand({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_12bit_0425) { TestHomExpand({ 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_12bit_2224) { TestHomExpand({ 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0 }); }
+// TEST(HomExpand, ExpandRLWEHoisted_12bit_3493) { TestHomExpand({ 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1 }); }
 
 
 /*
