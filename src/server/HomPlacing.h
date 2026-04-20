@@ -3,18 +3,7 @@
 #include "core/client/rgsw.h"
 
 namespace Server 
-{
-    using namespace lbcrypto;
-    
-    template <typename Element>
-    using CC = CryptoContext<Element>;
-
-    template <typename Element>
-    using CT = Ciphertext<Element>;
-
-    template <typename Element>
-    using CTVec = std::vector<Ciphertext<Element>>;
-
+{   
     /**
      * @brief Algorithm 1 without external product. Places value in the slot encoded in bits. 
      * @tparam Element DCRTPoly
@@ -23,23 +12,26 @@ namespace Server
      * @param c The encrypted bits of n
      */
     template <typename Element>
-    CTVec<Element> HomPlacingNoExt(
-        const CC<Element>&      cc,
-        const CT<Element>&      value,
-        const CTVec<Element>    c
+    std::vector<lbcrypto::Ciphertext<Element>> HomPlacingNoExt(
+        const lbcrypto::CryptoContext<Element>&          cc,
+        const lbcrypto::Ciphertext<Element>&             value,
+        const std::vector<lbcrypto::Ciphertext<Element>> c
     )
     {
+        using RLWE = lbcrypto::Ciphertext<Element>;
+        using Vec = std::vector<lbcrypto::Ciphertext<Element>>;
+
         // Levels in tree L = log(n)
         const uint32_t L = c.size();
         const uint32_t n = 1u << L;
 
         // Initialize b = { V_r, 0, 0, ..., 0 }
-        CTVec<Element> b(2*n - 1);
+        Vec b(2*n - 1);
         b[0] = value;
 
         for(uint32_t i = 0; i < L; i++) 
         {
-            const CT<Element>& bit = c[i];
+            const RLWE& bit = c[i];
 
             // Iterate over all nodes in i-th level
             for(uint32_t j = 0; j < (1u << i); j++)
@@ -55,7 +47,7 @@ namespace Server
         }
 
         // Output last n nodes 
-        CTVec<Element> leaves(n);
+        Vec leaves(n);
         for(uint32_t i = 0; i < n; i++)
             leaves[i] = b[n - 1 + i];
 
@@ -69,45 +61,13 @@ namespace Server
      * @param value Encrypted value to ble placed in slot n
      * @param c The encrypted bits of n
      */
-    CTVec<DCRTPoly> HomPlacing(
-        const CC<DCRTPoly>&         cc,
-        const CT<DCRTPoly>&         value,
-        const std::vector<RGSWCiphertext<DCRTPoly>>&    bits,
+    std::vector<Ciphertext<DCRTPoly>> HomPlacing(
+        const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&      cc,
+        const lbcrypto::Ciphertext<DCRTPoly>&                   value,
+        const std::vector<RGSWCiphertext<lbcrypto::DCRTPoly>>&  bits,
         const uint64_t log_B,   // TODO: crypto param
         const size_t ell        // TODO: crypto param
-    ) {
-        // Levels in tree L = log(n)
-        const uint64_t L = bits.size();
-        const uint64_t n = uint64_t(1) << L;
-
-        // Initialize b = { V_r, 0, 0, ..., 0 }
-        CTVec<DCRTPoly> b(2*n - 1);
-        b[0] = value;
-
-        for(uint32_t i = 0; i < L; i++) 
-        {
-            const auto& bit = bits[i];
-
-            // Iterate over all nodes in i-th level
-            for(uint64_t j = 0; j < (uint64_t(1) << i); j++)
-            {
-                const uint32_t idx_right = (1u << (i + 1)) + 2*j;
-                const uint32_t idx_left = idx_right - 1;
-
-                const auto& parent = b[(1u << i) - 1 + j];
-
-                b[idx_right] = EvalExternalProduct(cc, parent, bit, log_B, ell);
-                b[idx_left] = cc->EvalSub(parent, b[idx_right]);
-            }
-        }
-
-        // Output last n nodes 
-        CTVec<DCRTPoly> leaves(n);
-        for(uint32_t i = 0; i < n; i++)
-            leaves[i] = b[n - 1 + i];
-
-        return leaves;
-    }
+    );
     
 
     // /**
