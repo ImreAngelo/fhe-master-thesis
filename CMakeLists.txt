@@ -67,7 +67,7 @@ endif()
 include_directories(src)
 
 # ── C++20 for our own code ────────────────────────────────────────────────────
-# Link any src/ or tests/ target against this to get C++20 without changing the
+# Link any src/ or test/ target against this to get C++20 without changing the
 # global standard (which would break OpenFHE / GTest).
 add_library(project_cxx20 INTERFACE)
 target_compile_features(project_cxx20 INTERFACE cxx_std_20)
@@ -94,4 +94,4 @@ target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
 # "No tests were found".  EXCLUDE_FROM_ALL on the subdirectory still keeps every test
 # binary out of the default "make" target.
 enable_testing()
-add_subdirectory(tests EXCLUDE_FROM_ALL)
+add_subdirectory(test EXCLUDE_FROM_ALL)
