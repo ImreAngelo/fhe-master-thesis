@@ -1,165 +1,83 @@
 #include "server/HomPlacing.h"
 
+using namespace lbcrypto;
 
-void TestAlgorithm1(const uint32_t depth = 2, const int64_t target = 2)
-{
-    using namespace lbcrypto;
+/**
+ * @brief Test Homomorphic Placing (single user)
+ * Should place value in slot 2^index
+ */
+inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& value) {
+    const uint64_t log_B = 15;
+    const size_t ell = 14;
 
-    // Set up BGV-rns
     CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(depth);
+    params.SetMultiplicativeDepth(4);
     params.SetPlaintextModulus(65537);
+    params.SetRingDim(16384);
+    
+    // Avoid per-level scaling factor 
+    // RGSW rows are built by hand, so we need S_L = 1
+    // TODO: Set automatically in RGSW encrypt!
+    params.SetScalingTechnique(FIXEDAUTO);  
 
-    CryptoContext<DCRTPoly> cc;
-    cc = GenCryptoContext(params);
+#if defined(DEBUG_LOGGING)
+    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
+    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
+    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
+#endif
+
+    auto cc = GenCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
-    
-    KeyPair<DCRTPoly> keys;
-    keys = cc->KeyGen();
 
-    cc->EvalMultKeyGen(keys.secretKey);
+    KeyPair<DCRTPoly> keyPair;
+    keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
 
-    // Encrypt the value to be placed
-    constexpr auto val = 8;
-    Plaintext Vr = cc->MakePackedPlaintext({ val });
-    auto ctValue = cc->Encrypt(keys.publicKey, Vr);
+    std::vector<Client::RGSWCiphertext<DCRTPoly>> bits;
+    bits.reserve(index.size());
 
-    // Encrypt the L index bits (binary encoding of target, MSB first)
-    std::vector<Ciphertext<DCRTPoly>> ctBits;
-    ctBits.reserve(depth);
-    
-    for (uint32_t k = 0; k < depth; k++) {
-        int64_t bit = (target >> (depth - 1 - k)) & 1;
-        ctBits.push_back(cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({bit})));
+    for(const auto& bit : index) {
+        bits.emplace_back(Client::EncryptRGSW(cc, keyPair.secretKey, { bit }, log_B, ell));
     }
 
-    auto res = Server::HomPlacingNoExt(cc, ctValue, ctBits);
-    
-    // TEST: Confirm val is placed in correct slot
-    const auto target_idx = static_cast<uint32_t>(target);
-    const auto slots = (uint32_t(1) << depth);
+    Plaintext pt = cc->MakePackedPlaintext({ value });
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
-    ASSERT_EQ(slots, static_cast<uint32_t>(res.size())) << "Incorrect number of slots/levels";
+    auto res_cts = Server::HomPlacing(cc, rlwe_ct, bits, log_B, ell);
     
-    for (uint32_t i = 0; i < slots; i++) {
-        Plaintext pi;
-        cc->Decrypt(keys.secretKey, res[i], &pi);
-        pi->SetLength(1);
-        
-        SCOPED_TRACE("Slot " + std::to_string(i));
-        if (i == target_idx) {
-            ASSERT_EQ(val, pi->GetPackedValue()[0]);
-        } else {
-            ASSERT_EQ(0, pi->GetPackedValue()[0]);
-        }
+#if defined(DEBUG_LOGGING)
+    std::cout << "Final placing: ";
+    for(const auto& v : res_cts) {
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, v, &res);
+        std::cout << res << ", ";    
+    }
+    std::cout << std::endl;
+#endif
+
+    const auto slot = std::accumulate(index.begin(), index.end(), 0, 
+        [](int acc, bool bit) { return (acc << 1) | bit; });
+    std::vector<int64_t> expected(1 << index.size());
+    expected[slot] = value;
+
+#if defined(DEBUG_LOGGING)
+    std::cout << "Placing '" << value << "' in slot " << slot << std::endl;
+    std::cout << expected << std::endl;
+#endif
+
+    ASSERT_EQ(expected.size(), res_cts.size());
+
+    for(size_t i = 0; i < expected.size(); i++) {
+        Plaintext slot_val;
+        cc->Decrypt(keyPair.secretKey, res_cts[i], &slot_val);
+        ASSERT_EQ(expected[i], slot_val->GetPackedValue()[0]);
     }
 }
 
-TEST(Algorithm1, HomPlacingNotPackedNoExt) { TestAlgorithm1(2, 2); }
-// TEST(Algorithm1, HomPlacingStarNoExt) { TestAlgorithm2(); }
+// Basic test
+TEST(HomPlacing, b0) { TestHomPlacing({0}, 4); }
+TEST(HomPlacing, b1) { TestHomPlacing({1}, 4); }
 
-// void TestAlgorithm2()
-// {
-//     using testing::Timer;
-//     using CT  = Ciphertext<DCRTPoly>;
-//     using CTVec = std::vector<CT>;
-
-//     constexpr uint32_t L     = 1;
-//     constexpr uint32_t eta   = 1u << L;   // 2
-//     constexpr uint32_t D     = 3;
-//     constexpr uint32_t K     = 3;
-//     constexpr uint32_t depth = 22;
-
-//     // Candidate bin indices (decimal), one per choice d.
-//     // Expected: first write lands at bin 1, slot 0.
-//     constexpr int64_t addrs[D] = {1, 0, 1};
-
-//     CCParams<CryptoContextBGVRNS> params;
-//     params.SetMultiplicativeDepth(depth);
-//     params.SetPlaintextModulus(65537);
-
-//     CryptoContext<DCRTPoly> cc;
-//     KeyPair<DCRTPoly>       keys;
-
-//     {
-//         Timer t("Setup");
-//         cc = GenCryptoContext(params);
-//         cc->Enable(PKE);
-//         cc->Enable(LEVELEDSHE);
-//         keys = cc->KeyGen();
-//         cc->EvalMultKeyGen(keys.secretKey);
-//     }
-
-//     // Encrypt the value to be placed
-//     auto ctValue = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({42}));
-
-//     std::vector<CTVec> A(D);
-//     for (uint32_t d = 0; d < D; d++)
-//     {
-//         A[d].resize(L);
-//         for (uint32_t k = 0; k < L; k++)
-//         {
-//             int64_t bit = (addrs[d] >> (L - 1 - k)) & 1;
-//             A[d][k] = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({bit}));
-//         }
-
-//         std::cout << "A[" << d << "] = bin " << addrs[d] << " (bits:";
-//         for (uint32_t k = 0; k < L; k++)
-//             std::cout << " " << ((addrs[d] >> (L - 1 - k)) & 1);
-//         std::cout << ")\n";
-//     }
-
-//     // Initialise server state matrices (n × K)
-//     auto enc = [&](int64_t v) {
-//         return cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({v}));
-//     };
-
-//     std::vector<CTVec> dataMatrix(eta, CTVec(K));
-//     std::vector<CTVec> availMatrix(eta, CTVec(K));
-//     for (uint32_t i = 0; i < eta; i++)
-//         for (uint32_t k = 0; k < K; k++) {
-//             dataMatrix[i][k]  = enc(0);
-//             availMatrix[i][k] = enc(1);
-//         }
-
-//     // Run Algorithm 2
-//     std::cout << "\n=== Test: Algorithm 2 (HomPlacingStarNoExt) ===\n";
-//     CT hasWritten;
-//     {
-//         Timer t("HomPlacingStarNoExt");
-//         hasWritten = Server::HomPlacingStarNoExt(cc, ctValue, A, dataMatrix, availMatrix);
-//     }
-
-//     auto decrypt1 = [&](const CT& ct) -> int64_t {
-//         Plaintext pt;
-//         cc->Decrypt(keys.secretKey, ct, &pt);
-//         pt->SetLength(1);
-//         return pt->GetPackedValue()[0];
-//     };
-
-//     // hasWritten should be 1
-//     std::cout << "\nhasWritten = " << decrypt1(hasWritten) << " (expected 1)\n";
-
-//     // Data matrix
-//     std::cout << "\nData matrix L[i][k]:\n";
-//     for (uint32_t i = 0; i < eta; i++)
-//         for (uint32_t k = 0; k < K; k++) {
-//             int64_t got      = decrypt1(dataMatrix[i][k]);
-//             int64_t expected = (i == 1 && k == 0) ? 42 : 0;
-//             std::cout << "  L[" << i << "][" << k << "] = " << got
-//                       << " (expected " << expected << ")"
-//                       << (got == expected ? "" : "  MISMATCH") << "\n";
-//         }
-
-//     // Availability matrix
-//     std::cout << "\nAvailability matrix I[i][k]:\n";
-//     for (uint32_t i = 0; i < eta; i++)
-//         for (uint32_t k = 0; k < K; k++) {
-//             int64_t got      = decrypt1(availMatrix[i][k]);
-//             int64_t expected = (i == 1 && k == 0) ? 0 : 1;
-//             std::cout << "  I[" << i << "][" << k << "] = " << got
-//                       << " (expected " << expected << ")"
-//                       << (got == expected ? "" : "  MISMATCH") << "\n";
-//         }
-// }
+TEST(HomPlacing, x4_1) { TestHomPlacing({1, 0},    4); }
+TEST(HomPlacing, x4_3) { TestHomPlacing({0, 1, 1}, 4); }
