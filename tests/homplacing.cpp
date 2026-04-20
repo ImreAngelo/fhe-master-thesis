@@ -1,4 +1,4 @@
-#include "server/HomPlacing.h"
+#include "server/homplacing.h"
 
 using namespace lbcrypto;
 

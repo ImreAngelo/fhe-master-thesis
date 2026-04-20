@@ -80,9 +80,13 @@ target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 # add_executable(client src/client/main.cpp)
 # add_executable(server src/server/main.cpp)
 
+# ── Core library ─────────────────────────────────────────────────────────────
+add_library(core_lib STATIC src/core/context.cpp)
+target_link_libraries(core_lib PUBLIC project_cxx20)
+
 # ── Server library ───────────────────────────────────────────────────────────
-add_library(server_lib STATIC src/server/HomPlacing.cpp)
-target_link_libraries(server_lib PUBLIC project_cxx20)
+add_library(server_lib STATIC src/server/homplacing.cpp)
+target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
