@@ -8,7 +8,7 @@ using namespace lbcrypto;
  */
 inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& value) {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(4);
+    params.SetMultiplicativeDepth(2);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);
     
@@ -16,8 +16,8 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     // RGSW rows are built by hand, so we need S_L = 1
     // TODO: Set automatically in RGSW encrypt!
     params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(15);
-    params.SetGadgetDecomposition(14);
+    params.SetGadgetBase(30);
+    params.SetGadgetDecomposition(4);
 
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
