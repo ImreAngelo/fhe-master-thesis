@@ -37,7 +37,7 @@ namespace Client {
         RGSWCiphertext<DCRTPoly> G(2*ell);
         
         const Plaintext zero = cc->MakePackedPlaintext({ 0 });
-        int64_t gi = 1;
+        int64_t gi = 1; 
 
         for (size_t i = 0; i < ell; i++, gi = (gi * B) % t) {
             
@@ -46,7 +46,6 @@ namespace Client {
             #endif
 
             // Bottom L rows: msg * B^i
-            // TODO: Use SIMD for scalar * vector (mod t if possible)
             std::vector<int64_t> row = msg;
             for(size_t j = 0; j < slots; j++) {
                 row[j] *= gi;
@@ -56,34 +55,21 @@ namespace Client {
             Plaintext mBi = cc->MakePackedPlaintext(row);
             G[i + ell] = cc->Encrypt(secretKey, mBi);
             
-            // Top L rows: -s * msg * B^i
-            // enc(-s * msg * B^i) = Enc(0) - Enc(msg * B^i)
-            // TODO: Confirm identity in main doc, it should follow directly from Z - \mu G with Z = RLWE(0)
-            auto top = cc->Encrypt(secretKey, zero); // WARN: create *fresh* ciphertext of 0 each iteration 
+            // Top L rows: a + msg * B^i
+            // WARN: create *fresh* ciphertext of 0 each iteration 
+            auto top = cc->Encrypt(secretKey, zero); 
             
-            if(!mBi->Encode()) // ensure DCRTPoly form is populated
+            if(!mBi->Encode()) // ensure correct form
                 throw std::runtime_error("mBi is not DCRTPoly");
 
             auto mBiPoly = mBi->GetElement<DCRTPoly>();
 
-            auto& elems = top->GetElements();
-            mBiPoly.SetFormat(elems[1].GetFormat());  // match NTT/coeff form of c1
-            elems[1] -= mBiPoly;
+            auto& s = top->GetElements();
+            mBiPoly.SetFormat(s[1].GetFormat());  // match NTT/coeff form of c1
+            s[1] += mBiPoly;
 
             G[i] = top;
         }
-    
-    #if defined(DEBUG_LOGGING)
-        std::cout << "G: " << std::endl;
-        for(const auto& row : G) {
-            Plaintext decrytedRow;
-            cc->Decrypt(secretKey, row, &decrytedRow);
-            decrytedRow->SetLength(slots);
-            std::cout << decrytedRow << std::endl;
-
-            // TODO: Assert bottom rows are correct (in test)
-        }
-    #endif
 
         return G;
     }
@@ -98,10 +84,75 @@ namespace Server {
     template <typename T>
     using RGSWCiphertext = std::vector<Ciphertext<T>>;
 
+    // Helper: multiply each component of an RLWE ciphertext by a scalar polynomial
+    static Ciphertext<DCRTPoly> ScalarMultCiphertext(
+        const Ciphertext<DCRTPoly>& ct,
+        const DCRTPoly& scalar
+    ) {
+        auto result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+        auto& elems = result->GetElements();
+
+        // Digit polys from BaseDecompose come out in COEFFICIENT format;
+        // ciphertext elements are in EVALUATION (NTT). Must match before multiply.
+        // scalar.SetFormat(EVALUATION);
+
+        elems[0] *= scalar;
+        elems[1] *= scalar;
+        return result;
+    }
+
+    Ciphertext<DCRTPoly> EvalExternalProduct(
+        const CryptoContext<DCRTPoly>& cc,
+        const Ciphertext<DCRTPoly>& x,
+        const RGSWCiphertext<DCRTPoly>& Y,
+        const uint64_t log_B,
+        const size_t ell,
+        const KeyPair<DCRTPoly>& keys
+    ) {
+        // const auto& elems = x->GetElements(); // {c0=b, c1=a}
+
+        // Decompose both ciphertext components in base B.
+        // BaseDecompose operates per-limb in RNS — this is correct because
+        // ell is chosen to cover the full product modulus (ell = ceil(log_B(q))).
+        DCRTPoly b = x->GetElements()[0];
+        DCRTPoly a = x->GetElements()[1];
+        b.SetFormat(Format::COEFFICIENT);
+        a.SetFormat(Format::COEFFICIENT);
+
+        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true); // digits of b
+        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true); // digits of a
+
+        // auto zero = DCRTPoly(b.GetParams(), Format::EVALUATION, true);
+        // v.resize(ell, zero);
+        // u.resize(ell, zero);
+
+        if (u.size() != ell || v.size() != ell) {
+            std::cout << "Size mismatch: " << u.size() << " / " << ell << ", " << v.size() << " / " << ell << std::endl;
+            throw std::runtime_error("BaseDecompose depth mismatch — check ell vs log_B vs q");
+        }
+
+        // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
+        auto result = ScalarMultCiphertext(Y[0], u[0]);
+        for (size_t i = 1; i < ell; i++) {
+            Plaintext step;
+            cc->Decrypt(keys.secretKey, result, &step);
+            std::cout << step << std::endl;
+            result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i],       u[i]));
+        }
+        for (size_t i = 0; i < ell; i++) {
+            Plaintext step;
+            cc->Decrypt(keys.secretKey, result, &step);
+            std::cout << step << std::endl;
+            result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i + ell], v[i]));
+        }
+
+        return result;
+    }
+
     /**
      * @brief Evaluate external product homomorphically
      */
-    Ciphertext<DCRTPoly> EvalExternalProduct(
+    Ciphertext<DCRTPoly> EvalCoeffExternalProduct(
         const CryptoContext<DCRTPoly>& cc,  // TODO: Make ->encryptRGSW member of ClientImpl
         // const PublicKey<DCRTPoly>& publicKey,
         RLWECiphertext<DCRTPoly> x,
@@ -137,23 +188,49 @@ namespace Server {
         u.resize(ell, zero);
         v.resize(ell, zero);
 
-        // ── Step 2: out = Σ u_i · Y[i+ℓ]  -  Σ v_i · Y[i] ────────────────────
-        //   Y[i]     (0 ≤ i < ℓ): Enc(-μ·B^i·s)   ["top"    rows, our labeling]
-        //   Y[i+ℓ]   (0 ≤ i < ℓ): Enc( μ·B^i )    ["bottom" rows, our labeling]
-        //
-        // Decryption check:
-        //   out_0 + out_1·s
-        //     = Σ u_i·(μ·B^i)  -  Σ v_i·(-μ·B^i·s)       (+ t·noise)
-        //     = μ·(Σ u_i·B^i) + μ·s·(Σ v_i·B^i)
-        //     = μ·(x_0 + x_1·s) = μ·m_x                  ✓
         auto out = scalarMult(Y[ell], u[0]);
         for (size_t i = 1; i < ell; i++) {
             out = cc->EvalAdd(out, scalarMult(Y[i + ell], u[i]));
         }
         for (size_t i = 0; i < ell; i++) {
-            out = cc->EvalSub(out, scalarMult(Y[i], v[i]));
+            out = cc->EvalAdd(out, scalarMult(Y[i], v[i]));
         }
 
         return out;
+    }
+
+    // Accumulate in-place at the polynomial level, bypassing BGV level tracking
+    static void AccumulateInPlace(Ciphertext<DCRTPoly>& acc, const Ciphertext<DCRTPoly>& ct) {
+        auto& ae = acc->GetElements();
+        const auto& ce = ct->GetElements();
+        ae[0] += ce[0];
+        ae[1] += ce[1];
+    }
+
+    Ciphertext<DCRTPoly> EvalAccExternalProduct(
+        const CryptoContext<DCRTPoly>& cc,
+        const Ciphertext<DCRTPoly>& x,
+        const RGSWCiphertext<DCRTPoly>& Y,
+        const uint64_t log_B,
+        const size_t ell
+    ) {
+        DCRTPoly b = x->GetElements()[0];
+        DCRTPoly a = x->GetElements()[1];
+        b.SetFormat(Format::COEFFICIENT);
+        a.SetFormat(Format::COEFFICIENT);
+
+        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
+        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
+
+        if (u.size() != ell || v.size() != ell)
+            throw std::runtime_error("BaseDecompose depth mismatch");
+
+        Ciphertext<DCRTPoly> result = ScalarMultCiphertext(Y[0], u[0]);
+        for (size_t i = 1; i < ell; i++)
+            AccumulateInPlace(result, ScalarMultCiphertext(Y[i],       u[i]));
+        for (size_t i = 0; i < ell; i++)
+            AccumulateInPlace(result, ScalarMultCiphertext(Y[i + ell], v[i]));
+
+        return result;
     }
 }

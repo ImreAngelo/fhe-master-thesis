@@ -114,13 +114,28 @@ TEST(RGSW, EncryptRGSW) {
     const auto index = std::vector<int64_t>{ 1, 0, 1, 0 };
     
     // Note: n is not number of users but log(number of users)
-    const uint32_t n = index.size(); // bits
-    const uint32_t log_n = Log2(n);  // levels
+    // const uint32_t n = index.size(); // bits
+    // const uint32_t log_n = Log2(n);  // levels
+    
+    // const uint64_t log_B = 30;
+    // const size_t ell = 11;
+    
+    const uint64_t log_B = 15;
+    const size_t ell = 21;
 
     CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(2*log_n - 1);
+    // params.SetMultiplicativeDepth(2*ell - 1);
+    // params.SetPlaintextModulus((1 << 17) + 1);
+    // params.SetRingDim(1 << 16);     // 16384 = smallest recommended value with BGN-rns (l = 3)
+    //                                 // 65535 for l = 17
+    params.SetMultiplicativeDepth(7);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
+    // params.SetMaxRelinSkDeg(3);
+
+    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
+    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
+    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
 
     // RGSW-specific parameters
     // params.SetGadgetLevels(log_n);
@@ -136,29 +151,35 @@ TEST(RGSW, EncryptRGSW) {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
 
-    const uint64_t log_B = 15;
-    const size_t ell = 16;
     
     auto rgsw_ct = Client::EncryptRGSW(cc, keyPair.secretKey, index, log_B, ell);
     
-    std::cout << "G: " << std::endl;
-    for(const auto& row : rgsw_ct) {
-        Plaintext decrytedRow;
-        cc->Decrypt(keyPair.secretKey, row, &decrytedRow);
-        decrytedRow->SetLength(n);
-        std::cout << decrytedRow << std::endl;
-        // TODO: Assert bottom rows are correct
-    }
+    // std::cout << "G: " << std::endl;
+    // for(const auto& row : rgsw_ct) {
+    //     Plaintext decrytedRow;
+    //     cc->Decrypt(keyPair.secretKey, row, &decrytedRow);
+    //     decrytedRow->SetLength(n);
+    //     std::cout << decrytedRow << std::endl;
+    //     // TODO: Assert bottom rows are correct
+    // }
 
     Plaintext pt = cc->MakePackedPlaintext(index);
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
 
-    auto ext = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct);
+    Plaintext res_a;
+    auto ntt = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell, keyPair);
+    cc->Decrypt(keyPair.secretKey, ntt, &res_a);
+    std::cout << "Final result (NTT): " << res_a << std::endl;
     
-    Plaintext res;
-    cc->Decrypt(keyPair.secretKey, ext, &res);
-
-    std::cout << "Final result: " << res << std::endl;
+    Plaintext res_b;
+    auto cof = Server::EvalCoeffExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    cc->Decrypt(keyPair.secretKey, cof, &res_b);
+    std::cout << "Final result (CoF): " << res_b << std::endl;
+    
+    Plaintext res_c;
+    auto acc = Server::EvalAccExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
+    cc->Decrypt(keyPair.secretKey, acc, &res_c);
+    std::cout << "Final result (Acc): " << res_c << std::endl;
 }
 
 // /// @brief Test HomExpand

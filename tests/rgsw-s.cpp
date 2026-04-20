@@ -1,95 +1,69 @@
-#include "core/server/context.h"
-#include "core/server/helpers.h"
-#include "core/server/params.h"
-#include "core/client/rgsw.h"
+// #include "core/server/context.h"
+// #include "core/server/helpers.h"
+// #include "core/server/params.h"
+// #include "core/client/rgsw.h"
+#include "binfhecontext.h"
+#include <chrono>
 
 using namespace lbcrypto;
 
 TEST(RGSW, NegS) {
-    const uint32_t ell = 4;
-    const uint64_t B   = 2;
+    using namespace lbcrypto;
 
-    CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(16384);
-    params.SetMaxRelinSkDeg(3);
-    params.SetGadgetLevels(ell);
-    params.SetGadgetBase(B);
+    // Sample Program: Step 1: Set CryptoContext
 
-    auto cc = Server::GenExtendedCryptoContext(params);
-    cc->Enable(PKE);
-    cc->Enable(KEYSWITCH);
-    cc->Enable(LEVELEDSHE);
-    cc->Enable(ADVANCEDSHE);
+    auto cc = BinFHEContext();
 
-    auto keys = cc->KeyGen();
+    // Set the ciphertext modulus to be 1 << 23
+    // Note that normally we do not use this way to obtain the input ciphertext.
+    // Instead, we assume that an LWE ciphertext with large ciphertext
+    // modulus is already provided (e.g., by extracting from a CKKS ciphertext).
+    // However, we do not provide such a step in this example.
+    // Therefore, we use a brute force way to create a large LWE ciphertext.
+    uint32_t logQ = 23;
+    cc.GenerateBinFHEContext(STD128, false, logQ, 0, GINX, false);
 
-    // CryptoContext<DCRTPoly> cc_ctx = cc;
-    // auto rgsw = Client::CreateRGSW_NegS(cc_ctx, keys, ell, B);
-    // ASSERT_EQ(rgsw.size(), size_t{2 * ell});
+    uint32_t Q = 1 << logQ;
 
-    // const uint32_t ring_dim = cc->GetRingDimension();
-    // const uint64_t t        = cc->GetCryptoParameters()->GetPlaintextModulus();
-    // NativeInteger t_nat(t);
+    int q      = 4096;                                               // q
+    int factor = 1 << int(logQ - std::log2(q));                      // Q/q
+    uint64_t P = cc.GetMaxPlaintextSpace().ConvertToInt() * factor;  // Obtain the maximum plaintext space
 
-    // // Ground truth: NTT(-s) per slot, in [0, t)
-    // auto sk_poly = keys.secretKey->GetPrivateElement();
-    // sk_poly.SetFormat(Format::EVALUATION);
-    // auto& sk_eval = sk_poly.GetElementAtIndex(0);
+    // Sample Program: Step 2: Key Generation
+    // Generate the secret key
+    auto sk = cc.KeyGen();
 
-    // std::vector<uint64_t> neg_s(ring_dim);
-    // for (uint32_t i = 0; i < ring_dim; i++) {
-    //     NativeInteger v = sk_eval[i];
-    //     neg_s[i] = (v == NativeInteger(0)) ? 0 : (t_nat - v).ConvertToInt<uint64_t>();
-    // }
+    std::cout << "Generating the bootstrapping keys..." << std::endl;
 
-    // for (uint32_t k = 0; k < ell; k++) {
-    //     SCOPED_TRACE("k=" + std::to_string(k));
+    // Generate the bootstrapping keys (refresh and switching keys)
+    cc.BTKeyGen(sk);
 
-    //     // B^{-(k+1)} mod t
-    //     NativeInteger Bk(1);
-    //     for (uint32_t j = 0; j <= k; j++)
-    //         Bk = Bk.ModMul(NativeInteger(B), t_nat);
-    //     NativeInteger Bk_inv = Bk.ModInverse(t_nat);
+    std::cout << "Completed the key generation." << std::endl;
 
-    //     // Center a value in [0, t) to [-t/2, t/2]
-    //     auto center = [&](uint64_t v) -> int64_t {
-    //         int64_t c = static_cast<int64_t>(v);
-    //         if (c > static_cast<int64_t>(t / 2)) c -= static_cast<int64_t>(t);
-    //         return c;
-    //     };
+    // Sample Program: Step 3: Encryption
+    auto ct1 = cc.Encrypt(sk, P / 2 + 1, LARGE_DIM, P, Q);
+    std::cout << "Encrypted value: " << P / 2 + 1 << std::endl;
 
-    //     // Top half row k: each slot i should decrypt to center(-s[i] * B^{-(k+1)} mod t)
-    //     {
-    //         Plaintext pt;
-    //         cc->Decrypt(keys.secretKey, rgsw[k], &pt);
-    //         pt->SetLength(ring_dim);
-    //         const auto& vals = pt->GetPackedValue();
+    // Sample Program: Step 4: Evaluation
+    // Decompose the large ciphertext into small ciphertexts that fit in q
+    auto decomp = cc.EvalDecomp(ct1);
 
-    //         SCOPED_TRACE("top");
-    //         for (uint32_t i = 0; i < ring_dim; i++) {
-    //             int64_t expected = center(
-    //                 NativeInteger(neg_s[i]).ModMul(Bk_inv, t_nat).ConvertToInt<uint64_t>()
-    //             );
-    //             ASSERT_EQ(vals[i], expected) << "slot " << i;
-    //         }
-    //     }
-
-    //     // Bottom half row k: every slot should decrypt to center(B^{-(k+1)} mod t)
-    //     {
-    //         Plaintext pt;
-    //         cc->Decrypt(keys.secretKey, rgsw[k + ell], &pt);
-    //         pt->SetLength(ring_dim);
-    //         const auto& vals = pt->GetPackedValue();
-
-    //         int64_t expected = center(Bk_inv.ConvertToInt<uint64_t>());
-    //         SCOPED_TRACE("bottom");
-    //         for (uint32_t i = 0; i < ring_dim; i++) {
-    //             ASSERT_EQ(vals[i], expected) << "slot " << i;
-    //         }
-    //     }
-    // }
-
-    
+    // Sample Program: Step 5: Decryption
+    uint64_t p = cc.GetMaxPlaintextSpace().ConvertToInt();
+    std::cout << "Decomposed value: ";
+    for (size_t i = 0; i < decomp.size(); i++) {
+        ct1 = decomp[i];
+        LWEPlaintext result;
+        if (i == decomp.size() - 1) {
+            // after every evalfloor, the least significant digit is dropped so the last modulus is computed as log p = (log P) mod (log GetMaxPlaintextSpace)
+            auto logp = GetMSB(P - 1) % GetMSB(p - 1);
+            p         = 1 << logp;
+        }
+        cc.Decrypt(sk, ct1, &result, p);
+        std::cout << "(" << result << " * " << cc.GetMaxPlaintextSpace() << "^" << i << ")";
+        if (i != decomp.size() - 1) {
+            std::cout << " + ";
+        }
+    }
+    std::cout << std::endl;
 }
