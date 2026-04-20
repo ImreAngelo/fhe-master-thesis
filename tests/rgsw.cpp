@@ -28,7 +28,7 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     // const size_t ell = 11;
     
     const uint64_t log_B = 15;
-    const size_t ell = 21;
+    const size_t ell = 23;   // = ⌈log_B(Q)⌉ for depth=7 under FIXEDAUTO (Q ≈ 2^345)
 
     CCParams<CryptoContextBGVRNS> params;
     // params.SetMultiplicativeDepth(2*ell - 1);
@@ -38,6 +38,8 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     params.SetMultiplicativeDepth(7);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);   // smallest recommended value with BGN-rns (l = 3)?
+    params.SetScalingTechnique(FIXEDAUTO);  // avoid per-level scaling factor — RGSW rows are built by hand, so we need S_L = 1
+    params.SetSecurityLevel(HEStd_NotSet);  // 16384 doesn't meet HE standards under FIXEDAUTO; relax for this test
     // params.SetMaxRelinSkDeg(3);
 
 #if defined(DEBUG_LOGGING)
@@ -81,17 +83,9 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     auto ntt = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
     cc->Decrypt(keyPair.secretKey, ntt, &res_a);
     
-    Plaintext res_b;
-    auto cof = Server::EvalCoeffExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
-    cc->Decrypt(keyPair.secretKey, cof, &res_b);
-    
-    Plaintext res_c;
-    auto acc = Server::EvalAccExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
-    cc->Decrypt(keyPair.secretKey, acc, &res_c);
-    
-    std::cout << "Final result (NTT): " << res_a << std::endl;
-    std::cout << "Final result (CoF): " << res_b << std::endl;
-    std::cout << "Final result (Acc): " << res_c << std::endl;
+#if defined(DEBUG_LOGGING)
+    std::cout << "Final result: " << res_a << std::endl;
+#endif
 
     const auto& result_slot = res_a->GetPackedValue();
     for(size_t i = 0; i < value.size(); i++) {
