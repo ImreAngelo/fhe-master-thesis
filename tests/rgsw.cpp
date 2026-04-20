@@ -80,16 +80,17 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     Plaintext res_a;
     auto ntt = Server::EvalExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
     cc->Decrypt(keyPair.secretKey, ntt, &res_a);
-    std::cout << "Final result (NTT): " << res_a << std::endl;
     
     Plaintext res_b;
     auto cof = Server::EvalCoeffExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
     cc->Decrypt(keyPair.secretKey, cof, &res_b);
-    std::cout << "Final result (CoF): " << res_b << std::endl;
     
     Plaintext res_c;
     auto acc = Server::EvalAccExternalProduct(cc, rlwe_ct, rgsw_ct, log_B, ell);
     cc->Decrypt(keyPair.secretKey, acc, &res_c);
+    
+    std::cout << "Final result (NTT): " << res_a << std::endl;
+    std::cout << "Final result (CoF): " << res_b << std::endl;
     std::cout << "Final result (Acc): " << res_c << std::endl;
 
     const auto& result_slot = res_a->GetPackedValue();
@@ -254,11 +255,13 @@ inline void TestHomExpand(const std::vector<int64_t>& index) {
 }
 
 // Basic test
-TEST(RGSW, EncryptRGSW) { TestExternalProduct({ 1, 0, 1, 0 }); } // fails
+TEST(ExtProduct, Val_0)   { TestExternalProduct({ 0 }); }
+TEST(ExtProduct, Val_1)   { TestExternalProduct({ 1 }); } // fails
+TEST(ExtProduct, Val_10)  { TestExternalProduct({ 1, 0, 1, 0 }); } // fails
 
 // Basic test
-TEST(RGSW, HomPlacing_0) { TestHomPlacing({0}, 4); } // works 
-TEST(RGSW, HomPlacing_1) { TestHomPlacing({1}, 4); } // fails because of external product
+TEST(HomPlacing, Val_0) { TestHomPlacing({0}, 4); } // works 
+TEST(HomPlacing, Val_1) { TestHomPlacing({1}, 4); } // fails because of external product
 
 // Small power-of-2 base
 // TEST(RGSW, ExpandRLWEHoisted_4bit_01) { TestHomExpand({ 0, 0, 0, 1 }); }
