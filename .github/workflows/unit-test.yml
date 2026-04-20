@@ -33,13 +33,7 @@ jobs:
 
       - name: Build and install OpenFHE
         if: steps.cache-openfhe.outputs.cache-hit != 'true'
-        run: |
-          cmake -S vendors/openfhe-development \
-                -B vendors/openfhe-development/build \
-                -DBUILD_STATIC=ON \
-                -DCMAKE_INSTALL_PREFIX="${GITHUB_WORKSPACE}/vendors/install"
-          cmake --build vendors/openfhe-development/build -j$(nproc)
-          cmake --install vendors/openfhe-development/build
+        run: make ci
 
       - name: Save OpenFHE cache
         if: steps.cache-openfhe.outputs.cache-hit != 'true'

@@ -58,9 +58,8 @@ endfunction()
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
 register_test(test-rgsw             SOURCE rgsw)
-register_test(test-rgsw-s           SOURCE rgsw-s)
-# register_test(test-external-prod    SOURCE external-prod)
 register_test(test-homplacing       SOURCE homplacing)
+register_test(test-homexpand        SOURCE homexpand)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)

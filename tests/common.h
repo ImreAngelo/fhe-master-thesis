@@ -1,14 +1,13 @@
 /**
- * This file contains helpers used by most tests
+ * This file contains helpers used by multiple tests
  */
 #pragma once
 
 #include "openfhe.h"
 #include <gtest/gtest.h>
 
-#include <vector>
 
-/// @brief Print a list of ciphertexts 
+/// @brief Print a list of RLWE ciphertexts 
 template <typename CC, typename T>
 inline void PrintRGSW(
     const CC& cc, 

@@ -1,4 +1,7 @@
+#pragma once
 #include "openfhe.h"
+
+// #define DEBUG_LOGGING
 
 namespace Client {
     using namespace lbcrypto;
@@ -12,75 +15,64 @@ namespace Client {
     /**
      * @brief Encrypt message as RGSW ciphertext
      * 
+     * @todo Optimize: EncryptBatch and/or construct b in top row directly
+     * @todo Set noise scale for each row
+     * @todo Look into setting ell automatically
      * @todo Look into SIMD operations for constructing (top) rows
      * 
-     * @param keys Public/private keys needed
+     * @param keys Private keys needed
      * @param msg Packed plaintext message to encrypt
-     * @param B Gadget base (default 2)
+     * @param log_B Gadget base power (e.g., 5 gives B = 2^5)
      */
     RGSWCiphertext<DCRTPoly> EncryptRGSW(
-        CryptoContext<DCRTPoly>& cc,
-        KeyPair<DCRTPoly>& keys,
+        const CryptoContext<DCRTPoly>& cc,
+        const PrivateKey<DCRTPoly>& secretKey,
         std::vector<int64_t> msg,
-        uint64_t B = 2 // todo: create tests for different bases
+        const uint64_t log_B = 5,
+        const size_t ell = 9
     ) {
-        auto t = NativeInteger(cc->GetCryptoParameters()->GetPlaintextModulus());
-        auto ell = msg.size();
-        
-        RGSWCiphertext<DCRTPoly> G(2*ell);
-        NativeInteger b_ctr(1), gi;
+        RGSWCiphertext<DCRTPoly> G(2 * ell);
 
-        Plaintext zero = cc->MakePackedPlaintext({ 0 });
+        const Plaintext zero   = cc->MakePackedPlaintext({ 0 });
+        const Plaintext mPlain = cc->MakePackedPlaintext(msg);
+        if (!mPlain->Encode())
+            throw std::runtime_error("Failed to encode plaintext");
 
-        // Extract secret s
-        // Elements of RLWE is represented as (b, a) so s = element[0]
-        auto sk_poly = keys.secretKey->GetPrivateElement();
-        sk_poly.SetFormat(Format::EVALUATION);
-        auto& s = sk_poly.GetElementAtIndex(0);
+        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul),
+        // NOT at the R_t plaintext level. Going through MakePackedPlaintext would
+        // reduce each slot mod t, introducing a carry polynomial K_i with
+        // |K_i| ~ B^i. The external product then produces t·Σv[i]·K_i, which
+        // overflows Q and contaminates the result mod t.
+        DCRTPoly mScaled = mPlain->GetElement<DCRTPoly>();
+        mScaled.SetFormat(Format::EVALUATION);
+
+        const NativeInteger B(1ULL << log_B);
 
         for (size_t i = 0; i < ell; i++) {
-            // Find 1/B^{i + 1} mod t
-            b_ctr = b_ctr.ModMul(B, t);
-            gi = b_ctr.ModInverse(t);
-            
-            // First L rows
-            std::vector<int64_t> mu;
-            mu.reserve(ell);
-
-            // -s * msg / B^i = -msg * s/B^i
-            // NOTE: in the formula i is 1-index
-            for(size_t j = 0; j < ell; j++) {
-                auto neg = (msg[j] > 0) ? t - NativeInteger(msg[j]) : NativeInteger(msg[j]);
-                auto muj = s[j].ModMul(neg, t).ModMul(gi, t);
-
-                auto mujint = muj.ConvertToInt<uint64_t>();
-                // assert(...); // TODO: Check overflow etc. in conversion to signed
-                mu.emplace_back(static_cast<int64_t>(mujint));
+            // Bottom row i+ell: message is m·B^i (injected into c0).
+            // c0 + c1·s = t·e + m·B^i
+            {
+                auto bot     = cc->Encrypt(secretKey, zero);
+                auto& elems  = bot->GetElements();
+                DCRTPoly add = mScaled;
+                add.SetFormat(elems[0].GetFormat());
+                elems[0] += add;
+                G[i + ell] = bot;
             }
 
-            Plaintext row_i = cc->MakePackedPlaintext(mu);
-            G[i] = cc->Encrypt(keys.secretKey, row_i);
-
-            // Last L rows
-            auto b_int = static_cast<int64_t>(gi.ConvertToInt<uint64_t>());
-            
-            for(size_t j = 0; j < ell; j++) {
-                mu[j] = b_int * msg[j];
+            // Top row i: message is m·B^i·s (injected into c1).
+            // c0 + c1·s = t·e + m·B^i·s
+            {
+                auto top     = cc->Encrypt(secretKey, zero);
+                auto& elems  = top->GetElements();
+                DCRTPoly add = mScaled;
+                add.SetFormat(elems[1].GetFormat());
+                elems[1] += add;
+                G[i] = top;
             }
 
-            Plaintext row_il = cc->MakePackedPlaintext(mu);
-            G[i + ell] = cc->Encrypt(keys.secretKey, row_il);
+            mScaled *= B;  // mScaled ← m · B^{i+1} (per RNS tower)
         }
-        
-#if defined(DEBUG_LOGGING)
-        std::cout << "G: " << std::endl;
-        for(const auto& row : G) {
-            Plaintext decrytedRow;
-            cc->Decrypt(keys.secretKey, row, &decrytedRow);
-            decrytedRow->SetLength(ell);
-            std::cout << decrytedRow << std::endl;
-        }
-#endif
 
         return G;
     }
@@ -88,22 +80,74 @@ namespace Client {
 
 namespace Server {
     using namespace lbcrypto;
-    
-    template <typename T>
-    using RLWECiphertext = Ciphertext<T>;
 
     template <typename T>
     using RGSWCiphertext = std::vector<Ciphertext<T>>;
 
+    // Helper: multiply each component of an RLWE ciphertext by a scalar polynomial
+    static Ciphertext<DCRTPoly> ScalarMultCiphertext(
+        const Ciphertext<DCRTPoly>& ct,
+        const DCRTPoly& scalar
+    ) {
+        auto result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+        auto& elems = result->GetElements();
+        elems[0] *= scalar;
+        elems[1] *= scalar;
+        return result;
+    }
+
     /**
-     * @brief Evaluate external product homomorphically
+     * @brief Homomorphically evaluate the external product
+     * 
+     * @param cc 
+     * @param x 
+     * @param Y 
+     * @param log_B 
+     * @param ell 
+     * @return Ciphertext<DCRTPoly> 
      */
     Ciphertext<DCRTPoly> EvalExternalProduct(
-        CryptoContext<DCRTPoly>& cc,
-        PublicKey<DCRTPoly>& publicKey,
-        RLWECiphertext<DCRTPoly> rlwe,
-        RGSWCiphertext<DCRTPoly> rgsw
+        const CryptoContext<DCRTPoly>& cc,
+        const Ciphertext<DCRTPoly>& x,
+        const RGSWCiphertext<DCRTPoly>& Y,
+        const uint64_t log_B,
+        const size_t ell
     ) {
-        return rlwe;
+        // Decompose both ciphertext components in base B.
+        // BaseDecompose operates per-limb in RNS — this is correct because
+        // ell is chosen to cover the full product modulus (ell = ceil(log_B(q))).
+        DCRTPoly b = x->GetElements()[0];
+        DCRTPoly a = x->GetElements()[1];
+        b.SetFormat(Format::COEFFICIENT);
+        a.SetFormat(Format::COEFFICIENT);
+
+        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true); // digits of b
+        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true); // digits of a
+
+        // auto zero = DCRTPoly(b.GetParams(), Format::EVALUATION, true);
+        // v.resize(ell, zero);
+        // u.resize(ell, zero);
+
+        if (u.size() != ell || v.size() != ell) {
+            std::cout << "Size mismatch: " << u.size() << " / " << ell << ", " << v.size() << " / " << ell << std::endl;
+            throw std::runtime_error("BaseDecompose depth mismatch — check ell vs log_B vs q");
+        }
+
+        // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
+        auto result = ScalarMultCiphertext(Y[0], u[0]);
+        for (size_t i = 1; i < ell; i++) {
+            // Plaintext step;
+            // cc->Decrypt(keys.secretKey, result, &step);
+            // std::cout << step << std::endl;
+            result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i],       u[i]));
+        }
+        for (size_t i = 0; i < ell; i++) {
+            // Plaintext step;
+            // cc->Decrypt(keys.secretKey, result, &step);
+            // std::cout << step << std::endl;
+            result = cc->EvalAdd(result, ScalarMultCiphertext(Y[i + ell], v[i]));
+        }
+
+        return result;
     }
 }
