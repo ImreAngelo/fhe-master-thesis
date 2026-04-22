@@ -36,6 +36,11 @@ namespace Context
             const RGSWCiphertext<DCRTPoly>& Y
         );
 
+        RGSWCiphertext<DCRTPoly> EvalInnerProduct(
+            const RGSWCiphertext<DCRTPoly>& left,
+            const RGSWCiphertext<DCRTPoly>& right
+        );
+
         /**
          * @brief Encrypt message as RGSW ciphertext.
          *

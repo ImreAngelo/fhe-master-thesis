@@ -46,6 +46,20 @@ namespace Context
     }
 
     template <typename T>
+    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInnerProduct(
+        const RGSWCiphertext<DCRTPoly> &left, 
+        const RGSWCiphertext<DCRTPoly> &right
+    ) {
+        std::vector<Ciphertext<DCRTPoly>> result;
+        result.resize(left.size());
+
+        for(const auto& rlwe : left)
+            result.emplace_back(this->EvalExternalProduct(rlwe, right));
+        
+        return result;
+    }
+
+    template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
         const PrivateKey<DCRTPoly>& secretKey,
         std::vector<int64_t> msg
