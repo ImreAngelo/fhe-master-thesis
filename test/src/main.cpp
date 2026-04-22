@@ -1,84 +1,79 @@
 #include "server/homplacing.h"
+#include "core/helpers.h"
+#define DEBUG_LOGGING
+
+#include <random>
 
 using namespace lbcrypto;
 
 /**
- * @brief Test Homomorphic Placing (single user)
- * Should place value in slot 2^index
+ * @brief Test MultiHomPlacing (sPAR alg 2) with N users.
  */
-inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& value) {
-    CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(2);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(16384);
-    
-    // Avoid per-level scaling factor 
-    // RGSW rows are built by hand, so we need S_L = 1
-    // TODO: Set automatically in RGSW encrypt?
-    params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(30);
-    params.SetGadgetDecomposition(4);
+inline void TestMultiHomPlacing(uint32_t N, uint32_t candidates = 3, uint32_t bins = 3) {
+    const auto bits = Log2(N);
+    ASSERT_EQ(uint32_t(1) << bits, N);
 
-#if defined(DEBUG_LOGGING)
-    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
-    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
-    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
-#endif
+    CCParams<CryptoContextRGSWBGV> params;
+    params.SetMultiplicativeDepth(14);
+    params.SetPlaintextModulus(65537);
+    params.SetRingDim(32768);
+    params.SetScalingTechnique(FIXEDAUTO);
+    params.SetSecurityLevel(HEStd_NotSet);
+    params.SetGadgetBase(30);
+    params.SetGadgetDecomposition(22);
 
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
 
-    KeyPair<DCRTPoly> keyPair;
-    keyPair = cc->KeyGen();
+    auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
 
-    std::vector<RGSWCiphertext<DCRTPoly>> bits;
-    bits.reserve(index.size());
+    auto ptZero = cc->MakePackedPlaintext({0});
+    auto ptOne  = cc->MakePackedPlaintext({1});
 
-    for(const auto& bit : index) {
-        bits.emplace_back(cc->EncryptRGSW(keyPair.secretKey, { bit }));
+    std::vector<std::vector<Ciphertext<DCRTPoly>>> L_matrix(N, std::vector<Ciphertext<DCRTPoly>>(bins));
+    std::vector<std::vector<Ciphertext<DCRTPoly>>> I_matrix(N, std::vector<Ciphertext<DCRTPoly>>(bins));
+    for (uint32_t i = 0; i < N; i++) {
+        for (uint32_t k = 0; k < bins; k++) {
+            L_matrix[i][k] = cc->Encrypt(keyPair.publicKey, ptZero);
+            I_matrix[i][k] = cc->Encrypt(keyPair.publicKey, ptOne);
+        }
     }
 
-    Plaintext pt = cc->MakePackedPlaintext({ value });
-    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<uint32_t> dist(0, N - 1);
 
-    auto res_cts = Server::HomPlacing(cc, rlwe_ct, bits);
-    
-#if defined(DEBUG_LOGGING)
-    std::cout << "Final placing: ";
-    for(const auto& v : res_cts) {
-        Plaintext res;
-        cc->Decrypt(keyPair.secretKey, v, &res);
-        std::cout << res << ", ";    
+    for (uint32_t user = 0; user < N; user++) {
+        auto value = cc->Encrypt(keyPair.publicKey, cc->MakePackedPlaintext({int64_t(user + 1)}));
+
+        std::vector<std::vector<RGSWCiphertext<DCRTPoly>>> A(
+            candidates, std::vector<RGSWCiphertext<DCRTPoly>>(bits));
+        for (uint32_t d = 0; d < candidates; d++) {
+            const uint32_t idx = dist(rng);
+            for (uint32_t b = 0; b < bits; b++) {
+                const int64_t bit = (idx >> (bits - 1 - b)) & 1;
+                A[d][b] = cc->EncryptRGSW(keyPair.secretKey, { bit });
+            }
+        }
+
+        auto hasWritten = Server::MultiHomPlacing(cc, keyPair.publicKey, value, A, L_matrix, I_matrix);
+
+        Plaintext hw;
+        cc->Decrypt(keyPair.secretKey, hasWritten, &hw);
+        std::cout << "user " << user << " hasWritten=" << hw->GetPackedValue()[0] << std::endl;
     }
-    std::cout << std::endl;
-#endif
 
-    const auto slot = std::accumulate(index.begin(), index.end(), 0, 
-        [](int acc, bool bit) { return (acc << 1) | bit; });
-    std::vector<int64_t> expected(1 << index.size());
-    expected[slot] = value;
-
-#if defined(DEBUG_LOGGING)
-    std::cout << "Placing '" << value << "' in slot " << slot << std::endl;
-    std::cout << expected << std::endl;
-#endif
-
-    ASSERT_EQ(expected.size(), res_cts.size());
-
-    for(size_t i = 0; i < expected.size(); i++) {
-        Plaintext slot_val;
-        cc->Decrypt(keyPair.secretKey, res_cts[i], &slot_val);
-        ASSERT_EQ(expected[i], slot_val->GetPackedValue()[0]);
+    std::cout << "L_matrix:" << std::endl;
+    for (uint32_t i = 0; i < N; i++) {
+        for (uint32_t k = 0; k < bins; k++) {
+            Plaintext pt;
+            cc->Decrypt(keyPair.secretKey, L_matrix[i][k], &pt);
+            std::cout << pt->GetPackedValue()[0] << " ";
+        }
+        std::cout << std::endl;
     }
 }
 
-// TODO: Test HomPlacing without RGSW
-
-// Basic test
-TEST(HomPlacing2, b0) { TestHomPlacing({0}, 4); }
-TEST(HomPlacing2, b1) { TestHomPlacing({1}, 4); }
-
-TEST(HomPlacing2, x4_1) { TestHomPlacing({1, 0},    4); }
-TEST(HomPlacing2, x4_3) { TestHomPlacing({0, 1, 1}, 4); }
+TEST(MultiHomPlacing, N1) { TestMultiHomPlacing(1); }
+TEST(MultiHomPlacing, N2) { TestMultiHomPlacing(2); }

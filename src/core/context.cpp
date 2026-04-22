@@ -62,11 +62,7 @@ namespace Context
 
         RGSWCiphertext<DCRTPoly> G(2 * ell);
 
-        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul),
-        // NOT at the R_t plaintext level. Going through MakePackedPlaintext would
-        // reduce each slot mod t, introducing a carry polynomial K_i with
-        // |K_i| ~ B^i. The external product then produces t·Σv[i]·K_i, which
-        // overflows Q and contaminates the result mod t.
+        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul)
         DCRTPoly mScaled = mPlain->GetElement<DCRTPoly>();
         mScaled.SetFormat(Format::EVALUATION);
 
