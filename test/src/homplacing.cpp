@@ -2,22 +2,23 @@
 
 using namespace lbcrypto;
 
+
 /**
  * @brief Test Homomorphic Placing (single user)
- * Should place value in slot 2^index
+ *        Should place value in slot 2^index (binary)
  */
 inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& value) {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(4);
+    params.SetMultiplicativeDepth(2);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);
     
     // Avoid per-level scaling factor 
     // RGSW rows are built by hand, so we need S_L = 1
-    // TODO: Set automatically in RGSW encrypt!
+    // TODO: Set automatically in RGSW encrypt?
     params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(15);
-    params.SetGadgetDecomposition(14);
+    params.SetGadgetBase(30);
+    params.SetGadgetDecomposition(4);
 
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
@@ -37,7 +38,7 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     bits.reserve(index.size());
 
     for(const auto& bit : index) {
-        bits.emplace_back(cc->EncryptRGSW(keyPair.secretKey, { bit }));
+        bits.emplace_back(cc->EncryptRGSW(keyPair.publicKey, { bit }));
     }
 
     Plaintext pt = cc->MakePackedPlaintext({ value });
@@ -74,11 +75,16 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     }
 }
 
-// TODO: Test HomPlacing without RGSW
+// TODO: Test HomPlacing without RGSW for comparison
 
-// Basic test
-TEST(HomPlacing, b0) { TestHomPlacing({0}, 4); }
-TEST(HomPlacing, b1) { TestHomPlacing({1}, 4); }
-
-TEST(HomPlacing, x4_1) { TestHomPlacing({1, 0},    4); }
-TEST(HomPlacing, x4_3) { TestHomPlacing({0, 1, 1}, 4); }
+TEST(HomPlacing, b0)    { TestHomPlacing({0}, 4); }
+TEST(HomPlacing, b1)    { TestHomPlacing({1}, 4); }
+TEST(HomPlacing, x2_0)  { TestHomPlacing({0, 0}, 4); }
+TEST(HomPlacing, x2_1)  { TestHomPlacing({1, 0}, 4); }
+TEST(HomPlacing, x2_2)  { TestHomPlacing({0, 1}, 4); }
+TEST(HomPlacing, x2_3)  { TestHomPlacing({1, 1}, 4); }
+TEST(HomPlacing, x3)    { TestHomPlacing({0, 1, 1}, 4); }
+TEST(HomPlacing, x4)    { TestHomPlacing({1, 1, 0, 1}, 4); }
+TEST(HomPlacing, x5)    { TestHomPlacing({1, 0, 1, 1, 0}, 4); }
+// TEST(HomPlacing, x6) { TestHomPlacing({1, 0, 1, 1, 0, 1}, 4); }      // TODO: Auto-set parameters
+// TEST(HomPlacing, x7) { TestHomPlacing({1, 0, 1, 0, 1, 0, 1}, 4); }   //  ----------''-----------

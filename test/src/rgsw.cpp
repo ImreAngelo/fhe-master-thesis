@@ -29,8 +29,8 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     // Avoid per-level scaling factor 
     // RGSW rows are built by hand, so we need S_L = 1
     params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(15);               // NOTE: base = 2^base
-    params.SetGadgetDecomposition(6);       // TODO: set automatically
+    params.SetGadgetBase(30);               // NOTE: base = 2^base
+    params.SetGadgetDecomposition(3);       // TODO: set automatically
 
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
@@ -46,7 +46,7 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
     
-    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.publicKey, value);
     
 #if defined(DEBUG_LOGGING)
     std::cout << "G: " << std::endl;
@@ -74,3 +74,5 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
 TEST(ExtProduct, b0)    { TestExternalProduct({ 0 }); }
 TEST(ExtProduct, b1)    { TestExternalProduct({ 1 }); }
 TEST(ExtProduct, b1010) { TestExternalProduct({ 1, 0, 1, 0 }); }
+
+// TODO: Test internal product

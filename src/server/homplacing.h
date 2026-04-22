@@ -74,87 +74,23 @@ namespace Server
         const std::vector<RGSWCiphertext<DCRTPoly>>&    bits
     );
 
-    // template <typename Element>
-    // CT<Element> HomPlacingStarNoExt(
-    //     const CC<Element>&                  cc,
-    //     const CT<Element>&                  value,
-    //     const std::vector<CTVec<Element>>&  A,
-    //     std::vector<CTVec<Element>>&        dataMatrix,
-    //     std::vector<CTVec<Element>>&        availMatrix
-    // )
-    // {
-    //     const uint32_t L   = A[0].size();    // bits per address
-    //     const uint32_t eta = 1u << L;        // number of bins
-    //     constexpr uint32_t D = 3;            // number of candidate addresses
-    //     constexpr uint32_t K = 3;            // slots per bin
-
-    //     // Derive ct_zero and pt_one for arithmetic on plaintext constants
-    //     auto ct_zero = cc->EvalSub(A[0][0], A[0][0]);
-    //     auto pt_one  = cc->MakePackedPlaintext(std::vector<int64_t>{1});
-
-    //     // Helper: compute 1 - ct  (EvalSub only does CT - PT, not PT - CT)
-    //     auto one_minus = [&](const CT<Element>& ct) {
-    //         return cc->EvalAdd(cc->EvalNegate(ct), pt_one);
-    //     };
-
-    //     // --- Phase 1 ---
-    //     // For each candidate address d, run the HomPlacing tree with root = 1
-    //     // to produce a one-hot indicator vector z[d] of length eta.
-    //     std::vector<CTVec<Element>> z(D, CTVec<Element>(eta));
-
-    //     for (uint32_t d = 0; d < D; d++)
-    //     {
-    //         const CTVec<Element>& bits = A[d];
-
-    //         CTVec<Element> b(2 * eta - 1);
-    //         b[0] = cc->EvalAdd(ct_zero, pt_one);  // b_0 = enc(1)
-
-    //         for (uint32_t i = 0; i < L; i++)
-    //         {
-    //             const CT<Element>& bit = bits[i];
-
-    //             for (uint32_t j = 0; j < (1u << i); j++)
-    //             {
-    //                 const uint32_t idx_right = (1u << (i + 1)) + 2 * j;
-    //                 const uint32_t idx_left  = idx_right - 1;
-
-    //                 const auto& parent = b[(1u << i) - 1 + j];
-
-    //                 b[idx_right] = cc->EvalMult(parent, bit);
-    //                 b[idx_left]  = cc->EvalSub(parent, b[idx_right]);
-    //             }
-    //         }
-
-    //         for (uint32_t i = 0; i < eta; i++)
-    //             z[d][i] = b[eta - 1 + i];
-    //     }
-
-    //     // --- Phase 2 ---
-    //     // Obliviously write value into the first available slot.
-    //     // h = z[d][i] * I[i][k] * (1 - hasWritten) gates each write.
-    //     auto hasWritten = ct_zero;
-
-    //     for (uint32_t d = 0; d < D; d++)
-    //     {
-    //         for (uint32_t k = 0; k < K; k++)
-    //         {
-    //             for (uint32_t i = 0; i < eta; i++)
-    //             {
-    //                 auto h = cc->EvalMult(z[d][i], availMatrix[i][k]);
-    //                 h      = cc->EvalMult(h, one_minus(hasWritten));
-
-    //                 // L[i][k] += h * value
-    //                 dataMatrix[i][k]  = cc->EvalAdd(dataMatrix[i][k],
-    //                                                  cc->EvalMult(h, value));
-    //                 // I[i][k] -= h
-    //                 availMatrix[i][k] = cc->EvalSub(availMatrix[i][k], h);
-
-    //                 // hasWritten += h
-    //                 hasWritten = cc->EvalAdd(hasWritten, h);
-    //             }
-    //         }
-    //     }
-
-    //     return hasWritten;
-    // }
+    /**
+     * @brief Algorithm 2 from the sPAR paper.
+     *
+     * @param cc          Extended crypto context
+     * @param publicKey   Common public key (used to initialize encrypted constants)
+     * @param value       Encrypted value to be placed
+     * @param A           D candidate addresses, each as L encrypted RGSW bits
+     * @param L_matrix    Data matrix (η × K), mutated
+     * @param I_matrix    Availability matrix (η × K), mutated
+     * @return            Encryption of hasWritten (1 if a write succeeded, 0 otherwise)
+     */
+    Ciphertext<DCRTPoly> MultiHomPlacing(
+        const Context::ExtendedCryptoContext<DCRTPoly>&              cc,
+        const PublicKey<DCRTPoly>&                                   publicKey,
+        const Ciphertext<DCRTPoly>&                                  value,
+        const std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&    A,
+        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              L_matrix,
+        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              I_matrix
+    );
 }

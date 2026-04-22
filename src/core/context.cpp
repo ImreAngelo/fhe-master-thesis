@@ -46,8 +46,22 @@ namespace Context
     }
 
     template <typename T>
+    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
+        const RGSWCiphertext<DCRTPoly> &left, 
+        const RGSWCiphertext<DCRTPoly> &right
+    ) {
+        std::vector<Ciphertext<DCRTPoly>> result;
+        result.resize(left.size());
+
+        for(const auto& rlwe : left)
+            result.emplace_back(this->EvalExternalProduct(rlwe, right));
+        
+        return result;
+    }
+
+    template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
-        const PrivateKey<DCRTPoly>& secretKey,
+        const PublicKey<DCRTPoly>& publicKey,
         std::vector<int64_t> msg
     ) {
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
@@ -62,11 +76,7 @@ namespace Context
 
         RGSWCiphertext<DCRTPoly> G(2 * ell);
 
-        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul),
-        // NOT at the R_t plaintext level. Going through MakePackedPlaintext would
-        // reduce each slot mod t, introducing a carry polynomial K_i with
-        // |K_i| ~ B^i. The external product then produces t·Σv[i]·K_i, which
-        // overflows Q and contaminates the result mod t.
+        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul)
         DCRTPoly mScaled = mPlain->GetElement<DCRTPoly>();
         mScaled.SetFormat(Format::EVALUATION);
 
@@ -76,7 +86,7 @@ namespace Context
             // Bottom row i+ell: message is m·B^i (injected into c0).
             // c0 + c1·s = t·e + m·B^i
             {
-                auto bot     = this->Encrypt(secretKey, zero);
+                auto bot     = this->Encrypt(publicKey, zero);
                 auto& elems  = bot->GetElements();
                 DCRTPoly add = mScaled;
                 add.SetFormat(elems[0].GetFormat());
@@ -87,7 +97,7 @@ namespace Context
             // Top row i: message is m·B^i·s (injected into c1).
             // c0 + c1·s = t·e + m·B^i·s
             {
-                auto top     = this->Encrypt(secretKey, zero);
+                auto top     = this->Encrypt(publicKey, zero);
                 auto& elems  = top->GetElements();
                 DCRTPoly add = mScaled;
                 add.SetFormat(elems[1].GetFormat());
