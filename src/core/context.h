@@ -66,7 +66,7 @@ namespace Context
          * @param log_B Gadget base power (e.g., 5 gives B = 2^5)
          */
         RGSWCiphertext<DCRTPoly> EncryptRGSW(
-            const PrivateKey<DCRTPoly>& secretKey,
+            const PublicKey<DCRTPoly>& publicKey,
             std::vector<int64_t> msg
         );
 

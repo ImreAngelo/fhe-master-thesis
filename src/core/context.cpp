@@ -61,7 +61,7 @@ namespace Context
 
     template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
-        const PrivateKey<DCRTPoly>& secretKey,
+        const PublicKey<DCRTPoly>& publicKey,
         std::vector<int64_t> msg
     ) {
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
@@ -86,7 +86,7 @@ namespace Context
             // Bottom row i+ell: message is m·B^i (injected into c0).
             // c0 + c1·s = t·e + m·B^i
             {
-                auto bot     = this->Encrypt(secretKey, zero);
+                auto bot     = this->Encrypt(publicKey, zero);
                 auto& elems  = bot->GetElements();
                 DCRTPoly add = mScaled;
                 add.SetFormat(elems[0].GetFormat());
@@ -97,7 +97,7 @@ namespace Context
             // Top row i: message is m·B^i·s (injected into c1).
             // c0 + c1·s = t·e + m·B^i·s
             {
-                auto top     = this->Encrypt(secretKey, zero);
+                auto top     = this->Encrypt(publicKey, zero);
                 auto& elems  = top->GetElements();
                 DCRTPoly add = mScaled;
                 add.SetFormat(elems[1].GetFormat());

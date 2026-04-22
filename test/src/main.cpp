@@ -53,7 +53,7 @@ inline void TestMultiHomPlacing(uint32_t N, uint32_t candidates = 3, uint32_t bi
             const uint32_t idx = dist(rng);
             for (uint32_t b = 0; b < bits; b++) {
                 const int64_t bit = (idx >> (bits - 1 - b)) & 1;
-                A[d][b] = cc->EncryptRGSW(keyPair.secretKey, { bit });
+                A[d][b] = cc->EncryptRGSW(keyPair.publicKey, { bit });
             }
         }
 

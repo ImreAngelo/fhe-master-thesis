@@ -38,7 +38,7 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     bits.reserve(index.size());
 
     for(const auto& bit : index) {
-        bits.emplace_back(cc->EncryptRGSW(keyPair.secretKey, { bit }));
+        bits.emplace_back(cc->EncryptRGSW(keyPair.publicKey, { bit }));
     }
 
     Plaintext pt = cc->MakePackedPlaintext({ value });

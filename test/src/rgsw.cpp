@@ -46,7 +46,7 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
     
-    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.publicKey, value);
     
 #if defined(DEBUG_LOGGING)
     std::cout << "G: " << std::endl;
