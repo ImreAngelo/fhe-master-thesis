@@ -36,7 +36,16 @@ namespace Context
             const RGSWCiphertext<DCRTPoly>& Y
         );
 
-        RGSWCiphertext<DCRTPoly> EvalInnerProduct(
+        /**
+         * @brief Homomorphically evaluates the internal product.
+         *        Takes the external product between right with 
+         *        each row (rlwe CT) of left.
+         * 
+         * @param left 
+         * @param right 
+         * @return RGSW ciphertext 
+         */
+        RGSWCiphertext<DCRTPoly> EvalInternalProduct(
             const RGSWCiphertext<DCRTPoly>& left,
             const RGSWCiphertext<DCRTPoly>& right
         );
@@ -44,7 +53,7 @@ namespace Context
         /**
          * @brief Encrypt message as RGSW ciphertext.
          *
-         * Only used by tests.
+         * Only used by client/tests.
          *
          * @todo Optimize: EncryptBatch and/or construct b in top row directly
          * @todo Set noise scale for each row automatically
@@ -82,15 +91,6 @@ namespace Context
             const PublicKey<T>& publicKey,
             const uint32_t len
         );
-
-        // /**
-        //  * @brief Scales
-        //  *
-        //  * @todo Choose integer size from (cmake) parameter
-        //  * @todo Unify integer types
-        //  * @todo Optimize
-        //  */
-        // RingGSWCiphertext<T> ScaleToGadgetLevels(Ciphertext<T>& ct);
 
     protected:
         /**

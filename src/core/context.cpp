@@ -46,7 +46,7 @@ namespace Context
     }
 
     template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInnerProduct(
+    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
         const RGSWCiphertext<DCRTPoly> &left, 
         const RGSWCiphertext<DCRTPoly> &right
     ) {
