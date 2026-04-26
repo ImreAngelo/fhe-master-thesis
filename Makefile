@@ -66,12 +66,14 @@ params:
 .venv/.params-stamp:
 	@$(MAKE) params
 
-# One-click tuning: ensure the venv + the test binary are ready, then drive
-# Optuna against test-rgsw. Builds the binary without running the test suite
-# (run-test-rgsw would do both); Optuna invokes the binary itself per trial.
-tune-rgsw: .venv/.params-stamp
-	@mkdir -p build && $(_CMAKE) && cmake --build . --target test-rgsw -j$(shell nproc)
-	@.venv/bin/python scripts/parameter-search.py
+# One-click tuning. Builds the matching test binary (without running the suite
+# — that would happen via run-test-*), then hands the target name to the
+# search script which decides per-target search space + filter.
+#   make tune-rgsw   →  scripts/parameter-search.py rgsw
+#   make tune-main   →  scripts/parameter-search.py main
+tune-%: .venv/.params-stamp
+	@mkdir -p build && $(_CMAKE) && cmake --build . --target test-$* -j$(shell nproc)
+	@.venv/bin/python scripts/parameter-search.py $*
 
 ############
 # Clean-up #
@@ -101,7 +103,7 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
-	@echo "  tune-rgsw          - Run Optuna against test-rgsw (implies params + test-rgsw)"
+	@echo "  tune-<name>        - Run Optuna against test-<name> (e.g. tune-rgsw, tune-main)"
 	@echo "  clean              - Clean project build artifacts"
 	@echo "  clean-openfhe      - Clean OpenFHE build artifacts"
 	@echo "  help               - Show this help message"

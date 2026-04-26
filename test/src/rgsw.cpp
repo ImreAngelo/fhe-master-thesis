@@ -5,24 +5,14 @@
 #include "core/params.h"
 #include "core/rgsw.h"
 
+#include "../cli_params.h"
+
 #include <cstdint>
 #include <cmath>
 #include <iostream>
-#include <optional>
 #include <ranges>
-#include <string>
-#include <string_view>
 
 using namespace lbcrypto;
-
-// CLI overrides set in main(); std::nullopt use the per-test hardcoded default.
-namespace {
-    std::optional<uint32_t> g_mult_depth;
-    std::optional<uint32_t> g_plaintext_modulus;
-    std::optional<uint32_t> g_ring_dim;
-    std::optional<uint32_t> g_gadget_base;
-    std::optional<uint32_t> g_gadget_decomposition;
-}
 
 /**
  * @brief Test the external product and internal product
@@ -30,14 +20,14 @@ namespace {
  */
 inline void RunTest(const std::vector<int64_t>& value) {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(g_mult_depth.value_or(2));
-    params.SetPlaintextModulus(g_plaintext_modulus.value_or(65537));
-    params.SetRingDim(g_ring_dim.value_or(16384));
+    params.SetMultiplicativeDepth(2);   // RGSW tests fix depth at 2; not tunable.
+    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
+    params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
 
-    // Avoid per-level scaling factor
-    params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(g_gadget_base.value_or(30));                    // NOTE: base = 2^base
-    params.SetGadgetDecomposition(g_gadget_decomposition.value_or(4));   // TODO: set automatically
+    // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
+    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
+    params.SetGadgetBase(test_cli::g_gadget_base.value_or(30));                    // NOTE: base = 2^base
+    params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(4));   // TODO: set automatically
     
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
@@ -110,39 +100,8 @@ TEST(RGSW, b10)   { RunTest({ 1, 0 }); }
 TEST(RGSW, b11)   { RunTest({ 1, 1 }); }
 
 
-// GoogleTest entry point that recognises RGSW tuning flags
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-
-    auto parse_uint = [](std::string_view value, std::optional<uint32_t>& slot, std::string_view name) {
-        try {
-            slot = static_cast<uint32_t>(std::stoul(std::string(value)));
-        } catch (const std::exception&) {
-            std::cerr << "test-rgsw: invalid value for --" << name << ": " << value << "\n";
-            std::exit(2);
-        }
-    };
-
-    for (int i = 1; i < argc; ++i) {
-        std::string_view arg = argv[i];
-        const auto eq = arg.find('=');
-        if (arg.substr(0, 2) != "--" || eq == std::string_view::npos) {
-            std::cerr << "test-rgsw: unrecognised argument: " << arg << "\n";
-            return 2;
-        }
-        const auto name  = arg.substr(2, eq - 2);
-        const auto value = arg.substr(eq + 1);
-
-        if      (name == "mult_depth")           parse_uint(value, g_mult_depth,           name);
-        else if (name == "plaintext_modulus")    parse_uint(value, g_plaintext_modulus,    name);
-        else if (name == "ring_dim")             parse_uint(value, g_ring_dim,             name);
-        else if (name == "gadget_base")          parse_uint(value, g_gadget_base,          name);
-        else if (name == "gadget_decomposition") parse_uint(value, g_gadget_decomposition, name);
-        else {
-            std::cerr << "test-rgsw: unknown flag --" << name << "\n";
-            return 2;
-        }
-    }
-
+    if (int rc = test_cli::parse_args(argc, argv)) return rc;
     return RUN_ALL_TESTS();
 }

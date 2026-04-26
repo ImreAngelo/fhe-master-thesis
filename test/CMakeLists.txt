@@ -64,7 +64,7 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
-register_test(test-main             SOURCE src/main)
+register_test(test-main             SOURCE src/main CUSTOM_MAIN)
 register_test(test-rgsw             SOURCE src/rgsw CUSTOM_MAIN)
 register_test(test-homplacing       SOURCE src/homplacing)
 register_test(test-homexpand        SOURCE src/homexpand)
