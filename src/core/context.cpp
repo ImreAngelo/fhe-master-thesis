@@ -1,4 +1,6 @@
 #include "context.h"
+#include "utils/timer.h"
+
 
 namespace Context
 {
@@ -11,6 +13,8 @@ namespace Context
         const Ciphertext<DCRTPoly>& x,
         const RGSWCiphertext<DCRTPoly>& Y
     ) {
+        DEBUG_TIMER("External Product");
+
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
         const uint64_t log_B = m_params.GetGadgetBase();
         const size_t ell = m_params.GetGadgetDecomposition();
@@ -26,13 +30,15 @@ namespace Context
         std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true); // digits of b
         std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true); // digits of a
 
-        // auto zero = DCRTPoly(b.GetParams(), Format::EVALUATION, true);
-        // v.resize(ell, zero);
-        // u.resize(ell, zero);
-
         if (u.size() != ell || v.size() != ell) {
-            std::cout << "Size mismatch: " << u.size() << " / " << ell << ", " << v.size() << " / " << ell << std::endl;
+            std::cout << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << std::endl;
+            std::cout << "Current setting: " << ell << " / " << ell << std::endl;
             throw std::runtime_error("BaseDecompose depth mismatch — check ell vs log_B vs q");
+            
+            // if u.size() < ell || v.size() < ell
+            // auto zero = DCRTPoly(b.GetParams(), Format::EVALUATION, true);
+            // v.resize(ell, zero);
+            // u.resize(ell, zero);
         }
 
         // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
@@ -50,20 +56,21 @@ namespace Context
         const RGSWCiphertext<DCRTPoly> &left, 
         const RGSWCiphertext<DCRTPoly> &right
     ) {
-        std::vector<Ciphertext<DCRTPoly>> result;
-        result.resize(left.size());
-
-        for(const auto& rlwe : left)
-            result.emplace_back(this->EvalExternalProduct(rlwe, right));
+        DEBUG_TIMER("Internal Product");
         
+        RGSWCiphertext<DCRTPoly> result(left.size());
+        for(size_t i = 0; i < left.size(); i++)
+            result[i] = this->EvalExternalProduct(left[i], right);
         return result;
     }
 
     template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
         const PublicKey<DCRTPoly>& publicKey,
-        std::vector<int64_t> msg
+        std::vector<int64_t> msg    // TODO: Pass plaintext (optionally std::move)
     ) {
+        DEBUG_TIMER("Encrypt RGSW");
+        
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
         const uint64_t log_B = m_params.GetGadgetBase();
         const size_t ell = m_params.GetGadgetDecomposition();
@@ -86,6 +93,8 @@ namespace Context
             // Bottom row i+ell: message is m·B^i (injected into c0).
             // c0 + c1·s = t·e + m·B^i
             {
+                // DEBUG_TIMER("Row " + std::to_string(i + ell) + " (a)");
+
                 auto bot     = this->Encrypt(publicKey, zero);
                 auto& elems  = bot->GetElements();
                 DCRTPoly add = mScaled;
@@ -97,6 +106,8 @@ namespace Context
             // Top row i: message is m·B^i·s (injected into c1).
             // c0 + c1·s = t·e + m·B^i·s
             {
+                // DEBUG_TIMER("Row " + std::to_string(i) + " (b)");
+
                 auto top     = this->Encrypt(publicKey, zero);
                 auto& elems  = top->GetElements();
                 DCRTPoly add = mScaled;

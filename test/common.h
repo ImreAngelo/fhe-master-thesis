@@ -6,6 +6,13 @@
 #include "openfhe.h"
 #include <gtest/gtest.h>
 
+// TODO: Define in cmake
+// #define DEBUG
+#if defined(DEBUG)
+#define DEBUG_LOGGING
+#define DEBUG_TIMING
+#endif
+
 
 /// @brief Print a list of RLWE ciphertexts 
 template <typename CC, typename T>
