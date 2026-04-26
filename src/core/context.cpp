@@ -19,26 +19,27 @@ namespace Context
         const uint64_t log_B = m_params.GetGadgetBase();
         const size_t ell = m_params.GetGadgetDecomposition();
 
-        // Decompose both ciphertext components in base B.
-        // BaseDecompose operates per-limb in RNS — this is correct because
-        // ell is chosen to cover the full product modulus (ell = ceil(log_B(q))).
+        // Decompose both ciphertext components in base B
         DCRTPoly b = x->GetElements()[0];
         DCRTPoly a = x->GetElements()[1];
         b.SetFormat(Format::COEFFICIENT);
         a.SetFormat(Format::COEFFICIENT);
 
-        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true); // digits of b
-        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true); // digits of a
+        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
+        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
 
-        if (u.size() != ell || v.size() != ell) {
-            std::cout << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << std::endl;
-            std::cout << "Current setting: " << ell << " / " << ell << std::endl;
-            throw std::runtime_error("BaseDecompose depth mismatch — check ell vs log_B vs q");
-            
-            // if u.size() < ell || v.size() < ell
-            // auto zero = DCRTPoly(b.GetParams(), Format::EVALUATION, true);
-            // v.resize(ell, zero);
-            // u.resize(ell, zero);
+        // TODO: Relax constraints, allow bad ell
+        if (u.size() > ell || v.size() > ell) {
+            std::cerr << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << "\n";
+            std::cerr << "Current setting: " << ell << " / " << ell << "\n";
+            throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
+        }
+
+        if (u.size() < ell || v.size() < ell) {
+            std::cout << "Recommended decomposition parameter is " << u.size() << ", was " << ell << std::endl;
+            DCRTPoly zero(b.GetParams(), Format::EVALUATION, true);
+            u.resize(ell, zero);
+            v.resize(ell, zero);
         }
 
         // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]

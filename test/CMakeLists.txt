@@ -13,16 +13,19 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
-# ── register_test(name [SOURCE stem]) ────────────────────────────────────────
-# name   - CMake target name; must start with "test-" (matches "make test-<stem>")
-# SOURCE - source file stem without .cpp (defaults to name if omitted)
+# ── register_test(name [SOURCE stem] [CUSTOM_MAIN]) ──────────────────────────
+# name        - CMake target name; must start with "test-" (matches "make test-<stem>")
+# SOURCE      - source file stem without .cpp (defaults to name if omitted)
+# CUSTOM_MAIN - the source file provides its own main(); link GTest::gtest
+#               instead of GTest::gtest_main so the symbols don't collide.
+#               Used by tests that parse extra CLI flags (see src/rgsw.cpp).
 #
 # Creates:
 #   - executable target '<name>'         (excluded from bare "make")
 #   - CTest entry for every TEST() case  (used by "make test" / ctest -R)
 #   - custom target 'run-<name>'         (build + run just this binary)
 function(register_test name)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "SOURCE" "")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "CUSTOM_MAIN" "SOURCE" "")
     if(ARG_SOURCE)
         set(_src ${ARG_SOURCE}.cpp)
     else()
@@ -33,7 +36,11 @@ function(register_test name)
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
     # project_cxx20 bumps this target (only) to C++20; GTest stays at C++17.
-    target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20 server_lib)
+    if(ARG_CUSTOM_MAIN)
+        target_link_libraries(${name} PRIVATE GTest::gtest project_cxx20 server_lib)
+    else()
+        target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20 server_lib)
+    endif()
 
     # Force-include common.h before every translation unit in this target.
     # This makes gtest, openfhe, and shared helpers available without explicit includes.
@@ -58,7 +65,7 @@ endfunction()
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
 register_test(test-main             SOURCE src/main)
-register_test(test-rgsw             SOURCE src/rgsw)
+register_test(test-rgsw             SOURCE src/rgsw CUSTOM_MAIN)
 register_test(test-homplacing       SOURCE src/homplacing)
 register_test(test-homexpand        SOURCE src/homexpand)
 
