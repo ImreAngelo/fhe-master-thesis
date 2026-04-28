@@ -1,4 +1,5 @@
 #define TEST_INTERNAL_FUNCTIONS
+#define DEBUG_LOGGING
 
 #include "core/context.h"
 #include "core/helpers.h"

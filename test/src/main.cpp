@@ -10,18 +10,17 @@ using namespace lbcrypto;
 /**
  * @brief Test MultiHomPlacing (sPAR alg 2) with N users.
  */
-inline void TestMultiHomPlacing(uint32_t N, uint32_t candidates = 3, uint32_t bins = 3) {
+inline void TestServerWrite(uint32_t N, uint32_t candidates = 3, uint32_t bins = 3) {
     const auto bits = Log2(N);
     ASSERT_EQ(uint32_t(1) << bits, N); // ensure N is power of 2
 
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(9));
+    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(8));
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
-    params.SetRingDim(test_cli::g_ring_dim.value_or(32768));
-
+    // params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
     params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
-    params.SetGadgetBase(test_cli::g_gadget_base.value_or(12));
-    params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(50));
+    params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(39));
+    params.SetGadgetBase(test_cli::g_gadget_base.value_or(10));
 
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
@@ -158,8 +157,8 @@ inline void TestMultiHomPlacing(uint32_t N, uint32_t candidates = 3, uint32_t bi
     }
 }
 
-TEST(MultiHomPlacing, N2_1_1) { TestMultiHomPlacing(2, 1, 1); }
-// TEST(MultiHomPlacing, N2) { TestMultiHomPlacing(2); }
+// TEST(ServerWrite, N2_1_1) { TestServerWrite(2, 1, 1); }
+TEST(ServerWrite, N2) { TestServerWrite(2); }
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

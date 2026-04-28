@@ -38,7 +38,9 @@ namespace utils {
 
 #define CONCAT(a, b) a ## b
 #if defined(DEBUG_TIMING)
+/// Macro for creating an RAII timer
 #define DEBUG_TIMER(label) utils::Timer CONCAT(t,__COUNTER__)(label)
 #else
+/// Enable timer by defining a DEBUG_TIMING macro
 #define DEBUG_TIMER(label) 
 #endif

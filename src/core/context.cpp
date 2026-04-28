@@ -32,10 +32,8 @@ namespace Context
         if (u.size() > ell || v.size() > ell) {
             std::cerr << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << "\n";
             std::cerr << "Current setting: " << ell << " / " << ell << "\n";
-            throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
-        }
-
-        if (u.size() < ell || v.size() < ell) {
+            // throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
+        } else if (u.size() < ell || v.size() < ell) {
             std::cout << "Recommended decomposition parameter is " << u.size() << ", was " << ell << std::endl;
             DCRTPoly zero(b.GetParams(), Format::EVALUATION, true);
             u.resize(ell, zero);
@@ -92,10 +90,7 @@ namespace Context
 
         for (size_t i = 0; i < ell; i++) {
             // Bottom row i+ell: message is m·B^i (injected into c0).
-            // c0 + c1·s = t·e + m·B^i
             {
-                // DEBUG_TIMER("Row " + std::to_string(i + ell) + " (a)");
-
                 auto bot     = this->Encrypt(publicKey, zero);
                 auto& elems  = bot->GetElements();
                 DCRTPoly add = mScaled;
@@ -105,10 +100,7 @@ namespace Context
             }
 
             // Top row i: message is m·B^i·s (injected into c1).
-            // c0 + c1·s = t·e + m·B^i·s
             {
-                // DEBUG_TIMER("Row " + std::to_string(i) + " (b)");
-
                 auto top     = this->Encrypt(publicKey, zero);
                 auto& elems  = top->GetElements();
                 DCRTPoly add = mScaled;
