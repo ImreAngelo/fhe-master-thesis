@@ -21,13 +21,12 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
     params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
 
     // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
-    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
+    // params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
+    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDMANUAL));
 
-#if defined(DEBUG_LOGGING)
-    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
-    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
-    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
-#endif
+    DEBUG_PRINT("Depth = " << params.GetMultiplicativeDepth());
+    DEBUG_PRINT("Ring Dim. = " << params.GetRingDim());
+    DEBUG_PRINT("Plaintext mod = " << params.GetPlaintextModulus());
 
     return params;
 }
@@ -44,25 +43,30 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
 
-#if defined(DEBUG_LOGGING)
-    std::cout << "RGSW dnum = " << rgsw_ct.size() << std::endl;
-#endif
+    DEBUG_PRINT("RGSW dnum = " << rgsw_ct.size());
 
-    Plaintext pt = cc->MakePackedPlaintext(value);
+    Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+    
+    // Test External Product
+    {
+        auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
+        
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, res_ct, &res);
+        res->SetLength(value.size());
+    
+        DEBUG_PRINT("Final result: " << res);
+    
+        const auto& result_slot = res->GetPackedValue();
+        for (size_t i = 0; i < value.size(); i++) {
+            ASSERT_EQ(value[i], result_slot[i]);
+        }
+    }
 
-    Plaintext res;
-    auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
-    cc->Decrypt(keyPair.secretKey, res_ct, &res);
-    res->SetLength(value.size());
-
-#if defined(DEBUG_LOGGING)
-    std::cout << "Final result: " << res << std::endl;
-#endif
-
-    const auto& result_slot = res->GetPackedValue();
-    for (size_t i = 0; i < value.size(); i++) {
-        ASSERT_EQ(value[i], result_slot[i]);
+    // Test Internal Product
+    {
+        
     }
 }
 
