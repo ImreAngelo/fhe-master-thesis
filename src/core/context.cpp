@@ -17,35 +17,38 @@ namespace Context
 
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
         const uint64_t log_B = m_params.GetGadgetBase();
-        const size_t ell = m_params.GetGadgetDecomposition();
 
-        // Decompose both ciphertext components in base B
-        DCRTPoly b = x->GetElements()[0];
-        DCRTPoly a = x->GetElements()[1];
-        b.SetFormat(Format::COEFFICIENT);
-        a.SetFormat(Format::COEFFICIENT);
+        // RNS-friendly gadget decomposition: per (tower, base-B digit). CRTDecompose
+        // returns digits already in DCRT form (no big-integer interpolation), and the
+        // total digit count = sum_i ceil(log2(q_i) / log_B). Noise scales with the
+        // per-digit value (~B), not with the full Q, so increasing ell genuinely
+        // reduces external-product noise.
+        const DCRTPoly& b = x->GetElements()[0];
+        const DCRTPoly& a = x->GetElements()[1];
 
-        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
-        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
+        std::vector<DCRTPoly> v = b.CRTDecompose(log_B);
+        std::vector<DCRTPoly> u = a.CRTDecompose(log_B);
 
-        // TODO: Relax constraints, allow bad ell
-        if (u.size() > ell || v.size() > ell) {
-            std::cerr << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << "\n";
-            std::cerr << "Current setting: " << ell << " / " << ell << "\n";
-            // throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
-        } else if (u.size() < ell || v.size() < ell) {
-            std::cout << "Recommended decomposition parameter is " << u.size() << ", was " << ell << std::endl;
-            DCRTPoly zero(b.GetParams(), Format::EVALUATION, true);
-            u.resize(ell, zero);
-            v.resize(ell, zero);
-        }
+        // Y was built at full Q with layout
+        //   G[0      .. nFull)        top rows    (encrypt m * gadget_{i,d} * s)
+        //   G[nFull  .. 2*nFull)      bottom rows (encrypt m * gadget_{i,d})
+        // indexed by (tower i, digit d) in row-major order. After x is rescaled,
+        // BGV ModReduce drops the trailing towers, so CRTDecompose returns digits
+        // for towers 0..m-1 only — i.e., a prefix of the gadget. The per-tower
+        // alignment in ScalarMultCiphertext drops the matching trailing towers
+        // of each cloned Y[j] before multiplying.
+        const size_t nFull = Y.size() / 2;
 
-        // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
+        if (u.size() != v.size())
+            throw std::runtime_error("EvalExternalProduct: a/b decomposition size mismatch");
+        if (u.size() > nFull)
+            throw std::runtime_error("EvalExternalProduct: x has more digits than gadget supports");
+
         auto result = ScalarMultCiphertext(Y[0], u[0]);
-        for (size_t i = 1; i < ell; i++)
-            result = this->EvalAdd(result, ScalarMultCiphertext(Y[i],       u[i]));
-        for (size_t i = 0; i < ell; i++)
-            result = this->EvalAdd(result, ScalarMultCiphertext(Y[i + ell], v[i]));
+        for (size_t j = 1; j < u.size(); j++)
+            result = this->EvalAdd(result, ScalarMultCiphertext(Y[j],         u[j]));
+        for (size_t j = 0; j < v.size(); j++)
+            result = this->EvalAdd(result, ScalarMultCiphertext(Y[j + nFull], v[j]));
 
         return result;
     }
@@ -69,10 +72,10 @@ namespace Context
         std::vector<int64_t> msg    // TODO: Pass plaintext (optionally std::move)
     ) {
         DEBUG_TIMER("Encrypt RGSW");
-        
+
         // TODO: Document GadgetBase is not gadget base, but rather 2^base
         const uint64_t log_B = m_params.GetGadgetBase();
-        const size_t ell = m_params.GetGadgetDecomposition();
+        const NativeInteger B(1ULL << log_B);
 
         const Plaintext zero   = this->MakePackedPlaintext({ 0 });
         const Plaintext mPlain = this->MakePackedPlaintext(msg);
@@ -80,36 +83,61 @@ namespace Context
         if (!mPlain->Encode())
             throw std::runtime_error("Failed to encode plaintext");
 
-        RGSWCiphertext<DCRTPoly> G(2 * ell);
+        DCRTPoly mDCRT = mPlain->GetElement<DCRTPoly>();
+        mDCRT.SetFormat(Format::EVALUATION);
 
-        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul)
-        DCRTPoly mScaled = mPlain->GetElement<DCRTPoly>();
-        mScaled.SetFormat(Format::EVALUATION);
+        // RNS gadget: one entry per (tower i, base-B digit d). The gadget element
+        // g_{i,d} has value B^d in tower i and 0 in every other tower (i.e., the
+        // CRT idempotent for tower i scaled by B^d). Pairing this gadget with
+        // CRTDecompose gives a a = sum_{i,d} dec_{i,d}(a) * g_{i,d} (mod Q),
+        // matching what CRTDecompose returns.
+        const auto& mTowers    = mDCRT.GetAllElements();
+        const size_t numTowers = mTowers.size();
 
-        const NativeInteger B(1ULL << log_B);
+        std::vector<size_t> digitsPerTower(numTowers);
+        size_t nWindows = 0;
+        for (size_t i = 0; i < numTowers; i++) {
+            const uint32_t nBits = mTowers[i].GetModulus().GetLengthForBase(2);
+            const size_t d       = (nBits + log_B - 1) / log_B;
+            digitsPerTower[i]    = d;
+            nWindows            += d;
+        }
 
-        for (size_t i = 0; i < ell; i++) {
-            // Bottom row i+ell: message is m·B^i (injected into c0).
-            {
-                auto bot     = this->Encrypt(publicKey, zero);
-                auto& elems  = bot->GetElements();
-                DCRTPoly add = mScaled;
-                add.SetFormat(elems[0].GetFormat());
-                elems[0] += add;
-                G[i + ell] = bot;
+        RGSWCiphertext<DCRTPoly> G(2 * nWindows);
+
+        size_t j = 0;
+        for (size_t i = 0; i < numTowers; i++) {
+            const NativeInteger& q_i = mTowers[i].GetModulus();
+            NativeInteger Bd(1);
+
+            for (size_t d = 0; d < digitsPerTower[i]; d++) {
+                // Build m * g_{i,d}: tower i = (m * B^d) mod q_i, zero elsewhere.
+                DCRTPoly gm(mDCRT.GetParams(), Format::EVALUATION, true);
+                gm.GetAllElements()[i] = mTowers[i] * Bd;
+
+                // Bottom row (j + nWindows): encrypts m * g_{i,d}; inject into c0.
+                {
+                    auto bot     = this->Encrypt(publicKey, zero);
+                    auto& elems  = bot->GetElements();
+                    DCRTPoly add = gm;
+                    add.SetFormat(elems[0].GetFormat());
+                    elems[0] += add;
+                    G[j + nWindows] = bot;
+                }
+
+                // Top row (j): encrypts m * g_{i,d} * s; inject into c1.
+                {
+                    auto top     = this->Encrypt(publicKey, zero);
+                    auto& elems  = top->GetElements();
+                    DCRTPoly add = gm;
+                    add.SetFormat(elems[1].GetFormat());
+                    elems[1] += add;
+                    G[j] = top;
+                }
+
+                Bd = Bd.ModMul(B, q_i);
+                j++;
             }
-
-            // Top row i: message is m·B^i·s (injected into c1).
-            {
-                auto top     = this->Encrypt(publicKey, zero);
-                auto& elems  = top->GetElements();
-                DCRTPoly add = mScaled;
-                add.SetFormat(elems[1].GetFormat());
-                elems[1] += add;
-                G[i] = top;
-            }
-
-            mScaled *= B;
         }
 
         return G;
@@ -144,6 +172,19 @@ namespace Context
     ) {
         auto result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
         auto& elems = result->GetElements();
+
+        // Align towers: drop the last towers of the cloned ciphertext to match
+        // the scalar's CRT tower count. This is needed when ct is a fresh RGSW
+        // element (full Q) and scalar comes from a rescaled RLWE ciphertext.
+        const size_t target = scalar.GetNumOfElements();
+        const size_t cur    = elems[0].GetNumOfElements();
+        if (cur > target) {
+            const size_t drop = cur - target;
+            for (auto& e : elems)
+                e.DropLastElements(drop);
+            result->SetLevel(result->GetLevel() + drop);
+        }
+
         elems[0] *= scalar;
         elems[1] *= scalar;
         return result;

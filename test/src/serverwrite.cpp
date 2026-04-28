@@ -78,8 +78,7 @@ void TestServerWrite(
     // Repeat for each user
     for(uint64_t r = 0; r < N; r++) {
         DEBUG_TIMER("User " + std::to_string(r + 1));
-        
-        std::cout << "User " << (r + 1) << ":" << std::endl;
+        DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
 
         // Set up dummy value and A_j = {r, r, r} choices
         // const auto pt = cc->MakePackedPlaintext({static_cast<int64_t>(r + 1)});
@@ -94,7 +93,7 @@ void TestServerWrite(
             b[r] = 1;
             z[d] = cc->EncryptRGSW(keys.publicKey, b);
 
-            std::cout << "z[" << r << "][" << d << "]: " << b << std::endl;
+            DEBUG_PRINT("z[" << r << "][" << d << "]: " << b);
 
             // auto rlwe = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext(b));
             // auto extp = cc->EvalExternalProduct(rlwe, z[d]);
@@ -129,27 +128,31 @@ void TestServerWrite(
         Plaintext hasWrittenPt;
         cc->Decrypt(keys.secretKey, hasWritten, &hasWrittenPt);
         hasWrittenPt->SetLength(N);
-        std::cout << "User " << (r + 1) << " has written: " << hasWrittenPt << std::endl;
+
+        DEBUG_PRINT("User " << (r + 1) << " has written: " << hasWrittenPt);
+
+        auto values = hasWrittenPt->GetPackedValue();
+        for(uint64_t i = 0; i < N; i++) {
+            ASSERT_EQ(values[i], (i == r) ? 1 : 0);
+        }
     }
 
     // return hasWritten;
 }
 
-CCParams<CryptoContextRGSWBGV> CreateParams() {
+CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t base) {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(4);
+    params.SetMultiplicativeDepth(depth);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(16384);
     params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(30);               // NOTE: base = 2^base
-    params.SetGadgetDecomposition(7);       // TODO: set automatically
+    params.SetGadgetBase(base);               // NOTE: base = 2^base
+    // params.SetGadgetDecomposition(ell);     // TODO: set automatically
     return params;
 }
 
-TEST(Server, Write) { 
-    const auto& params = CreateParams();
-    TestServerWrite<DCRTPoly, 3, 1, 1>(params); 
-}
+TEST(Server, Write_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(4, 31)); }
+TEST(Server, Write_K3)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(4, 15)); }
 
 
 

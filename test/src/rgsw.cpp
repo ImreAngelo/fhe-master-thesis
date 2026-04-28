@@ -15,20 +15,16 @@
 
 using namespace lbcrypto;
 
-/**
- * @brief Test the external product and internal product
- * @todo Maybe split into two separate files, for external and internal product?
- */
-inline void RunTest(const std::vector<int64_t>& value) {
+inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(2);   // RGSW tests fix depth at 2; not tunable.
+    params.SetMultiplicativeDepth(2);
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
     params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
 
     // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
     params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
-    params.SetGadgetBase(test_cli::g_gadget_base.value_or(30));                    // NOTE: base = 2^base
-    params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(4));   // TODO: set automatically
+    params.SetGadgetBase(test_cli::g_gadget_base.value_or(31));                    // NOTE: base = 2^base
+    // params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(4));   // TODO: set automatically
     
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
@@ -36,6 +32,15 @@ inline void RunTest(const std::vector<int64_t>& value) {
     std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
 #endif
 
+    return params;
+}
+
+/**
+ * @brief Test the external product and internal product
+ * @todo Maybe split into two separate files, for external and internal product?
+ */
+inline void RunTest(const std::vector<int64_t>& value) {
+    const CCParams<CryptoContextRGSWBGV> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
@@ -56,8 +61,10 @@ inline void RunTest(const std::vector<int64_t>& value) {
 // #endif
     
 #if defined(DEBUG_LOGGING)
-    std::cout << "RGSW (decrypted): " << std::endl;
-    PrintRGSW(cc, keyPair, rgsw_ct, value.size());
+    std::cout << "Decomposition parameter = " << rgsw_ct.size() << std::endl;
+    
+    // std::cout << "RGSW (decrypted): " << std::endl;
+    // PrintRGSW(cc, keyPair, rgsw_ct, value.size());
 #endif
 
     Plaintext pt = cc->MakePackedPlaintext(value);
@@ -66,6 +73,7 @@ inline void RunTest(const std::vector<int64_t>& value) {
     Plaintext res;
     auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
     cc->Decrypt(keyPair.secretKey, res_ct, &res);
+    res->SetLength(value.size());
     
 #if defined(DEBUG_LOGGING)
     std::cout << "Final result: " << res << std::endl;
@@ -99,6 +107,7 @@ TEST(RGSW, b00)   { RunTest({ 0, 0 }); }
 TEST(RGSW, b01)   { RunTest({ 0, 1 }); }
 TEST(RGSW, b10)   { RunTest({ 1, 0 }); }
 TEST(RGSW, b11)   { RunTest({ 1, 1 }); }
+
 
 
 int main(int argc, char** argv) {
