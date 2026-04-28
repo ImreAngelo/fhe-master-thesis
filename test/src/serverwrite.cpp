@@ -93,10 +93,10 @@ inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth) {
     return params;
 }
 
-TEST(Server, Write_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(4)); }
-TEST(Server, Write_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(4)); }
-TEST(Server, Write_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
-TEST(Server, Write_A2)  { TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(8)); }
+TEST(ServerWrite, Params_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(4)); }
+TEST(ServerWrite, Params_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(4)); }
+TEST(ServerWrite, Params_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
+TEST(ServerWrite, Params_A2)  { TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(8)); }
 
 // GOAL: Pass this test!
 TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams(12)); }
