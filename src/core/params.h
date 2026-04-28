@@ -6,14 +6,18 @@
 
 /**
  * @file params.h
- * @brief This file defines the parameters required for generating an ExtendedCryptoContext.
+ * @brief Parameters for ExtendedCryptoContext (BGV-RNS + RGSW).
+ *
+ * The RGSW gadget structure now reuses the hybrid keyswitch RNS digit
+ * decomposition (dnum digits of α = numPerPartQ RNS limbs each). Set dnum
+ * via the inherited CCParams<CryptoContextBGVRNS>::SetNumLargeDigits.
  */
 namespace lbcrypto {
 
 class CryptoContextRGSWBGV;
 
 /**
- * @brief Contains parameters for using RGSW with BGV-rns, as required by HomExpand and HomPlacing.
+ * @brief Marker subclass used by GenExtendedCryptoContext.
  */
 template <>
 class CCParams<CryptoContextRGSWBGV> : public CCParams<CryptoContextBGVRNS> {
@@ -22,18 +26,6 @@ public:
     CCParams(const CCParams& obj) = default;
     CCParams(CCParams&& obj)      = default;
     ~CCParams()                   = default;
-    
-    // ----- RGSW-specific getters -----
-    uint32_t GetGadgetBase() const { return gadgetBase; }
-    uint32_t GetGadgetDecomposition() const { return gadgetDecomposition; }
-    
-    // ----- RGSW-specific setters -----
-    void SetGadgetBase(uint32_t gadgetBase) { this->gadgetBase = gadgetBase; }
-    void SetGadgetDecomposition(uint32_t gadgetDecomposition) { this->gadgetDecomposition = gadgetDecomposition; }
-    
-protected:
-    uint32_t gadgetBase   = 2;          // B: gadget base (must be a power of 2)
-    uint32_t gadgetDecomposition = 8;   // ℓ: levels
 };
 
 }  // namespace lbcrypto

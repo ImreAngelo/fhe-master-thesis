@@ -17,7 +17,7 @@ inline void TestServerWrite(uint32_t N, uint32_t candidates = 3, uint32_t bins =
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(8));
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
-    // params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
+    // params.SetRingDim(test_cli::g_ring_dim.value_or(16384)); // 1 << 14
     params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
     params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(39));
     params.SetGadgetBase(test_cli::g_gadget_base.value_or(10));

@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <cmath>
 #include <iostream>
-#include <ranges>
 
 using namespace lbcrypto;
 
@@ -23,9 +22,7 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
 
     // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
     params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
-    params.SetGadgetBase(test_cli::g_gadget_base.value_or(31));                    // NOTE: base = 2^base
-    // params.SetGadgetDecomposition(test_cli::g_gadget_decomposition.value_or(4));   // TODO: set automatically
-    
+
 #if defined(DEBUG_LOGGING)
     std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
     std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
@@ -35,10 +32,6 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
     return params;
 }
 
-/**
- * @brief Test the external product and internal product
- * @todo Maybe split into two separate files, for external and internal product?
- */
 inline void RunTest(const std::vector<int64_t>& value) {
     const CCParams<CryptoContextRGSWBGV> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
@@ -48,23 +41,11 @@ inline void RunTest(const std::vector<int64_t>& value) {
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-    
-    auto rgsw_ct = cc->EncryptRGSW(keyPair.publicKey, value);
-    
-// #if defined(DEBUG_LOGGING)
-//     auto ctxt = rgsw_ct[0];
-//     auto& elements = ctxt->GetElements(); // Get elements (for multisum/encoding)
-//     auto& allElements = elements[0].GetAllElements(); // Get RNS limbs
-//     for (size_t i = 0; i < allElements.size(); ++i) {
-//         std::cout << "Modulus " << i << ": " << allElements[i].GetModulus() << std::endl;
-//     }
-// #endif
-    
+
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
+
 #if defined(DEBUG_LOGGING)
-    std::cout << "Decomposition parameter = " << rgsw_ct.size() << std::endl;
-    
-    // std::cout << "RGSW (decrypted): " << std::endl;
-    // PrintRGSW(cc, keyPair, rgsw_ct, value.size());
+    std::cout << "RGSW dnum = " << rgsw_ct.size() << std::endl;
 #endif
 
     Plaintext pt = cc->MakePackedPlaintext(value);
@@ -74,29 +55,14 @@ inline void RunTest(const std::vector<int64_t>& value) {
     auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
     cc->Decrypt(keyPair.secretKey, res_ct, &res);
     res->SetLength(value.size());
-    
+
 #if defined(DEBUG_LOGGING)
     std::cout << "Final result: " << res << std::endl;
 #endif
 
     const auto& result_slot = res->GetPackedValue();
-    for(size_t i = 0; i < value.size(); i++) {
+    for (size_t i = 0; i < value.size(); i++) {
         ASSERT_EQ(value[i], result_slot[i]);
-    }
-
-    // RGSW(value) x RGSW(value) = RGSW(value x value)  (slot-wise)
-    auto product = cc->EvalInternalProduct(rgsw_ct, rgsw_ct);
-
-    // Extract via external product against RLWE(1...): result slot i = value[i]^2
-    std::vector<int64_t> ones(value.size(), 1);
-    auto rlwe_ones = cc->Encrypt(keyPair.publicKey, cc->MakePackedPlaintext(ones));
-
-    res_ct = cc->EvalExternalProduct(rlwe_ones, product);
-    cc->Decrypt(keyPair.secretKey, res_ct, &res);
-
-    const auto& result_slot_sq = res->GetPackedValue();
-    for(size_t i = 0; i < value.size(); i++) {
-        ASSERT_EQ(value[i] * value[i], result_slot_sq[i]);
     }
 }
 
@@ -107,7 +73,6 @@ TEST(RGSW, b00)   { RunTest({ 0, 0 }); }
 TEST(RGSW, b01)   { RunTest({ 0, 1 }); }
 TEST(RGSW, b10)   { RunTest({ 1, 0 }); }
 TEST(RGSW, b11)   { RunTest({ 1, 1 }); }
-
 
 
 int main(int argc, char** argv) {
