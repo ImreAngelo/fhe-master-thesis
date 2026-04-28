@@ -285,14 +285,101 @@ namespace Context
     }
 
     // ----------------------------------------------------------------------
-    // STUB: internal product on the V2 format. Implementation deferred.
+    // Internal product: RGSW × RGSW → RGSW.
+    //
+    // For each (a, b) row of B (top and bot, dnum each):
+    //   1. ApproxModDown the row from QP → Q  (cancels the gadget P factor,
+    //      leaving an RLWE ciphertext that encrypts m_B · g_j  [bot]
+    //      or  m_B · g_j · s  [top]).
+    //   2. Run the external-product inner loop against A (ModUp Q→QP, dot
+    //      product with A.top/A.bot, ApproxModDown back to Q).
+    //   3. Lift back to QP via TimesNoCheck(PModq), restoring the P factor
+    //      that the RGSW gadget format requires.
+    //
+    // This is the simple "round-trip through Q" approach: dnum × 2 outer
+    // rows, each costing 2 ApproxModDowns + 2 ModUps + 1 inner-product +
+    // 2 ApproxModDowns + 1 P-lift. A direct QP-only path is possible but
+    // requires custom digit decomposition of QP-basis polys; not pursued.
     // ----------------------------------------------------------------------
     template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
-        const RGSWCiphertext<DCRTPoly>&,
-        const RGSWCiphertext<DCRTPoly>&
+        const RGSWCiphertext<DCRTPoly>& A,
+        const RGSWCiphertext<DCRTPoly>& B
     ) {
-        throw std::runtime_error("EvalInternalProduct: not yet implemented for V2 RGSW");
+        DEBUG_TIMER("Internal Product");
+
+        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        if (!cp)
+            throw std::runtime_error("EvalInternalProduct: cryptoparams not RNS");
+        if (A.size() != B.size())
+            throw std::runtime_error("EvalInternalProduct: dnum mismatch");
+
+        const auto paramsQ   = cp->GetElementParams();
+        const auto paramsP   = cp->GetParamsP();
+        const auto paramsQP  = cp->GetParamsQP();
+        const uint32_t dnum  = static_cast<uint32_t>(A.size());
+        const uint32_t sizeQ = paramsQ->GetParams().size();
+        const uint32_t sizeP = paramsP->GetParams().size();
+        const uint32_t sizeQP = sizeQ + sizeP;
+        const auto& PModq = cp->GetPModq();
+
+        KeySwitchHYBRID ks;
+
+        // Apply the external-product action of A to a single QP-basis row of
+        // B, returning the resulting QP-basis (a', b') with the gadget P
+        // factor restored.
+        auto applyAToRow = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
+            // (1) Project from QP → Q, cancelling the gadget P factor.
+            DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
+            DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
+
+            // (2) External product against A (ModUp Q→QP, dot product, ApproxModDown).
+            auto uDig = ks.EvalKeySwitchPrecomputeCore(aQ, cp);
+            auto vDig = ks.EvalKeySwitchPrecomputeCore(bQ, cp);
+
+            DCRTPoly r0(paramsQP, Format::EVALUATION, true);
+            DCRTPoly r1(paramsQP, Format::EVALUATION, true);
+            for (uint32_t j = 0; j < dnum; ++j) {
+                for (uint32_t i = 0; i < sizeQP; ++i) {
+                    const auto& uji = (*uDig)[j].GetElementAtIndex(i);
+                    const auto& vji = (*vDig)[j].GetElementAtIndex(i);
+
+                    r0.SetElementAtIndex(i, r0.GetElementAtIndex(i)
+                        + uji * A.topB[j].GetElementAtIndex(i)
+                        + vji * A.botB[j].GetElementAtIndex(i));
+                    r1.SetElementAtIndex(i, r1.GetElementAtIndex(i)
+                        + uji * A.topA[j].GetElementAtIndex(i)
+                        + vji * A.botA[j].GetElementAtIndex(i));
+                }
+            }
+
+            DCRTPoly out0Q = ApproxModDownToQ(r0, paramsQ);
+            DCRTPoly out1Q = ApproxModDownToQ(r1, paramsQ);
+
+            // (3) Lift back to QP with the P factor on Q-side, zeros on P-side.
+            auto mult0 = out0Q.TimesNoCheck(PModq);
+            auto mult1 = out1Q.TimesNoCheck(PModq);
+            DCRTPoly outB(paramsQP, Format::EVALUATION, true);
+            DCRTPoly outA(paramsQP, Format::EVALUATION, true);
+            for (uint32_t i = 0; i < sizeQ; ++i) {
+                outB.SetElementAtIndex(i, std::move(mult0.GetElementAtIndex(i)));
+                outA.SetElementAtIndex(i, std::move(mult1.GetElementAtIndex(i)));
+            }
+            return std::pair<DCRTPoly, DCRTPoly>{ std::move(outA), std::move(outB) };
+        };
+
+        RGSWCiphertext<DCRTPoly> C;
+        C.topA.resize(dnum); C.topB.resize(dnum);
+        C.botA.resize(dnum); C.botB.resize(dnum);
+        for (uint32_t j = 0; j < dnum; ++j) {
+            auto top = applyAToRow(B.topA[j], B.topB[j]);
+            auto bot = applyAToRow(B.botA[j], B.botB[j]);
+            C.topA[j] = std::move(top.first);
+            C.topB[j] = std::move(top.second);
+            C.botA[j] = std::move(bot.first);
+            C.botB[j] = std::move(bot.second);
+        }
+        return C;
     }
 
     template <typename T>

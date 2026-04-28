@@ -1,5 +1,4 @@
 #define TEST_INTERNAL_FUNCTIONS
-#define DEBUG_LOGGING
 
 #include "core/context.h"
 #include "core/helpers.h"
@@ -16,13 +15,12 @@ using namespace lbcrypto;
 
 inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(2);
+    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(3));
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
     params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
 
     // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
-    // params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
-    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDMANUAL));
+    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
 
     DEBUG_PRINT("Depth = " << params.GetMultiplicativeDepth());
     DEBUG_PRINT("Ring Dim. = " << params.GetRingDim());
@@ -40,13 +38,12 @@ inline void RunTest(const std::vector<int64_t>& value) {
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-
+    
+    Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
     auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
 
     DEBUG_PRINT("RGSW dnum = " << rgsw_ct.size());
-
-    Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
-    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
     
     // Test External Product
     {
@@ -66,7 +63,19 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     // Test Internal Product
     {
-        
+        auto rgsw_sq = cc->EvalInternalProduct(rgsw_ct, rgsw_ct);
+        auto sq_ct   = cc->EvalExternalProduct(rlwe_ct, rgsw_sq);
+
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, sq_ct, &res);
+        res->SetLength(value.size());
+
+        DEBUG_PRINT("Internal product result: " << res);
+
+        const auto& result_slot = res->GetPackedValue();
+        for (size_t i = 0; i < value.size(); i++) {
+            ASSERT_EQ(value[i] * value[i], result_slot[i]);
+        }
     }
 }
 
