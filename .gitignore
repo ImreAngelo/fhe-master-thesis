@@ -5,5 +5,8 @@ cmake_install.cmake
 CMakeCache.txt
 **/install
 
+# Scripts
+.venv
+
 # For the vibe coders
 .claude

@@ -1,5 +1,6 @@
-// #pragma once
-// #include "openfhe.h"
+#pragma once
+#include "openfhe.h"
+#include "core/context.h"
 
 // using namespace lbcrypto;
 
@@ -28,3 +29,37 @@
         
 //     };
 // }
+
+
+namespace Server {
+    using namespace lbcrypto;
+    using namespace Context;
+
+    /**
+     * @brief Create L and I matrices and run algorithm 2 for each user
+     * 
+     * @tparam T DCRTPoly
+     * @tparam K Number of bins
+     * @param cc Crypto Context (RGSW capable)
+     * @param N number of users
+     * @return std::vector<Ciphertext<T>> 
+     */
+    template <typename T = DCRTPoly, std::size_t K = 3>
+    std::vector<Ciphertext<T>> Write(
+        const ExtendedCryptoContext<T>& cc,
+        const uint32_t N
+    )
+    {
+        std::vector<Ciphertext<T>> hasWritten;
+        hasWritten.reserve(N);
+
+        std::vector<std::array<Ciphertext<T>, K>> L(N); // 3 x N
+        std::vector<std::array<Ciphertext<T>, K>> I(N); // 3 x N
+
+        
+
+        return hasWritten;
+    }
+
+    // inline void HomPlacingSingleUser() { /* 1 user */ }
+}

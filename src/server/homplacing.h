@@ -85,12 +85,12 @@ namespace Server
      * @param I_matrix    Availability matrix (η × K), mutated
      * @return            Encryption of hasWritten (1 if a write succeeded, 0 otherwise)
      */
-    Ciphertext<DCRTPoly> MultiHomPlacing(
-        const Context::ExtendedCryptoContext<DCRTPoly>&              cc,
-        const PublicKey<DCRTPoly>&                                   publicKey,
-        const Ciphertext<DCRTPoly>&                                  value,
-        const std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&    A,
-        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              L_matrix,
-        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              I_matrix
+    RGSWCiphertext<DCRTPoly> MultiHomPlacing(
+        const Context::ExtendedCryptoContext<DCRTPoly>&                  cc,
+        const PublicKey<DCRTPoly>&                                       publicKey,
+        const Ciphertext<DCRTPoly>&                                      value,
+        const std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&        A,
+        std::vector<std::vector<Ciphertext<DCRTPoly>>>&                  L_matrix,
+        std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&              I_matrix
     );
 }

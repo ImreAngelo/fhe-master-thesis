@@ -6,15 +6,16 @@
 
 #include <vector>
 
-// modinv // todo: include only necessary parts?
-// #include "math/nbtheory.h"
-
 namespace Context
 {
     using namespace lbcrypto;
 
     /**
-     * @brief Actual implementation of ExtendedCryptoContext
+     * @brief BGV-RNS context extended with RGSW-on-hybrid-keyswitch operations.
+     *
+     * RGSW ciphertexts use the hybrid-keyswitch RNS digit gadget: dnum (a, b)
+     * pairs in QP basis, one per Q-partition. External product reuses
+     * KeySwitchHYBRID::EvalKeySwitchPrecomputeCore + EvalFastKeySwitchCore.
      */
     template <typename T = DCRTPoly>
     class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {
@@ -25,11 +26,7 @@ namespace Context
 
     public:
         /**
-         * @brief Homomorphically evaluate the external product.
-         *
-         * @param x RLWE ciphertext
-         * @param Y RGSW ciphertext
-         * @return RLWE ciphertext
+         * @brief Homomorphic external product: RLWE × RGSW → RLWE.
          */
         Ciphertext<DCRTPoly> EvalExternalProduct(
             const Ciphertext<DCRTPoly>& x,
@@ -37,13 +34,7 @@ namespace Context
         );
 
         /**
-         * @brief Homomorphically evaluates the internal product.
-         *        Takes the external product between right with 
-         *        each row (rlwe CT) of left.
-         * 
-         * @param left 
-         * @param right 
-         * @return RGSW ciphertext 
+         * @brief Homomorphic internal product: RGSW × RGSW → RGSW.
          */
         RGSWCiphertext<DCRTPoly> EvalInternalProduct(
             const RGSWCiphertext<DCRTPoly>& left,
@@ -51,42 +42,51 @@ namespace Context
         );
 
         /**
-         * @brief Encrypt message as RGSW ciphertext.
+         * @brief Element-wise add/sub of two RGSW ciphertexts (operates in QP).
+         */
+        RGSWCiphertext<DCRTPoly> EvalAddRGSW(
+            const RGSWCiphertext<DCRTPoly>& A,
+            const RGSWCiphertext<DCRTPoly>& B
+        );
+        RGSWCiphertext<DCRTPoly> EvalSubRGSW(
+            const RGSWCiphertext<DCRTPoly>& A,
+            const RGSWCiphertext<DCRTPoly>& B
+        );
+
+        /**
+         * @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
          *
-         * Only used by client/tests.
-         *
-         * @todo Optimize: EncryptBatch and/or construct b in top row directly
-         * @todo Set noise scale for each row automatically
-         * @todo Set ell automatically
-         * @todo Look into SIMD operations for constructing (top) rows
-         * @todo Make generic T instead of DCRTPoly
-         *
-         * @param secretKey Private keys needed
-         * @param msg Packed plaintext message to encrypt // TODO: Make const
-         * @param log_B Gadget base power (e.g., 5 gives B = 2^5)
+         * Mirrors KeySwitchHYBRID::KeySwitchGenInternal: m plays the role of s_old.
+         * Requires the secret key.
          */
         RGSWCiphertext<DCRTPoly> EncryptRGSW(
-            const PublicKey<DCRTPoly>& publicKey,
-            std::vector<int64_t> msg
+            const PrivateKey<DCRTPoly>& secretKey,
+            const std::vector<int64_t>& msg
+        );
+
+        /**
+         * @brief Decrypt a single (a, b) row of an RGSW ciphertext.
+         *
+         * Projects (a, b) from QP back to Q via ApproxModDown (which cancels the P
+         * factor in the gadget), then decrypts as a regular BGV ciphertext.
+         * Test/debug only.
+         */
+        Plaintext DecryptRGSWRow(
+            const PrivateKey<DCRTPoly>& secretKey,
+            const DCRTPoly& a,
+            const DCRTPoly& b
         );
 
 #if !defined(TEST_INTERNAL_FUNCTIONS)
-    // only used by HomExpand *and tests*
     protected:
 #endif
         /**
-         * @brief Takes an RLWE encryption with l slots and converts it to l RLWE ciphertexts,
-         * where ciphertext c[i] encrypts b[i]
+         * @brief Hoisted RLWE expansion (Algorithm 3 of eprint 2019/736).
          *
-         * We do not need to account for the scaling being 1/n * B^{-(k + 1)}, we can assume
-         * natively the scaling is b^{-(k + 1)}
-         *
-         * Uses EvalFastRotation from https://eprint.iacr.org/2018/244.
-         *
-         * @param ciphertext RLWE(sum(b[i] X^i) for 0 <= i < len)
-         * @param publicKey The public key
+         * Returns a vector of RLWE ciphertexts where c[i] encrypts the i-th
+         * coefficient/slot of the input. Conversion to RGSW is a separate step.
          */
-        RGSWCiphertext<T> ExpandRLWEHoisted(
+        std::vector<Ciphertext<T>> ExpandRLWEHoisted(
             const Ciphertext<T>& ciphertext,
             const PublicKey<T>& publicKey,
             const uint32_t len
@@ -94,29 +94,24 @@ namespace Context
 
     protected:
         /**
-         * @brief Helper: multiply each component of an RLWE ciphertext by a scalar polynomial
-         *
-         * @param ct
-         * @param scalar
-         * @return
+         * @brief Lift a Q-basis ciphertext to QP basis: (c0, c1) → (P*c0, P*c1) embedded in Q-slots, zeros in P-slots.
          */
-        static Ciphertext<DCRTPoly> ScalarMultCiphertext(
-            const Ciphertext<DCRTPoly>& ct,
-            const DCRTPoly& scalar
-        );
+        std::pair<DCRTPoly, DCRTPoly> LiftCtxToQP(
+            const Ciphertext<DCRTPoly>& ct
+        ) const;
+
+        /**
+         * @brief ApproxModDown a single QP-basis DCRTPoly back to Ql, using BGV's t-aware variant.
+         */
+        DCRTPoly ApproxModDownToQ(
+            const DCRTPoly& xQP,
+            const std::shared_ptr<typename DCRTPoly::Params>& paramsQl
+        ) const;
     };
 
-    /**
-     * @brief Extends CryptoContext to contain RGSW functionality required for sPAR optimizations.
-     */
     template <typename T>
     using ExtendedCryptoContext = std::shared_ptr<ExtendedCryptoContextImpl<T>>;
 
-    /**
-     * @brief Access broker that exposes CryptoContextFactory::AddContext (protected) so we
-     * can register our copy-constructed ExtendedCryptoContextImpl with OpenFHE's static
-     * context registry (needed for GetContextForPointer to resolve correctly).
-     */
     template <typename T>
     struct ContextRegistrar : protected CryptoContextFactory<T> {
         static void Register(std::shared_ptr<CryptoContextImpl<T>> cc) {
@@ -124,13 +119,6 @@ namespace Context
         }
     };
 
-    /**
-     * @brief Constructs an ExtendedCryptoContext from CCParams<CryptoContextRGSWBGV>, mirroring GenCryptoContext.
-     *
-     * Internally calls GenCryptoContext, copy-constructs an ExtendedCryptoContextImpl from
-     * the result, then registers the new object with OpenFHE's context registry so that
-     * operations like KeyGen/Encrypt/EvalMult resolve back to the right context.
-     */
     inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextRGSWBGV>& params) {
         auto ext = std::make_shared<ExtendedCryptoContextImpl<DCRTPoly>>(
             *GenCryptoContext(static_cast<const CCParams<CryptoContextBGVRNS>&>(params)), params);

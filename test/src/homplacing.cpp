@@ -16,15 +16,9 @@ inline void TestHomPlacing(const std::vector<int64_t>& index, const int64_t& val
     // Avoid per-level scaling factor 
     // RGSW rows are built by hand, so we need S_L = 1
     // TODO: Set automatically in RGSW encrypt?
-    params.SetScalingTechnique(FIXEDAUTO);
+    params.SetScalingTechnique(FIXEDMANUAL);
     params.SetGadgetBase(30);
-    params.SetGadgetDecomposition(4);
-
-#if defined(DEBUG_LOGGING)
-    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
-    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
-    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
-#endif
+    params.SetGadgetDecomposition(5);
 
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);

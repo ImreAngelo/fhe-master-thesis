@@ -5,39 +5,32 @@
 #include "core/params.h"
 #include "core/rgsw.h"
 
+#include "../cli_params.h"
+
 #include <cstdint>
 #include <cmath>
 #include <iostream>
-#include <ranges>
 
 using namespace lbcrypto;
 
-/**
- * @brief Test the external product
- * Should result in input value
- */
-inline void TestExternalProduct(const std::vector<int64_t>& value) {
-    // Note: n is not number of users but log(number of users)
-    // const uint32_t n = value.size(); // bits
-    // const uint32_t log_n = Log2(n);  // levels
-
+inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(16384);
+    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(3));
+    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
+    params.SetRingDim(test_cli::g_ring_dim.value_or(16384));
 
-    // Avoid per-level scaling factor 
-    // RGSW rows are built by hand, so we need S_L = 1
-    params.SetScalingTechnique(FIXEDAUTO);
-    params.SetGadgetBase(30);               // NOTE: base = 2^base
-    params.SetGadgetDecomposition(3);       // TODO: set automatically
+    // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
+    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDAUTO));
 
-#if defined(DEBUG_LOGGING)
-    std::cout << "Depth = " << params.GetMultiplicativeDepth() << std::endl;
-    std::cout << "Ring Dim. = " << params.GetRingDim() << std::endl;
-    std::cout << "Plaintext mod = " << params.GetPlaintextModulus() << std::endl;
-#endif
+    DEBUG_PRINT("Depth = " << params.GetMultiplicativeDepth());
+    DEBUG_PRINT("Ring Dim. = " << params.GetRingDim());
+    DEBUG_PRINT("Plaintext mod = " << params.GetPlaintextModulus());
 
+    return params;
+}
+
+inline void RunTest(const std::vector<int64_t>& value) {
+    const CCParams<CryptoContextRGSWBGV> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
@@ -46,33 +39,57 @@ inline void TestExternalProduct(const std::vector<int64_t>& value) {
     keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
     
-    auto rgsw_ct = cc->EncryptRGSW(keyPair.publicKey, value);
-    
-#if defined(DEBUG_LOGGING)
-    std::cout << "G: " << std::endl;
-    PrintRGSW(cc, keyPair, rgsw_ct, value.size());
-#endif
-
-    Plaintext pt = cc->MakePackedPlaintext(value);
+    Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
 
-    Plaintext res;
-    auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
-    cc->Decrypt(keyPair.secretKey, res_ct, &res);
+    DEBUG_PRINT("RGSW dnum = " << rgsw_ct.size());
     
-#if defined(DEBUG_LOGGING)
-    std::cout << "Final result: " << res << std::endl;
-#endif
+    // Test External Product
+    {
+        auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
+        
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, res_ct, &res);
+        res->SetLength(value.size());
+    
+        DEBUG_PRINT("Final result: " << res);
+    
+        const auto& result_slot = res->GetPackedValue();
+        for (size_t i = 0; i < value.size(); i++) {
+            ASSERT_EQ(value[i], result_slot[i]);
+        }
+    }
 
-    const auto& result_slot = res->GetPackedValue();
-    for(size_t i = 0; i < value.size(); i++) {
-        ASSERT_EQ(value[i], result_slot[i]);
+    // Test Internal Product
+    {
+        auto rgsw_sq = cc->EvalInternalProduct(rgsw_ct, rgsw_ct);
+        auto sq_ct   = cc->EvalExternalProduct(rlwe_ct, rgsw_sq);
+
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, sq_ct, &res);
+        res->SetLength(value.size());
+
+        DEBUG_PRINT("Internal product result: " << res);
+
+        const auto& result_slot = res->GetPackedValue();
+        for (size_t i = 0; i < value.size(); i++) {
+            ASSERT_EQ(value[i] * value[i], result_slot[i]);
+        }
     }
 }
 
-// Basic test
-TEST(ExtProduct, b0)    { TestExternalProduct({ 0 }); }
-TEST(ExtProduct, b1)    { TestExternalProduct({ 1 }); }
-TEST(ExtProduct, b1010) { TestExternalProduct({ 1, 0, 1, 0 }); }
+// Unit tests
+TEST(RGSW, b0)    { RunTest({ 0 }); }
+TEST(RGSW, b1)    { RunTest({ 1 }); }
+TEST(RGSW, b00)   { RunTest({ 0, 0 }); }
+TEST(RGSW, b01)   { RunTest({ 0, 1 }); }
+TEST(RGSW, b10)   { RunTest({ 1, 0 }); }
+TEST(RGSW, b11)   { RunTest({ 1, 1 }); }
 
-// TODO: Test internal product
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    if (int rc = test_cli::parse_args(argc, argv)) return rc;
+    return RUN_ALL_TESTS();
+}
