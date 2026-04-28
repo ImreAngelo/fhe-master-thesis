@@ -111,7 +111,10 @@ namespace Context
         // Inner product: result.c_k = sum_j (uDigits[j] * Y.topX_k[j] + vDigits[j] * Y.botX_k[j])
         // Y is stored at full Q (size sizeQ in Q-side, sizeP in P-side). For
         // mod-reduced x, we skip dropped towers via `delta` when indexing.
+        // Mirrors keyswitch-hybrid.cpp:422-432: outer j sequential (accumulate
+        // into r0/r1), inner i parallel (each thread writes a distinct tower).
         for (uint32_t j = 0; j < numPartQl; ++j) {
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(sizeQlP))
             for (uint32_t i = 0; i < sizeQlP; ++i) {
                 const uint32_t idx = (i >= sizeQl) ? i + delta : i;
 
@@ -182,6 +185,7 @@ namespace Context
         DCRTPoly sExt(paramsQP, Format::EVALUATION, true);
         auto s0 = sQ.GetElementAtIndex(0);
         s0.SetFormat(Format::COEFFICIENT);
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(sizeQP))
         for (uint32_t i = 0; i < sizeQP; ++i) {
             if (i < sizeQ) {
                 auto tmp = sQ.GetElementAtIndex(i);
@@ -205,6 +209,8 @@ namespace Context
         G.botA.resize(numPartQ); G.botB.resize(numPartQ);
 
         // For each partition j, build (a, b) pair for top and bot.
+        // Mirrors keyswitch-hybrid.cpp:98 — outer parallel with private RNGs.
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(numPartQ)) private(dug, dgg)
         for (uint32_t part = 0; part < numPartQ; ++part) {
             const uint32_t startPartIdx = numPerPartQ * part;
             const uint32_t endPartIdx   = (sizeQ > startPartIdx + numPerPartQ) ? (startPartIdx + numPerPartQ) : sizeQ;
@@ -340,6 +346,7 @@ namespace Context
             DCRTPoly r0(paramsQP, Format::EVALUATION, true);
             DCRTPoly r1(paramsQP, Format::EVALUATION, true);
             for (uint32_t j = 0; j < dnum; ++j) {
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(sizeQP))
                 for (uint32_t i = 0; i < sizeQP; ++i) {
                     const auto& uji = (*uDig)[j].GetElementAtIndex(i);
                     const auto& vji = (*vDig)[j].GetElementAtIndex(i);
