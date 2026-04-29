@@ -1,4 +1,4 @@
-.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help params test tune-rgsw
+.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help params test tune-rgsw latex
 
 all: build
 
@@ -92,6 +92,13 @@ clean-cmake:
 	@echo "Removing CMake cache..."
 	@rm -rf build/CMakeCache.txt
 
+
+################
+# Latex Thesis #
+################
+
+latex:
+	$(MAKE) -C docs/latex
 
 ################
 # Instructions #
