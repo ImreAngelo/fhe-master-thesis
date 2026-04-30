@@ -1,9 +1,13 @@
 #include "context.h"
-#include "utils/timer.h"
-
 #include "key/privatekey.h"
 #include "schemerns/rns-cryptoparameters.h"
 
+// TODO: Fix so macro defined in common.h is valid here
+// #ifndef DEBUG_TIMING
+// #define DEBUG_TIMING
+// #endif
+
+#include "utils/timer.h"
 
 namespace Context
 {
@@ -153,7 +157,7 @@ namespace Context
     template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
         const PrivateKey<DCRTPoly>& secretKey,
-        const std::vector<int64_t>& msg
+        const Plaintext& plaintext
     ) {
         DEBUG_TIMER("Encrypt RGSW");
 
@@ -171,10 +175,10 @@ namespace Context
         const uint32_t numPartQ    = cp->GetNumPartQ();
 
         // Encode message as DCRTPoly in Q.
-        Plaintext mPlain = this->MakePackedPlaintext(msg);
-        if (!mPlain->Encode())
-            throw std::runtime_error("EncryptRGSW: failed to encode plaintext");
-        DCRTPoly mDCRT = mPlain->GetElement<DCRTPoly>();
+        // Plaintext mPlain = this->MakePackedPlaintext(msg);
+        // if (!mPlain->Encode())
+        //     throw std::runtime_error("EncryptRGSW: failed to encode plaintext");
+        DCRTPoly mDCRT = plaintext->GetElement<DCRTPoly>();
         mDCRT.SetFormat(Format::EVALUATION);
 
         // Build m*s in Q (used for top rows). m is the message; s is the secret.

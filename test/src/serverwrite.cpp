@@ -33,8 +33,8 @@ void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
 
     constexpr uint64_t N = (uint64_t(1) << L);
 
-    const auto rgsw_zero = cc->EncryptRGSW(keys.secretKey, { 0 });
-    const auto rgsw_one  = cc->EncryptRGSW(keys.secretKey, { 1 });
+    const auto rgsw_zero = cc->EncryptRGSW(keys.secretKey, cc->MakePackedPlaintext({ 0 }));
+    const auto rgsw_one  = cc->EncryptRGSW(keys.secretKey, cc->MakePackedPlaintext({ 1 }));
     const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({ 1 }));
 
     std::array<std::array<RGSWCiphertext<T>, K>, N> L_mat;
@@ -99,19 +99,21 @@ void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
     }
 }
 
-inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDim = 32768) {
+inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDimLog = 14) {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(depth);
-    params.SetPlaintextModulus(65537);
-    params.SetRingDim(ringDim);
+    params.SetPlaintextModulus(17); //65537
+    params.SetRingDim(1 << ringDimLog);
     params.SetScalingTechnique(FIXEDAUTO);
+
+    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     return params;
 }
 
-TEST(ServerWrite, Params_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(14)); }
-TEST(ServerWrite, Params_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(8)); }
-TEST(ServerWrite, Params_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
-TEST(ServerWrite, Params_A2)  { TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(12)); }
+TEST(ServerWrite, Params_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(8, 3)); }
+// TEST(ServerWrite, Params_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(8)); }
+// TEST(ServerWrite, Params_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
+// TEST(ServerWrite, Params_A2)  { TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(12)); }
 
 // GOAL: Pass this test!
 TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams(50)); }

@@ -74,7 +74,7 @@ namespace Context
          */
         RGSWCiphertext<DCRTPoly> EncryptRGSW(
             const PrivateKey<DCRTPoly>& secretKey,
-            const std::vector<int64_t>& msg
+            const Plaintext& plaintext
         );
 
         /**

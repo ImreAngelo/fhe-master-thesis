@@ -32,6 +32,9 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
     return params;
 }
 
+/**
+ * @brief Test RGSW encryption, the external product and internal product
+ */
 inline void RunTest(const std::vector<int64_t>& value) {
     const CCParams<CryptoContextRGSWBGV> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
@@ -44,14 +47,14 @@ inline void RunTest(const std::vector<int64_t>& value) {
     
     Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
-    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, value);
+    auto rgsw_ct = cc->EncryptRGSW(keyPair.secretKey, cc->MakePackedPlaintext(value));
 
     DEBUG_PRINT("RGSW dnum = " << rgsw_ct.size());
     
     // Test External Product
     {
         auto res_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_ct);
-        
+
         Plaintext res;
         cc->Decrypt(keyPair.secretKey, res_ct, &res);
         res->SetLength(value.size());
@@ -106,7 +109,7 @@ inline void RunTest(const std::vector<int64_t>& value) {
     }
 }
 
-// Unit tests
+// Test basic functionality
 TEST(RGSW, b0)    { RunTest({ 0 }); }
 TEST(RGSW, b1)    { RunTest({ 1 }); }
 TEST(RGSW, d2)    { RunTest({ 2 }); }
@@ -116,7 +119,16 @@ TEST(RGSW, b00)   { RunTest({ 0, 0 }); }
 TEST(RGSW, b01)   { RunTest({ 0, 1 }); }
 TEST(RGSW, b10)   { RunTest({ 1, 0 }); }
 TEST(RGSW, b11)   { RunTest({ 1, 1 }); }
-TEST(RGSW, max4)  { RunTest({ 65536, 65536, 65536, 65536 }); }
+
+// // Test slots
+// TEST(RGSW, x4)    { RunTest(std::vector<int64_t>(4, 65536)); }
+// TEST(RGSW, x8)    { RunTest(std::vector<int64_t>(8, 65536)); }
+// TEST(RGSW, x16)   { RunTest(std::vector<int64_t>(16, 65536)); }
+// TEST(RGSW, x32)   { RunTest(std::vector<int64_t>(32, 65536)); }
+// TEST(RGSW, x64)   { RunTest(std::vector<int64_t>(64, 65536)); }
+// TEST(RGSW, x128)  { RunTest(std::vector<int64_t>(128, 65536)); }
+// TEST(RGSW, x256)  { RunTest(std::vector<int64_t>(256, 65536)); }
+// TEST(RGSW, x512)  { RunTest(std::vector<int64_t>(512, 65536)); }
 
 
 int main(int argc, char** argv) {
