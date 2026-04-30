@@ -54,6 +54,19 @@ namespace Context
         );
 
         /**
+         * @brief Plaintext × RGSW: scale every (a, b) row by the plaintext.
+         *
+         * The plaintext is encoded in Q and lifted to QP (P-side via
+         * SwitchModulus on each P-tower, mirroring how `sExt` is built in
+         * EncryptRGSW). Linearity gives RGSW(p · m) from RGSW(m), at the cost
+         * of one multiplicative level.
+         */
+        RGSWCiphertext<DCRTPoly> EvalMultPlain(
+            const Plaintext& p,
+            const RGSWCiphertext<DCRTPoly>& A
+        );
+
+        /**
          * @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
          *
          * Mirrors KeySwitchHYBRID::KeySwitchGenInternal: m plays the role of s_old.

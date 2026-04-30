@@ -427,6 +427,63 @@ namespace Context
         return R;
     }
 
+    // ----------------------------------------------------------------------
+    // Plaintext × RGSW: scale every QP-basis (a, b) row by the plaintext.
+    //
+    // Encode the plaintext to its Q-basis DCRTPoly, lift to QP (Q-side as is,
+    // P-side via SwitchModulus on each P-tower — same pattern used to extend
+    // the secret key in EncryptRGSW), then element-wise multiply each of
+    // topA/topB/botA/botB by the lifted polynomial. Linearity preserves the
+    // RGSW gadget structure: row j now encrypts (m · p) · P · g_j.
+    // ----------------------------------------------------------------------
+    template <typename T>
+    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalMultPlain(
+        const Plaintext& p,
+        const RGSWCiphertext<DCRTPoly>& A
+    ) {
+        DEBUG_TIMER("EvalMultPlain RGSW");
+
+        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        if (!cp)
+            throw std::runtime_error("EvalMultPlain: cryptoparams not RNS");
+
+        const auto paramsQ    = cp->GetElementParams();
+        const auto paramsQP   = cp->GetParamsQP();
+        const auto& pparamsQP = paramsQP->GetParams();
+        const uint32_t sizeQ  = paramsQ->GetParams().size();
+        const uint32_t sizeQP = paramsQP->GetParams().size();
+
+        if (!p->Encode())
+            throw std::runtime_error("EvalMultPlain: failed to encode plaintext");
+        DCRTPoly pQ = p->GetElement<DCRTPoly>();
+        pQ.SetFormat(Format::EVALUATION);
+
+        DCRTPoly pQP(paramsQP, Format::EVALUATION, true);
+        for (uint32_t i = 0; i < sizeQ; ++i) {
+            pQP.SetElementAtIndex(i, pQ.GetElementAtIndex(i));
+        }
+        auto p0 = pQ.GetElementAtIndex(0);
+        p0.SetFormat(Format::COEFFICIENT);
+        for (uint32_t i = sizeQ; i < sizeQP; ++i) {
+            auto tmp = p0;
+            tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
+            tmp.SetFormat(Format::EVALUATION);
+            pQP.SetElementAtIndex(i, std::move(tmp));
+        }
+
+        const size_t dnum = A.size();
+        RGSWCiphertext<DCRTPoly> R;
+        R.topA.resize(dnum); R.topB.resize(dnum);
+        R.botA.resize(dnum); R.botB.resize(dnum);
+        for (size_t j = 0; j < dnum; ++j) {
+            R.topA[j] = A.topA[j] * pQP;
+            R.topB[j] = A.topB[j] * pQP;
+            R.botA[j] = A.botA[j] * pQP;
+            R.botB[j] = A.botB[j] * pQP;
+        }
+        return R;
+    }
+
     template <typename T>
     std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::ExpandRLWEHoisted(
         const Ciphertext<T>& ciphertext,
