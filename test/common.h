@@ -9,7 +9,7 @@
 // TODO: Define in cmake
 #define DEBUG
 #if defined(DEBUG)
-// #define DEBUG_LOGGING
+#define DEBUG_LOGGING
 #define DEBUG_TIMING
 #endif
 

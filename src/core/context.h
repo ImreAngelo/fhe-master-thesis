@@ -25,6 +25,9 @@ namespace Context
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params);
 
     public:
+        RGSWCiphertext<T> Encrypt_BVKS(const PrivateKey<T>& secretKey, const Plaintext& plaintext);
+
+    public:
         /**
          * @brief Homomorphic external product: RLWE × RGSW → RLWE.
          */

@@ -107,6 +107,96 @@ inline void RunTest(const std::vector<int64_t>& value) {
             ASSERT_EQ(modval, result_slot[i]);
         }
     }
+
+    // Test noise/mult depth growth
+    { 
+        
+
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Depth/noise invariance under chained RGSW operations.
+//
+// External/internal product implementations call SetLevel(x->GetLevel()) and
+// SetNoiseScaleDeg(x->GetNoiseScaleDeg()) on their outputs (context.cpp). The
+// gadget decomposition is supposed to keep noise additive rather than
+// multiplicative, so chaining N products should not consume N levels.
+//
+// We verify this empirically by running a chain longer than the available
+// mult_depth and asserting (a) level/noise-scale-degree are unchanged and
+// (b) the result still decrypts correctly. With mult_depth = 2, an EvalMult
+// chain of length 8 would exhaust the modulus tower well before the end.
+// ─────────────────────────────────────────────────────────────────────────────
+TEST(RGSW, chain_no_depth_growth) {
+    auto params = GetParams();
+    params.SetMultiplicativeDepth(2);  // chain length below will exceed this
+
+    auto cc = Context::GenExtendedCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(LEVELEDSHE);
+
+    KeyPair<DCRTPoly> keyPair = cc->KeyGen();
+    cc->EvalMultKeyGen(keyPair.secretKey);
+
+    constexpr int64_t base  = 2;
+    constexpr int     N_EXT = 4;  // > mult_depth (= 2)
+    constexpr int     N_INT = 2;
+    const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
+
+    auto pt_one  = cc->MakePackedPlaintext({ 1 });
+    auto pt_base = cc->MakePackedPlaintext({ base });
+    auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt_one);
+    auto rgsw_c  = cc->EncryptRGSW(keyPair.secretKey, pt_base);
+
+    const auto initial_level = rlwe_ct->GetLevel();
+    const auto initial_nsd   = rlwe_ct->GetNoiseScaleDeg();
+
+    auto pow_mod = [&](int n) {
+        int64_t v = 1;
+        for (int i = 0; i < n; ++i) v = (v * base) % t;
+        return CENTER(v, t);
+    };
+
+    // Part A: chain N_EXT external products with the same RGSW(base).
+    {
+        auto ct = rlwe_ct;
+        for (int i = 0; i < N_EXT; ++i) {
+            ct = cc->EvalExternalProduct(ct, rgsw_c);
+            ASSERT_EQ(ct->GetLevel(), initial_level)
+                << "External product step " << (i + 1) << " advanced level";
+            ASSERT_EQ(ct->GetNoiseScaleDeg(), initial_nsd)
+                << "External product step " << (i + 1) << " advanced NoiseScaleDeg";
+        }
+
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, ct, &res);
+        res->SetLength(1);
+        ASSERT_EQ(res->GetPackedValue()[0], pow_mod(N_EXT))
+            << "Chain of " << N_EXT << " external products decrypted incorrectly "
+            << "(mult_depth=" << params.GetMultiplicativeDepth() << ")";
+    }
+
+    // Part B: build RGSW(base^N_INT) via chained internal products, then
+    // verify a single external product into an RLWE still preserves level.
+    {
+        auto rgsw_chain = rgsw_c;
+        for (int i = 1; i < N_INT; ++i) {
+            rgsw_chain = cc->EvalInternalProduct(rgsw_chain, rgsw_c);
+        }
+
+        auto out_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_chain);
+        ASSERT_EQ(out_ct->GetLevel(), initial_level)
+            << "External product after " << (N_INT - 1)
+            << " chained internal products advanced level";
+        ASSERT_EQ(out_ct->GetNoiseScaleDeg(), initial_nsd);
+
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, out_ct, &res);
+        res->SetLength(1);
+        ASSERT_EQ(res->GetPackedValue()[0], pow_mod(N_INT))
+            << "Internal-product chain of length " << N_INT << " decrypted incorrectly";
+    }
 }
 
 // Test basic functionality

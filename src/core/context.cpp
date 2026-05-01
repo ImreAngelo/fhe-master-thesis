@@ -15,6 +15,13 @@ namespace Context
     ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
         : CryptoContextImpl<T>(base), m_params(params) {}
 
+    /// @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
+    template <typename T>
+    RGSWCiphertext<T> ExtendedCryptoContextImpl<T>::Encrypt_BVKS(const PrivateKey<T> &secretKey, const Plaintext &plaintext)
+    {
+        throw new std::runtime_error("Encrypt_BVKS not implemented yet");
+    }
+
     // ----------------------------------------------------------------------
     // Helper: ApproxModDown a single QP DCRTPoly back to Q (BGV t-aware).
     // Mirrors the call at keyswitch-hybrid.cpp:389-398.
