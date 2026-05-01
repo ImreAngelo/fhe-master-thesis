@@ -3,9 +3,9 @@
 #include "schemerns/rns-cryptoparameters.h"
 
 // TODO: Fix so macro defined in common.h is valid here
-#ifndef DEBUG_TIMING
-#define DEBUG_TIMING
-#endif
+// #ifndef DEBUG_TIMING
+// #define DEBUG_TIMING
+// #endif
 
 #include "utils/timer.h"
 
@@ -94,18 +94,23 @@ namespace Context
         std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
         std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
 
-        // Or extend
         if (u.size() > ell || v.size() > ell) {
             std::cerr << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << "\n";
             std::cerr << "Current setting: " << ell << " / " << ell << "\n";
             throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
         }
 
+        // BaseDecompose may return fewer than ell digits when log(q) < ell·log_B
+        // (e.g. low multiplicative depth). The missing digits are zero and the
+        // corresponding gadget rows are simply omitted from the accumulator.
+        const size_t uLen = u.size();
+        const size_t vLen = v.size();
+
         // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
         auto result = ScalarMultCiphertext_old(rgsw[0], u[0]);
-        for (size_t i = 1; i < ell; i++)
+        for (size_t i = 1; i < uLen; i++)
             result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i],       u[i]));
-        for (size_t i = 0; i < ell; i++)
+        for (size_t i = 0; i < vLen; i++)
             result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i + ell], v[i]));
 
         return result;
