@@ -1,7 +1,10 @@
+#pragma once
+
 #include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <string>
+
 
 namespace utils {
 
