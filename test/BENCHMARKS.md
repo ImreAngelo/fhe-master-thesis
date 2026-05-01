@@ -38,4 +38,24 @@
 [       OK ] RGSW.max (581 ms)
 
 
+# Further optimizations
+
+[ RUN      ] RGSW.inv
+  [timing] Encrypt RGSW: 59.86 ms
+  [timing] External Product: 31.68 ms
+  [timing] Internal Product: 254.41 ms
+  [timing] External Product: 20.62 ms
+  [timing] EvalMultPlain RGSW: 8.78 ms
+  [timing] External Product: 79.87 ms
+[       OK ] RGSW.inv (565 ms)
+[ RUN      ] RGSW.max
+  [timing] Encrypt RGSW: 59.42 ms
+  [timing] External Product: 47.27 ms
+  [timing] Internal Product: 112.83 ms
+  [timing] External Product: 24.07 ms
+  [timing] EvalMultPlain RGSW: 9.23 ms
+  [timing] External Product: 87.34 ms
+[       OK ] RGSW.max (451 ms)
+
+
 # Textbook construction

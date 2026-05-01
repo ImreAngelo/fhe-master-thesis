@@ -260,12 +260,15 @@ namespace Context
     //      or  m_B · g_j · s  [top]).
     //   2. ModUp Q → QP via EvalKeySwitchPrecomputeCore.
     //   3. Two EvalFastKeySwitchCoreExt calls (one against A.top, one against
-    //      A.bot), summed in QP, then a single ApproxModDown back to Q.
-    //   4. Lift back to QP via TimesNoCheck(PModq), restoring the P factor
-    //      that the RGSW gadget format requires.
+    //      A.bot), summed in QP. The QP result is *already* in RGSW gadget
+    //      format — the dot-product introduces a P factor on Q-side in the
+    //      partition we're processing and ≈ 0 elsewhere — so we keep it as-is.
     //
-    // Same per-side accumulator pattern as EvalExternalProduct, but applied
-    // 2·dnum times (once per (a, b) row of B) and with a final P-lift.
+    // The original implementation rounded the QP result back to Q (one extra
+    // ApproxModDown per side) and then multiplied by P to "re-lift" — that's
+    // algebraically near-identity but a noise amplifier and a wasted pass.
+    // Skipping it cuts 4 ApproxModDowns + the P-lift loop out of every B-row
+    // and lowers the depth budget needed by the composed Internal+External.
     // ----------------------------------------------------------------------
     template <typename T>
     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
@@ -282,45 +285,33 @@ namespace Context
         if (!A.top || !A.bot || !B.top || !B.bot)
             throw std::runtime_error("EvalInternalProduct: RGSW operand has null top/bot key");
 
-        const auto paramsQ   = cp->GetElementParams();
-        const auto paramsQP  = cp->GetParamsQP();
-        const uint32_t dnum  = static_cast<uint32_t>(A.size());
-        const uint32_t sizeQ = paramsQ->GetParams().size();
-        const auto& PModq    = cp->GetPModq();
+        const auto paramsQ  = cp->GetElementParams();
+        const uint32_t dnum = static_cast<uint32_t>(A.size());
 
         KeySwitchHYBRID ks;
 
         // Apply the external-product action of A to a single QP-basis row of
-        // B, returning the resulting QP-basis (a', b') with the gadget P
-        // factor restored.
+        // B, returning the resulting QP-basis (a', b') already in RGSW gadget
+        // format for the same partition index this row came from.
         auto applyAToRow = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
-            // (1) Project from QP → Q, cancelling the gadget P factor.
+            // (1) Project QP → Q, cancelling the gadget P factor in B's row.
             DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
             DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
 
-            // (2) ModUp Q → QP and (3) two dot-products + add + ApproxModDown.
+            // (2) ModUp Q → QP digits.
             auto uDig = ks.EvalKeySwitchPrecomputeCore(aQ, cp);
             auto vDig = ks.EvalKeySwitchPrecomputeCore(bQ, cp);
 
+            // (3) Two dot-products in QP, summed. r0 ↔ B-side, r1 ↔ A-side.
+            // r0 + r1·s ≈ m_A · P · embed_Q(b_Q + a_Q·s) = m_A · m_B · P · g_j,
+            // i.e., already an RGSW row. No ApproxModDown / re-lift needed.
             auto topRes = ks.EvalFastKeySwitchCoreExt(uDig, A.top, paramsQ);
             auto botRes = ks.EvalFastKeySwitchCoreExt(vDig, A.bot, paramsQ);
 
             DCRTPoly r0 = (*topRes)[0] + (*botRes)[0];
             DCRTPoly r1 = (*topRes)[1] + (*botRes)[1];
 
-            DCRTPoly out0Q = ApproxModDownToQ(r0, paramsQ);
-            DCRTPoly out1Q = ApproxModDownToQ(r1, paramsQ);
-
-            // (4) Lift back to QP with the P factor on Q-side, zeros on P-side.
-            auto mult0 = out0Q.TimesNoCheck(PModq);
-            auto mult1 = out1Q.TimesNoCheck(PModq);
-            DCRTPoly outB(paramsQP, Format::EVALUATION, true);
-            DCRTPoly outA(paramsQP, Format::EVALUATION, true);
-            for (uint32_t i = 0; i < sizeQ; ++i) {
-                outB.SetElementAtIndex(i, std::move(mult0.GetElementAtIndex(i)));
-                outA.SetElementAtIndex(i, std::move(mult1.GetElementAtIndex(i)));
-            }
-            return std::pair<DCRTPoly, DCRTPoly>{ std::move(outA), std::move(outB) };
+            return std::pair<DCRTPoly, DCRTPoly>{ std::move(r1), std::move(r0) };
         };
 
         std::vector<DCRTPoly> topAVec(dnum), topBVec(dnum);
