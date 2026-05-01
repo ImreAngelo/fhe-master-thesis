@@ -25,7 +25,7 @@ namespace server {
         const PublicKey<T>& publicKey,
         const Plaintext& plaintext
     ) {
-        return cc->Encrypt_Textbook(publicKey, plaintext, 10, 21);
+        return cc->Encrypt_Textbook(publicKey, plaintext, 10, 38);
     }
 
     // EvalExternalProduct
