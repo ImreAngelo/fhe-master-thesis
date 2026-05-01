@@ -102,15 +102,15 @@ void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
 inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDimLog = 14) {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(depth);
-    params.SetPlaintextModulus(17); //65537
+    params.SetPlaintextModulus(65537);
     params.SetRingDim(1 << ringDimLog);
-    params.SetScalingTechnique(FIXEDAUTO);
+    params.SetScalingTechnique(FIXEDMANUAL);
 
     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     return params;
 }
 
-TEST(ServerWrite, Params_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(8, 3)); }
+TEST(ServerWrite, Params_111) { TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(8)); }
 // TEST(ServerWrite, Params_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(8)); }
 // TEST(ServerWrite, Params_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
 // TEST(ServerWrite, Params_A2)  { TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(12)); }

@@ -107,13 +107,6 @@ namespace Context
 
     protected:
         /**
-         * @brief Lift a Q-basis ciphertext to QP basis: (c0, c1) → (P*c0, P*c1) embedded in Q-slots, zeros in P-slots.
-         */
-        std::pair<DCRTPoly, DCRTPoly> LiftCtxToQP(
-            const Ciphertext<DCRTPoly>& ct
-        ) const;
-
-        /**
          * @brief ApproxModDown a single QP-basis DCRTPoly back to Ql, using BGV's t-aware variant.
          */
         DCRTPoly ApproxModDownToQ(

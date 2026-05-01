@@ -1,4 +1,4 @@
-#define TEST_INTERNAL_FUNCTIONS
+// #define TEST_INTERNAL_FUNCTIONS
 #define CENTER(integer, modulus) (((integer) > (modulus) / 2) ? ((integer % (2*modulus)) - (modulus)) : (integer))
 
 #include "core/context.h"
