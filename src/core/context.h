@@ -24,9 +24,28 @@ namespace Context
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params);
 
+    /// @brief Textbook implementations
     public:
-        RGSWCiphertext<T> Encrypt_BVKS(const PrivateKey<T>& secretKey, const Plaintext& plaintext);
+        std::vector<Ciphertext<T>> Encrypt_Textbook(
+            const PublicKey<T> &publicKey, 
+            const Plaintext& plaintext,
+            const uint64_t log_B,
+            const size_t ell
+        );
 
+        Ciphertext<T> EvalExternalProduct_Textbook(
+            const Ciphertext<T>& rlwe,
+            const std::vector<Ciphertext<T>>& rgsw,
+            const uint64_t log_B
+        );
+
+        std::vector<Ciphertext<T>> EvalInternalProduct_Textbook(
+            const std::vector<Ciphertext<T>>& rgsw_left,
+            const std::vector<Ciphertext<T>>& rgsw_right,
+            const uint64_t log_B
+        );
+
+    /// @brief RNS-implementation
     public:
         /**
          * @brief Homomorphic external product: RLWE × RGSW → RLWE.

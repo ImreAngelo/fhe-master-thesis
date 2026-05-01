@@ -11,15 +11,118 @@
 
 namespace Context
 {
+    Ciphertext<DCRTPoly> ScalarMultCiphertext_old(
+        const Ciphertext<DCRTPoly>& ct,
+        const DCRTPoly& scalar
+    ) {
+        auto result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+        auto& elems = result->GetElements();
+        elems[0] *= scalar;
+        elems[1] *= scalar;
+        return result;
+    }
+
     template <typename T>
     ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
         : CryptoContextImpl<T>(base), m_params(params) {}
 
     /// @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
     template <typename T>
-    RGSWCiphertext<T> ExtendedCryptoContextImpl<T>::Encrypt_BVKS(const PrivateKey<T> &secretKey, const Plaintext &plaintext)
-    {
-        throw new std::runtime_error("Encrypt_BVKS not implemented yet");
+    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::Encrypt_Textbook(
+        const PublicKey<T> &publicKey, 
+        const Plaintext &plaintext,
+        const uint64_t log_B,
+        const size_t ell
+    ) {
+        DEBUG_TIMER("Encrypt RGSW (Textbook method)");
+
+        const Plaintext zero   = this->MakePackedPlaintext({ 0 });
+
+        std::vector<Ciphertext<DCRTPoly>> G(2 * ell);
+
+        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul)
+        DCRTPoly mScaled = plaintext->GetElement<DCRTPoly>();
+        mScaled.SetFormat(Format::EVALUATION);
+
+        const NativeInteger B(1ULL << log_B);
+
+        for (size_t i = 0; i < ell; i++) {
+            // Bottom row i+ell: message is m·B^i (injected into c0).
+            // c0 + c1·s = t·e + m·B^i
+            {
+                auto bot     = this->Encrypt(publicKey, zero);
+                auto& elems  = bot->GetElements();
+                DCRTPoly add = mScaled;
+                add.SetFormat(elems[0].GetFormat());
+                elems[0] += add;
+                G[i + ell] = bot;
+            }
+
+            // Top row i: message is m·B^i·s (injected into c1).
+            // c0 + c1·s = t·e + m·B^i·s
+            {
+                auto top     = this->Encrypt(publicKey, zero);
+                auto& elems  = top->GetElements();
+                DCRTPoly add = mScaled;
+                add.SetFormat(elems[1].GetFormat());
+                elems[1] += add;
+                G[i] = top;
+            }
+
+            mScaled *= B;
+        }
+
+        return G;
+    }
+
+    template <typename T>
+    Ciphertext<T> ExtendedCryptoContextImpl<T>::EvalExternalProduct_Textbook(
+        const Ciphertext<T> &rlwe, 
+        const std::vector<Ciphertext<T>> &rgsw,
+        const uint64_t log_B
+    ) {
+        DEBUG_TIMER("External Product (Textbook method)");
+
+        const size_t ell = rgsw.size() / 2;
+
+        // Decompose both ciphertext components in base B
+        DCRTPoly b = rlwe->GetElements()[0];
+        DCRTPoly a = rlwe->GetElements()[1];
+        b.SetFormat(Format::COEFFICIENT);
+        a.SetFormat(Format::COEFFICIENT);
+
+        std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
+        std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
+
+        // Or extend
+        if (u.size() > ell || v.size() > ell) {
+            std::cerr << "Recommended decomposition parameter: " << u.size() << " / " << v.size() << "\n";
+            std::cerr << "Current setting: " << ell << " / " << ell << "\n";
+            throw std::runtime_error("BaseDecompose depth mismatch: ell too small");
+        }
+
+        // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
+        auto result = ScalarMultCiphertext_old(rgsw[0], u[0]);
+        for (size_t i = 1; i < ell; i++)
+            result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i],       u[i]));
+        for (size_t i = 0; i < ell; i++)
+            result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i + ell], v[i]));
+
+        return result;
+    }
+
+    template <typename T>
+    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::EvalInternalProduct_Textbook(
+        const std::vector<Ciphertext<T>> &left, 
+        const std::vector<Ciphertext<T>> &right, 
+        const uint64_t log_B
+    ){
+        DEBUG_TIMER("Internal Product");
+
+        std::vector<Ciphertext<T>> result(left.size());
+        for(size_t i = 0; i < left.size(); i++)
+            result[i] = this->EvalExternalProduct_Textbook(left[i], right, log_B);
+        return result;
     }
 
     // ----------------------------------------------------------------------
