@@ -7,7 +7,8 @@
 #include <gtest/gtest.h>
 
 // TODO: Define in cmake
-// #define DEBUG
+#define DEBUG
+
 #if defined(DEBUG)
 #define DEBUG_LOGGING
 #define DEBUG_TIMING

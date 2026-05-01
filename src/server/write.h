@@ -89,6 +89,21 @@ namespace server {
         }
         return result;
     }
+
+    // Decrypt RGSW
+    template <typename T = DCRTPoly>
+    inline std::vector<int64_t> Decrypt(
+        const Context::ExtendedCryptoContext<T>& cc,
+        const PrivateKey<T>& secretKey,
+        const RGSWCiphertext<T>& rgsw,
+        const size_t len = 1
+    ) {
+        Plaintext res;
+        auto rlwe_one = cc->Encrypt(secretKey, cc->MakePackedPlaintext({ 1 }));
+        cc->Decrypt(secretKey, server::EvalExternalProduct(cc, rlwe_one, rgsw), &res);
+        res->SetLength(len);
+        return res->GetPackedValue();
+    }
     
     // -------------------------------- //
     // Easily swappable implementations //
@@ -117,26 +132,30 @@ namespace server {
         const Plaintext& Vr,
         std::array<std::array<RGSWCiphertext<T>, K>, (uint64_t(1) << L)>& L_mat,
         std::array<std::array<RGSWCiphertext<T>, K>, (uint64_t(1) << L)>& I_mat,
-        const std::array<std::array<RGSWCiphertext<T>, D>, (uint64_t(1) << L)>& z
+        const std::array<std::array<RGSWCiphertext<T>, D>, (uint64_t(1) << L)>& z,
+        const PrivateKey<T>& secretKey // for debugging
     ) {
         const auto one  = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
         auto hasWritten = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
 
         {
-            DEBUG_TIMER("server:write");
+            DEBUG_TIMER("Server Write");
     
             for(uint32_t d = 0; d < D; d++) {
                 for (uint32_t k = 0; k < K; k++) {
                     for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
-                        DEBUG_TIMER("server:write iteration");
-                        auto zI  = server::EvalInternalProduct(cc, z[i][d], I_mat[i][k]);
-                        auto sub = server::EvalSubRGSW(cc, one, hasWritten);
-                        auto h   = server::EvalInternalProduct(cc, zI, sub);
+                        DEBUG_TIMER("iteration");
+                        auto zI  = EvalInternalProduct(cc, z[i][d], I_mat[i][k]);
+                        auto sub = EvalSubRGSW(cc, one, hasWritten);
+                        auto h   = EvalInternalProduct(cc, zI, sub);
     
-                        L_mat[i][k] = server::EvalAddRGSW(cc, L_mat[i][k], server::EvalMultPlain(cc, Vr, h));
-                        I_mat[i][k] = server::EvalSubRGSW(cc, I_mat[i][k], h);
+                        L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], server::EvalMultPlain(cc, Vr, h));
+                        I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
 
-                        hasWritten = server::EvalAddRGSW(cc, hasWritten, h);
+                        hasWritten = EvalAddRGSW(cc, hasWritten, h);
+
+                        // DEBUG_PRINT("i: " << i << ", k: " << k << ", d: " << d);
+                        DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten, 1 << L));
                     }
                 }
             }
@@ -168,13 +187,15 @@ namespace client {
 
         for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
             for (uint32_t d = 0; d < D; d++) {
+                std::cout << ((i == index[d]) ? "1, " : "0, ");
                 z[i][d] = (i == index[d]) 
                     ? server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }))
                     : server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }))
                 ;
             }
         }
-
+        
+        std::cout << std::endl;
         return z;
     }
 }

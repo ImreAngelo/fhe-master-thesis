@@ -1,3 +1,4 @@
+// TODO: This should be handled by common.h!!!!!
 #define DEBUG_TIMING
 #define DEBUG_LOGGING
 #include "utils/timer.h"
@@ -51,8 +52,8 @@ void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
     }
 
     for (uint64_t r = 0; r < N; r++) {
-        DEBUG_TIMER("User " + std::to_string(r + 1));
         DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
+        DEBUG_TIMER("User " + std::to_string(r + 1));
 
         const auto Vr = cc->MakePackedPlaintext({ static_cast<int64_t>(r + 1) });
 
@@ -60,17 +61,14 @@ void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
         const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, std::array<size_t, D>{ r });
 
         // Loop 2
-        const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z);
+        const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey);
 
         // Output results
-        Plaintext hw;
-        auto rlwe_one = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({ 1 })); // TODO: Make DecryptRGSW function for simplicity + stay in NTT domain until decrypted
-        cc->Decrypt(keys.secretKey, server::EvalExternalProduct(cc, rlwe_one, hasWritten), &hw);
-        hw->SetLength(1 << L);
-        DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw->GetPackedValue());
+        auto hw = server::Decrypt(cc, keys.secretKey, hasWritten, N);
+        DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
 
         // Verify hasWritten is correct for this user
-        ASSERT_EQ(hw->GetPackedValue()[0], 1);
+        ASSERT_EQ(hw[0], 1);
     }
 
     // // Final state: L_mat[i][0] == i+1, L_mat[i][k>0] == 0.
