@@ -4,33 +4,42 @@
 ROOT     := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 BUILDDIR := $(ROOT)/.bench
 
+# Auto-discovered: every benchmark/src/<name>.cpp registered in CMakeLists.txt
+# lives at benchmark/src/<name>.cpp on disk. Glob picks them up so a new file
+# is included by `make bench` without touching this Makefile.
+ALL_BENCH_NAMES := $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/benchmark/src/*.cpp))
+
 # Defaults — override per invocation, e.g.
+#   make run BENCH_NAMES=rgsw                 # only one
 #   make run BENCH_FILTER=ExternalProduct
 #   make run BENCH_REPETITIONS=10
-#   make run BENCH_OUT=results-rgsw.json
-BENCH_NAME        ?= rgsw
+BENCH_NAMES       ?= $(ALL_BENCH_NAMES)
 BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
 BENCH_REPETITIONS ?= 5
-BENCH_OUT         ?= $(BUILDDIR)/results-$(BENCH_NAME).json
 
-BENCH_FLAGS = \
+# Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
+bench_flags = \
 	--benchmark_filter="$(BENCH_FILTER)" \
 	--benchmark_time_unit=$(BENCH_TIME_UNIT) \
-	--benchmark_repetitions=$(BENCH_REPETITIONS) \
-	--benchmark_report_aggregates_only=true \
 	--benchmark_out_format=json \
-	--benchmark_out="$(BENCH_OUT)" \
+	--benchmark_out="$(BUILDDIR)/results-$(1).json" \
 	--benchmark_color=yes
+# 	--benchmark_report_aggregates_only=true \
+# 	--benchmark_repetitions=$(BENCH_REPETITIONS) \
 
 all: run
 
-# Build the optimized OpenFHE install if not already present, then build the
-# benchmark binary into $(BUILDDIR) with -O3 -march=native and run it.
+# Build the optimized OpenFHE install if not already present, then build every
+# benchmark binary in $(BENCH_NAMES) into $(BUILDDIR) with -O3 -march=native
+# and run them sequentially.
 run: build
-	@echo "Running bench-$(BENCH_NAME) (filter=$(BENCH_FILTER), repetitions=$(BENCH_REPETITIONS))..."
-	@$(BUILDDIR)/benchmark/bench-$(BENCH_NAME) $(BENCH_FLAGS)
-	@echo "JSON written to $(BENCH_OUT)"
+	@for name in $(BENCH_NAMES); do \
+		echo ""; \
+		echo "▶ bench-$$name (filter=$(BENCH_FILTER))"; \
+		$(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
+		echo "  JSON: $(BUILDDIR)/results-$$name.json"; \
+	done
 
 # Build a specific benchmark binary without running. Pattern target so
 # `make bench-rgsw` (delegated from the root) reaches us as `bench-rgsw` here.
@@ -42,7 +51,7 @@ bench-%: openfhe-optimized
 		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
 	@cmake --build $(BUILDDIR) --target bench-$* -j$(shell nproc)
 
-build: bench-$(BENCH_NAME)
+build: $(addprefix bench-,$(BENCH_NAMES))
 
 # Build OpenFHE with full optimizations (NATIVEOPT, OpenMP, tcmalloc, reduced
 # noise) into vendors/install. Skipped if already installed — delete
@@ -79,14 +88,14 @@ clean:
 
 help:
 	@echo "Benchmark targets (run from project root via 'make bench' or here directly):"
-	@echo "  run                - Build optimized + run bench-\$$(BENCH_NAME) [default: rgsw]"
+	@echo "  run                - Build optimized + run all benchmarks in BENCH_NAMES"
 	@echo "  bench-<name>       - Build a specific benchmark binary (e.g. bench-rgsw)"
 	@echo "  openfhe-optimized  - Build the optimized OpenFHE install (idempotent)"
 	@echo "  clean              - Remove the .bench/ build dir"
 	@echo ""
 	@echo "Variables:"
-	@echo "  BENCH_NAME=<n>        target stem to run (default: rgsw)"
+	@echo "  BENCH_NAMES=<list>    space-separated stems to run (default: all in src/)"
+	@echo "                        currently auto-discovered: $(ALL_BENCH_NAMES)"
 	@echo "  BENCH_FILTER=<regex>  --benchmark_filter (default: .*)"
 	@echo "  BENCH_TIME_UNIT=<u>   --benchmark_time_unit (default: ms)"
 	@echo "  BENCH_REPETITIONS=<n> --benchmark_repetitions (default: 5)"
-	@echo "  BENCH_OUT=<path>      JSON output path (default: .bench/results-<name>.json)"
