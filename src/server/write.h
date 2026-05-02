@@ -142,8 +142,11 @@ namespace server {
             DEBUG_TIMER("Server Write");
     
             for(uint32_t d = 0; d < D; d++) {
+                DEBUG_PRINT("d: " << d);
                 for (uint32_t k = 0; k < K; k++) {
+                    DEBUG_PRINT("k: " << k);
                     for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
+                        DEBUG_PRINT("i: " << i);
                         DEBUG_TIMER("iteration");
                         auto zI  = EvalInternalProduct(cc, z[i][d], I_mat[i][k]);
                         auto sub = EvalSubRGSW(cc, one, hasWritten);
