@@ -95,3 +95,7 @@ target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
 # binary out of the default "make" target.
 enable_testing()
 add_subdirectory(test EXCLUDE_FROM_ALL)
+
+# ── Benchmark suite ──────────────────────────────────────────────────────────
+# Same pattern as the test suite: kept out of the default "make" target.
+add_subdirectory(benchmark EXCLUDE_FROM_ALL)

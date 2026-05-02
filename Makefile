@@ -1,4 +1,4 @@
-.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help params test tune-rgsw latex
+.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help params test tune-rgsw latex write bench
 
 all: build
 
@@ -75,6 +75,59 @@ tune-%: .venv/.params-stamp
 	@mkdir -p build && $(_CMAKE) && cmake --build . --target test-$* -j$(shell nproc)
 	@.venv/bin/python scripts/parameter-search.py $*
 
+###################
+# Optimized build #
+###################
+
+# Build OpenFHE with all optimizations (NATIVEOPT, OpenMP, tcmalloc, reduced
+# noise) into vendors/install, then build test-write into .dist/ in Release
+# mode with -march=native. HEXL/AVX512 stays off (default).
+write:
+	@echo "Building OpenFHE with full optimizations..."
+	@rm -rf vendors/openfhe-development/build vendors/install
+	@cmake -S vendors/openfhe-development -B vendors/openfhe-development/build \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_STATIC=ON \
+		-DBUILD_SHARED=OFF \
+		-DBUILD_BENCHMARKS=OFF \
+		-DBUILD_UNITTESTS=OFF \
+		-DBUILD_EXAMPLES=OFF \
+		-DBUILD_EXTRAS=OFF \
+		-DWITH_NATIVEOPT=ON \
+		-DWITH_OPENMP=ON \
+		-DWITH_REDUCED_NOISE=ON \
+		-DWITH_TCM=ON \
+		-DNATIVE_SIZE=64 \
+		-DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
+	@cmake --build vendors/openfhe-development/build --target tcm -j$(shell nproc)
+	@cmake --build vendors/openfhe-development/build -j$(shell nproc)
+	@cmake --install vendors/openfhe-development/build
+	@echo "Aliasing libtcmalloc_minimal -> libtcmalloc_static (OpenFHE export mismatch)..."
+	@cd vendors/install/lib && \
+		ln -sf libtcmalloc_minimal.a libtcmalloc_static.a && \
+		ln -sf libtcmalloc_minimal.so libtcmalloc_static.so
+	@echo "Building test-write into .dist/ ..."
+	@mkdir -p .dist && cd .dist && cmake .. \
+		-DBUILD_STATIC=ON \
+		-DNATIVE_SIZE=64 \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
+	@cmake --build .dist --target test-write -j$(shell nproc)
+
+#############
+# Benchmark #
+#############
+
+# Delegated to benchmark/Makefile. See `make -C benchmark help`.
+#   make bench                                  # build + run all RGSW benchmarks
+#   make bench BENCH_FILTER=ExternalProduct     # run a subset
+#   make bench-<name>                           # build a specific benchmark binary
+bench:
+	@$(MAKE) -C benchmark run BENCH_FILTER='$(BENCH_FILTER)'
+
+bench-%:
+	@$(MAKE) -C benchmark $@
+
 ############
 # Clean-up #
 ############
@@ -109,6 +162,8 @@ help:
 	@echo "  build              - Build OpenFHE (static) and link project against it"
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
+	@echo "  bench              - Delegates to benchmark/Makefile (see 'make -C benchmark help')"
+	@echo "  bench-<name>       - Delegates to benchmark/Makefile to build bench-<name>"
 	@echo "  params             - Set up the .venv used by parameter tuning"
 	@echo "  tune-<name>        - Run Optuna against test-<name> (e.g. tune-rgsw, tune-main)"
 	@echo "  clean              - Clean project build artifacts"
