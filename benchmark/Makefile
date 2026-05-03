@@ -16,17 +16,17 @@ ALL_BENCH_NAMES := $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/b
 BENCH_NAMES       ?= $(ALL_BENCH_NAMES)
 BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
-BENCH_REPETITIONS ?= 5
+BENCH_REPETITIONS ?= 10
 
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
 	--benchmark_filter="$(BENCH_FILTER)" \
 	--benchmark_time_unit=$(BENCH_TIME_UNIT) \
 	--benchmark_repetitions=$(BENCH_REPETITIONS) \
+	--benchmark_report_aggregates_only=true \
 	--benchmark_out_format=json \
 	--benchmark_out="$(BUILDDIR)/results-$(1).json" \
 	--benchmark_color=yes
-# 	--benchmark_report_aggregates_only=true \
 
 all: run
 

@@ -4,10 +4,9 @@
 // op itself runs inside the timed loop. To run a subset:
 //   ./bench-rgsw --benchmark_filter=ExternalProduct
 
+#include <benchmark/benchmark.h>
 #include "openfhe.h"
 #include "core/context.h"
-
-#include <benchmark/benchmark.h>
 
 using namespace lbcrypto;
 

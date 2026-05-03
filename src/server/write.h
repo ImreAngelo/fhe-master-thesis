@@ -187,18 +187,13 @@ namespace client {
         const std::array<size_t, D> index
     ) {
         std::array<std::array<server::RGSWCiphertext<T>, D>, (uint64_t(1) << L)> z;
+        auto one = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
+        auto zero = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
 
-        for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
-            for (uint32_t d = 0; d < D; d++) {
-                std::cout << ((i == index[d]) ? "1, " : "0, ");
-                z[i][d] = (i == index[d]) 
-                    ? server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }))
-                    : server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }))
-                ;
-            }
-        }
+        for (uint64_t i = 0; i < (uint64_t(1) << L); i++)
+            for (uint32_t d = 0; d < D; d++)
+                z[i][d] = (i == index[d]) ? one : zero;
         
-        std::cout << std::endl;
         return z;
     }
 }

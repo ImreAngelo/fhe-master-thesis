@@ -25,7 +25,7 @@ namespace server {
      * @tparam L Bit-length of the address — N = 2^L users (and bins)
      */
     template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
-    void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
+    bool TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
     {
         auto cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);
@@ -79,5 +79,7 @@ namespace server {
         //         ASSERT_EQ(pt->GetPackedValue()[0], expected);
         //     }
         // }
+
+        return true;
     }
 } // namespace server

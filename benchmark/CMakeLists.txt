@@ -45,6 +45,7 @@ endfunction()
 # ── Register benchmarks ──────────────────────────────────────────────────────
 register_benchmark(bench-rgsw       SOURCE src/rgsw)
 register_benchmark(bench-rgsw-rns   SOURCE src/rgsw-rns)
+register_benchmark(bench-write      SOURCE src/write)
 
 # ── "make bench-all": build every benchmark binary ───────────────────────────
 get_property(_all_benches GLOBAL PROPERTY ALL_BENCH_TARGETS)
