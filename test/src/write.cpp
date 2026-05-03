@@ -15,13 +15,12 @@ inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ring
     params.SetPlaintextModulus(65537);
     params.SetRingDim(1 << ringDimLog);
     params.SetScalingTechnique(FIXEDAUTO);
-    // params.SetNumLargeDigits(3);
 
     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     return params;
 }
 
-TEST(Server, Write_1s) { server::TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(2)); }
+TEST(Server, Write_1s) { server::TestServerWrite<DCRTPoly, 1, 1, 1>(CreateParams(3)); }
 TEST(Server, Write_2s) { server::TestServerWrite<DCRTPoly, 2, 2, 1>(CreateParams(5)); }
 // TEST(ServerWrite, Params_K2)  { TestServerWrite<DCRTPoly, 2, 1, 1>(CreateParams(8)); }
 // TEST(ServerWrite, Params_D2)  { TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }

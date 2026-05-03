@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params tune-% latex clean clean-build clean-cmake clean-openfhe help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params tune-% latex clean clean-build clean-cmake help
 
 all: build
 
@@ -6,11 +6,10 @@ all: build
 # OpenFHE (optimized) #
 #######################
 
-# One canonical OpenFHE install used by every target in this repo (project,
-# tests, benchmarks). Built with full optimizations:
+# One canonical OpenFHE install used by every target.
+# Built with full optimizations:
 #   NATIVEOPT, OpenMP, tcmalloc, reduced-noise, static, NATIVE_SIZE=64, Release.
-# Idempotent: re-running is a no-op once both the OpenFHE config and tcmalloc
-# static lib are present. Delete vendors/install to force a rebuild.
+# Delete vendors/install to force a rebuild.
 OPENFHE_STAMP := vendors/install/lib/OpenFHE/OpenFHEConfig.cmake
 TCM_STAMP     := vendors/install/lib/libtcmalloc_static.a
 
@@ -52,7 +51,6 @@ openfhe-clean:
 BUILDDIR := build
 _CONFIGURE = cmake -S . -B $(BUILDDIR) \
 	-DBUILD_STATIC=ON \
-	-DNATIVE_SIZE=64 \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
 
@@ -123,8 +121,6 @@ clean-cmake:
 	@echo "Removing CMake cache..."
 	@rm -rf $(BUILDDIR)/CMakeCache.txt
 
-clean-openfhe: openfhe-clean
-
 ################
 # Latex Thesis #
 ################
@@ -147,5 +143,4 @@ help:
 	@echo "  params             - Set up the .venv used by parameter tuning"
 	@echo "  tune-<name>        - Run Optuna against test-<name>"
 	@echo "  clean              - Clean project build artifacts"
-	@echo "  clean-openfhe      - Remove vendors/install + OpenFHE build dir"
 	@echo "  help               - Show this help message"

@@ -17,7 +17,7 @@ namespace Server
      * @param c The encrypted bits of n
      */
     template <typename Element>
-    std::vector<Ciphertext<Element>> HomPlacingNoExt(
+    std::vector<Ciphertext<Element>> HomPlacingSingleRLWE(
         const CryptoContext<Element>&          cc,
         const Ciphertext<Element>&             value,
         const std::vector<Ciphertext<Element>> c
@@ -68,7 +68,7 @@ namespace Server
      * @param value Encrypted value to ble placed in slot n
      * @param c The encrypted bits of n
      */
-    std::vector<Ciphertext<DCRTPoly>> HomPlacing(
+    std::vector<Ciphertext<DCRTPoly>> HomPlacingSingle(
         const Context::ExtendedCryptoContext<DCRTPoly>& cc,
         const Ciphertext<DCRTPoly>&                     value,
         const std::vector<RGSWCiphertext<DCRTPoly>>&    bits
@@ -85,7 +85,7 @@ namespace Server
      * @param I_matrix    Availability matrix (η × K), mutated
      * @return            Encryption of hasWritten (1 if a write succeeded, 0 otherwise)
      */
-    RGSWCiphertext<DCRTPoly> MultiHomPlacing(
+    RGSWCiphertext<DCRTPoly> HomPlacing(
         const Context::ExtendedCryptoContext<DCRTPoly>&                  cc,
         const PublicKey<DCRTPoly>&                                       publicKey,
         const Ciphertext<DCRTPoly>&                                      value,

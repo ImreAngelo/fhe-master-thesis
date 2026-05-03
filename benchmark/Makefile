@@ -56,7 +56,6 @@ bench-%:
 	@$(MAKE) -C $(ROOT) openfhe
 	@cmake -S $(ROOT) -B $(BUILDDIR) \
 		-DBUILD_STATIC=ON \
-		-DNATIVE_SIZE=64 \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
 	@cmake --build $(BUILDDIR) --target bench-$* -j$(shell nproc)

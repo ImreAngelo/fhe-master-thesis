@@ -1,5 +1,7 @@
 #define CENTER(integer, modulus) (((integer) > (modulus) / 2) ? ((integer % (2*modulus)) - (modulus)) : (integer))
 
+// TODO: This is not a test per se, so move it out of the test/ directory
+
 #include "core/context.h"
 #include "core/helpers.h"
 #include "core/params.h"

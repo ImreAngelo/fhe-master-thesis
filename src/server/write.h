@@ -4,7 +4,6 @@
 #include "core/context.h"
 #include "utils/timer.h"
 
-
 namespace server {
     using namespace lbcrypto;
 
@@ -14,9 +13,13 @@ namespace server {
     template <typename T = DCRTPoly>
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
-    // -------------------------------- //
-    // Easily swappable implementations //
-    // -------------------------------- //
+    // TODO: Pass as args
+    constexpr uint32_t B_LOG = 15;
+    constexpr uint32_t ELL = 17;
+
+    // ------------------------- //
+    // Swappable implementations //
+    // ------------------------- //
 
     // Encrypt RGSW
     template <typename T = DCRTPoly>
@@ -25,7 +28,7 @@ namespace server {
         const PublicKey<T>& publicKey,
         const Plaintext& plaintext
     ) {
-        return cc->Encrypt_Textbook(publicKey, plaintext, 10, 38);
+        return cc->Encrypt_Textbook(publicKey, plaintext, B_LOG, ELL);
     }
 
     // EvalExternalProduct
@@ -35,7 +38,7 @@ namespace server {
         const RLWECiphertext<T>& rlwe,
         const RGSWCiphertext<T>& rgsw
     ) {
-        return cc->EvalExternalProduct_Textbook(rlwe, rgsw, 10);
+        return cc->EvalExternalProduct_Textbook(rlwe, rgsw, B_LOG);
     }
 
     // EvalInternalProduct
@@ -45,7 +48,7 @@ namespace server {
         const RGSWCiphertext<T>& left,
         const RGSWCiphertext<T>& right
     ) {
-        return cc->EvalInternalProduct_Textbook(left, right, 10);
+        return cc->EvalInternalProduct_Textbook(left, right, B_LOG);
     }
 
     // RGSW addition
