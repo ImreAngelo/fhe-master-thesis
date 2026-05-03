@@ -79,7 +79,7 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
         Plaintext res;
         cc->Decrypt(keyPair.secretKey, sq_ct, &res);
-        res->SetLength(value.size());
+        res->SetLength(std::max(static_cast<size_t>(8), value.size()));
 
         DEBUG_PRINT("Internal product result: " << res);
 

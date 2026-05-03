@@ -7,7 +7,6 @@
 
 
 namespace utils {
-
     using Clock = std::chrono::high_resolution_clock;
     using Ms    = std::chrono::duration<double, std::milli>;
 
@@ -38,7 +37,6 @@ namespace utils {
         std::string              m_label;
         Clock::time_point        m_start;
     };
-
 }
 
 #define CONCAT(a, b) a ## b

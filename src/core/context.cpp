@@ -2,11 +2,6 @@
 #include "key/privatekey.h"
 #include "schemerns/rns-cryptoparameters.h"
 
-// TODO: Fix so macro defined in common.h is valid here
-// #ifndef DEBUG_TIMING
-// #define DEBUG_TIMING
-// #endif
-
 #include "utils/timer.h"
 
 namespace Context
@@ -90,6 +85,12 @@ namespace Context
         DCRTPoly a = rlwe->GetElements()[1];
         b.SetFormat(Format::COEFFICIENT);
         a.SetFormat(Format::COEFFICIENT);
+
+        {
+            DEBUG_TIMER("BaseDecompose");
+            b.BaseDecompose(log_B, true);
+            a.BaseDecompose(log_B, true);
+        }
 
         std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
         std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);

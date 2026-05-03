@@ -77,6 +77,18 @@ include_directories(src)
 # ── Core library ─────────────────────────────────────────────────────────────
 add_library(core_lib STATIC src/core/context.cpp)
 
+# Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
+# DEBUG_LOGGING. Tests force-include common.h which sets these for test TUs,
+# but core_lib compiles separately, so we propagate them here as well.
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core_lib"  ON)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core_lib" ON)
+if(ENABLE_DEBUG_TIMING)
+    target_compile_definitions(core_lib PUBLIC DEBUG_TIMING)
+endif()
+if(ENABLE_DEBUG_LOGGING)
+    target_compile_definitions(core_lib PUBLIC DEBUG_LOGGING)
+endif()
+
 # ── Server library ───────────────────────────────────────────────────────────
 add_library(server_lib STATIC src/server/homplacing.cpp)
 target_link_libraries(server_lib PUBLIC core_lib)

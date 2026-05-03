@@ -6,16 +6,17 @@
 #include "openfhe.h"
 #include <gtest/gtest.h>
 
-// TODO: Define in cmake
-// #define DEBUG
-
-#if defined(DEBUG)
+// DEBUG_TIMING / DEBUG_LOGGING for test TUs. core_lib gets these via
+// target_compile_definitions in the root CMakeLists.txt (which also propagates
+// to dependents), so the timer macros fire in both context.cpp and tests.
+#ifndef DEBUG_LOGGING
 #define DEBUG_LOGGING
+#endif
+#ifndef DEBUG_TIMING
 #define DEBUG_TIMING
 #endif
 
 #include "utils/timer.h"
-
 
 /// @brief Print a list of RLWE ciphertexts 
 template <typename CC, typename T>
