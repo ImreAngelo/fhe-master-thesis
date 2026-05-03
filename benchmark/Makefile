@@ -1,8 +1,11 @@
 .PHONY: all run build help clean
 
 # Run from the benchmark/ subdir; project root is one level up.
-ROOT     := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
-BUILDDIR := $(ROOT)/.bench
+ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+
+# Shared with the root Makefile. Override with `make -C benchmark BUILDDIR=...`
+# when invoking from outside; the root delegates already pass it through.
+BUILDDIR ?= $(ROOT)/build
 
 # Auto-discovered: every benchmark/src/<name>.cpp registered in CMakeLists.txt
 # lives at benchmark/src/<name>.cpp on disk. Glob picks them up so a new file
@@ -18,6 +21,12 @@ BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
 BENCH_REPETITIONS ?= 10
 
+# OpenFHE's keyswitch uses a nested `#pragma omp parallel for` over a small
+# (sizeQlP ≈ 6–7) inner loop, so at our parameters (depth=3, dnum=2) thread
+# spawn cost dominates and multi-threaded runs are *slower* than single-thread.
+# Lock the env down for reproducible timings; override with BENCH_OMP_THREADS.
+BENCH_OMP_THREADS ?= 1
+
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
 	--benchmark_filter="$(BENCH_FILTER)" \
@@ -30,21 +39,22 @@ bench_flags = \
 
 all: run
 
-# Build the optimized OpenFHE install if not already present, then build every
-# benchmark binary in $(BENCH_NAMES) into $(BUILDDIR) with -O3 -march=native
-# and run them sequentially.
+# Build every benchmark binary in $(BENCH_NAMES) into $(BUILDDIR), then run them
+# sequentially with OMP pinned (see BENCH_OMP_THREADS above).
 run: build
 	@for name in $(BENCH_NAMES); do \
 		echo ""; \
-		echo "▶ bench-$$name (filter=$(BENCH_FILTER))"; \
-		$(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
+		echo "▶ bench-$$name (filter=$(BENCH_FILTER), OMP_NUM_THREADS=$(BENCH_OMP_THREADS))"; \
+		OMP_NUM_THREADS=$(BENCH_OMP_THREADS) $(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
 		echo "  JSON: $(BUILDDIR)/results-$$name.json"; \
 	done
 
-# Build a specific benchmark binary without running. Pattern target so
-# `make bench-rgsw` (delegated from the root) reaches us as `bench-rgsw` here.
-bench-%: openfhe-optimized
-	@mkdir -p $(BUILDDIR) && cd $(BUILDDIR) && cmake $(ROOT) \
+# Build a specific benchmark binary without running. The OpenFHE install +
+# project configuration are owned by the root Makefile — we just drive the
+# target build here.
+bench-%:
+	@$(MAKE) -C $(ROOT) openfhe
+	@cmake -S $(ROOT) -B $(BUILDDIR) \
 		-DBUILD_STATIC=ON \
 		-DNATIVE_SIZE=64 \
 		-DCMAKE_BUILD_TYPE=Release \
@@ -53,49 +63,19 @@ bench-%: openfhe-optimized
 
 build: $(addprefix bench-,$(BENCH_NAMES))
 
-# Build OpenFHE with full optimizations (NATIVEOPT, OpenMP, tcmalloc, reduced
-# noise) into vendors/install. Skipped if already installed — delete
-# $(ROOT)/vendors/install to force a rebuild.
-openfhe-optimized:
-	@if [ ! -f $(ROOT)/vendors/install/lib/OpenFHE/OpenFHEConfig.cmake ] || \
-	    [ ! -f $(ROOT)/vendors/install/lib/libtcmalloc_static.a ]; then \
-		echo "Building OpenFHE with full optimizations..."; \
-		rm -rf $(ROOT)/vendors/openfhe-development/build $(ROOT)/vendors/install; \
-		cmake -S $(ROOT)/vendors/openfhe-development -B $(ROOT)/vendors/openfhe-development/build \
-			-DCMAKE_BUILD_TYPE=Release \
-			-DBUILD_STATIC=ON \
-			-DBUILD_SHARED=OFF \
-			-DBUILD_BENCHMARKS=OFF \
-			-DBUILD_UNITTESTS=OFF \
-			-DBUILD_EXAMPLES=OFF \
-			-DBUILD_EXTRAS=OFF \
-			-DWITH_NATIVEOPT=ON \
-			-DWITH_OPENMP=ON \
-			-DWITH_REDUCED_NOISE=ON \
-			-DWITH_TCM=ON \
-			-DNATIVE_SIZE=64 \
-			-DCMAKE_INSTALL_PREFIX="$(ROOT)/vendors/install"; \
-		cmake --build $(ROOT)/vendors/openfhe-development/build --target tcm -j$(shell nproc); \
-		cmake --build $(ROOT)/vendors/openfhe-development/build -j$(shell nproc); \
-		cmake --install $(ROOT)/vendors/openfhe-development/build; \
-		cd $(ROOT)/vendors/install/lib && \
-			ln -sf libtcmalloc_minimal.a libtcmalloc_static.a && \
-			ln -sf libtcmalloc_minimal.so libtcmalloc_static.so; \
-	fi
-
 clean:
 	@rm -rf $(BUILDDIR)
 
 help:
 	@echo "Benchmark targets (run from project root via 'make bench' or here directly):"
-	@echo "  run                - Build optimized + run all benchmarks in BENCH_NAMES"
+	@echo "  run                - Build + run all benchmarks in BENCH_NAMES"
 	@echo "  bench-<name>       - Build a specific benchmark binary (e.g. bench-rgsw)"
-	@echo "  openfhe-optimized  - Build the optimized OpenFHE install (idempotent)"
-	@echo "  clean              - Remove the .bench/ build dir"
+	@echo "  clean              - Remove the build dir"
 	@echo ""
 	@echo "Variables:"
-	@echo "  BENCH_NAMES=<list>    space-separated stems to run (default: all in src/)"
-	@echo "                        currently auto-discovered: $(ALL_BENCH_NAMES)"
-	@echo "  BENCH_FILTER=<regex>  --benchmark_filter (default: .*)"
-	@echo "  BENCH_TIME_UNIT=<u>   --benchmark_time_unit (default: ms)"
-	@echo "  BENCH_REPETITIONS=<n> --benchmark_repetitions (default: 5)"
+	@echo "  BENCH_NAMES=<list>      space-separated stems to run (default: all in src/)"
+	@echo "                          currently auto-discovered: $(ALL_BENCH_NAMES)"
+	@echo "  BENCH_FILTER=<regex>    --benchmark_filter (default: .*)"
+	@echo "  BENCH_TIME_UNIT=<u>     --benchmark_time_unit (default: ms)"
+	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 10)"
+	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 1)"

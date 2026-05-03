@@ -66,12 +66,6 @@ endif()
 ### Include source files
 include_directories(src)
 
-# ── C++20 for our own code ────────────────────────────────────────────────────
-# Link any src/ or test/ target against this to get C++20 without changing the
-# global standard (which would break OpenFHE / GTest).
-add_library(project_cxx20 INTERFACE)
-target_compile_features(project_cxx20 INTERFACE cxx_std_20)
-
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.
 # "make" / "make all" builds only what is listed here — tests are excluded.
@@ -82,11 +76,10 @@ target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 
 # ── Core library ─────────────────────────────────────────────────────────────
 add_library(core_lib STATIC src/core/context.cpp)
-target_link_libraries(core_lib PUBLIC project_cxx20)
 
 # ── Server library ───────────────────────────────────────────────────────────
 add_library(server_lib STATIC src/server/homplacing.cpp)
-target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
+target_link_libraries(server_lib PUBLIC core_lib)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.

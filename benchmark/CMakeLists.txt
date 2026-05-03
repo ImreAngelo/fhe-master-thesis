@@ -17,11 +17,6 @@ FetchContent_MakeAvailable(googlebenchmark)
 # ── register_benchmark(name [SOURCE stem]) ───────────────────────────────────
 # name   - target name; must start with "bench-" (matches "make bench-<stem>")
 # SOURCE - source file stem without .cpp (defaults to name if omitted)
-#
-# Note: this directory is built with C++17 (the project default) so the
-# benchmark binaries link cleanly against OpenFHE and Google Benchmark, both
-# of which target C++17. server_lib drags in project_cxx20 which is fine —
-# C++20 propagates only to its own translation units.
 function(register_benchmark name)
     cmake_parse_arguments(PARSE_ARGV 1 ARG "" "SOURCE" "")
     if(ARG_SOURCE)
@@ -31,7 +26,7 @@ function(register_benchmark name)
     endif()
 
     add_executable(${name} ${_src})
-    target_link_libraries(${name} PRIVATE benchmark::benchmark project_cxx20 server_lib)
+    target_link_libraries(${name} PRIVATE benchmark::benchmark server_lib)
 
     add_custom_target(run-${name}
         COMMAND $<TARGET_FILE:${name}> --benchmark_color=yes
