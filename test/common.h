@@ -7,14 +7,14 @@
 #include <gtest/gtest.h>
 
 // TODO: Define in cmake
-#define DEBUG
+// #define DEBUG
 
 #if defined(DEBUG)
 #define DEBUG_LOGGING
 #define DEBUG_TIMING
-#include "utils/timer.h"
 #endif
 
+#include "utils/timer.h"
 
 
 /// @brief Print a list of RLWE ciphertexts 

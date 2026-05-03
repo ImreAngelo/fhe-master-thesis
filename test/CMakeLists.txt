@@ -63,6 +63,7 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
+register_test(test-rgsw-rns         SOURCE src/rgsw-rns CUSTOM_MAIN)
 register_test(test-rgsw             SOURCE src/rgsw CUSTOM_MAIN)
 register_test(test-depth            SOURCE src/depth CUSTOM_MAIN)
 register_test(test-write            SOURCE src/write)
