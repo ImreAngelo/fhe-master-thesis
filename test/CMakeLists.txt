@@ -35,11 +35,10 @@ function(register_test name)
     add_executable(${name} ${_src})
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
-    # project_cxx20 bumps this target (only) to C++20; GTest stays at C++17.
     if(ARG_CUSTOM_MAIN)
-        target_link_libraries(${name} PRIVATE GTest::gtest project_cxx20 server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest server_lib)
     else()
-        target_link_libraries(${name} PRIVATE GTest::gtest_main project_cxx20 server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest_main server_lib)
     endif()
 
     # Force-include common.h before every translation unit in this target.
@@ -64,8 +63,10 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
+register_test(test-rgsw-rns         SOURCE src/rgsw-rns CUSTOM_MAIN)
 register_test(test-rgsw             SOURCE src/rgsw CUSTOM_MAIN)
-register_test(test-write            SOURCE src/serverwrite)
+register_test(test-depth            SOURCE src/depth CUSTOM_MAIN)
+register_test(test-write            SOURCE src/write)
 # The targets below depend on the legacy vector<Ciphertext>-based RGSW API and
 # will be re-enabled once the V2 (RGSWCiphertext struct) migration is complete.
 # register_test(test-main             SOURCE src/main CUSTOM_MAIN)

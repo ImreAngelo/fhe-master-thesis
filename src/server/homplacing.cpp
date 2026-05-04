@@ -5,8 +5,11 @@
 using namespace lbcrypto;
 
 
-std::vector<Ciphertext<DCRTPoly>> Server::HomPlacing(const Context::ExtendedCryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &value, const std::vector<RGSWCiphertext<DCRTPoly>> &bits)
-{
+std::vector<Ciphertext<DCRTPoly>> Server::HomPlacingSingle(
+    const Context::ExtendedCryptoContext<DCRTPoly> &cc, 
+    const Ciphertext<DCRTPoly> &value, 
+    const std::vector<RGSWCiphertext<DCRTPoly>> &bits
+) {
     // Levels in tree L = log(n)
     const uint64_t L = bits.size();
     const uint64_t n = uint64_t(1) << L;
@@ -40,7 +43,7 @@ std::vector<Ciphertext<DCRTPoly>> Server::HomPlacing(const Context::ExtendedCryp
     return leaves;
 }
 
-RGSWCiphertext<DCRTPoly> Server::MultiHomPlacing(
+RGSWCiphertext<DCRTPoly> Server::HomPlacing(
     const Context::ExtendedCryptoContext<DCRTPoly>&,
     const PublicKey<DCRTPoly>&,
     const Ciphertext<DCRTPoly>&,

@@ -24,6 +24,28 @@ namespace Context
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params);
 
+    /// @brief Textbook implementations
+    public:
+        std::vector<Ciphertext<T>> Encrypt_Textbook(
+            const PublicKey<T> &publicKey, 
+            const Plaintext& plaintext,
+            const uint64_t log_B,
+            const size_t ell
+        );
+
+        Ciphertext<T> EvalExternalProduct_Textbook(
+            const Ciphertext<T>& rlwe,
+            const std::vector<Ciphertext<T>>& rgsw,
+            const uint64_t log_B
+        );
+
+        std::vector<Ciphertext<T>> EvalInternalProduct_Textbook(
+            const std::vector<Ciphertext<T>>& rgsw_left,
+            const std::vector<Ciphertext<T>>& rgsw_right,
+            const uint64_t log_B
+        );
+
+    /// @brief RNS-implementation
     public:
         /**
          * @brief Homomorphic external product: RLWE × RGSW → RLWE.
@@ -54,6 +76,19 @@ namespace Context
         );
 
         /**
+         * @brief Plaintext × RGSW: scale every (a, b) row by the plaintext.
+         *
+         * The plaintext is encoded in Q and lifted to QP (P-side via
+         * SwitchModulus on each P-tower, mirroring how `sExt` is built in
+         * EncryptRGSW). Linearity gives RGSW(p · m) from RGSW(m), at the cost
+         * of one multiplicative level.
+         */
+        RGSWCiphertext<DCRTPoly> EvalMultPlain(
+            const Plaintext& p,
+            const RGSWCiphertext<DCRTPoly>& A
+        );
+
+        /**
          * @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
          *
          * Mirrors KeySwitchHYBRID::KeySwitchGenInternal: m plays the role of s_old.
@@ -61,7 +96,7 @@ namespace Context
          */
         RGSWCiphertext<DCRTPoly> EncryptRGSW(
             const PrivateKey<DCRTPoly>& secretKey,
-            const std::vector<int64_t>& msg
+            const Plaintext& plaintext
         );
 
         /**
@@ -93,13 +128,6 @@ namespace Context
         );
 
     protected:
-        /**
-         * @brief Lift a Q-basis ciphertext to QP basis: (c0, c1) → (P*c0, P*c1) embedded in Q-slots, zeros in P-slots.
-         */
-        std::pair<DCRTPoly, DCRTPoly> LiftCtxToQP(
-            const Ciphertext<DCRTPoly>& ct
-        ) const;
-
         /**
          * @brief ApproxModDown a single QP-basis DCRTPoly back to Ql, using BGV's t-aware variant.
          */

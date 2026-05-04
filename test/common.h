@@ -6,15 +6,9 @@
 #include "openfhe.h"
 #include <gtest/gtest.h>
 
-// TODO: Define in cmake
-#define DEBUG
-#if defined(DEBUG)
-#define DEBUG_LOGGING
-#define DEBUG_TIMING
-#endif
-
+// DEBUG_TIMING / DEBUG_LOGGING are opt-in via `DEBUG=1 make test-<name>`,
+// which configures core_lib with PUBLIC compile defs that also reach tests.
 #include "utils/timer.h"
-
 
 /// @brief Print a list of RLWE ciphertexts 
 template <typename CC, typename T>
