@@ -14,8 +14,7 @@ namespace server {
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
     // TODO: Pass as args
-    constexpr uint32_t B_LOG = 15;
-    constexpr uint32_t ELL = 17;
+    constexpr uint32_t B_LOG = 30;
 
     // ------------------------- //
     // Swappable implementations //
@@ -28,7 +27,9 @@ namespace server {
         const PublicKey<T>& publicKey,
         const Plaintext& plaintext
     ) {
-        return cc->Encrypt_Textbook(publicKey, plaintext, B_LOG, ELL);
+        const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
+        const size_t ell = log_q / B_LOG + 1;
+        return cc->Encrypt_Textbook(publicKey, plaintext, B_LOG, ell);
     }
 
     // EvalExternalProduct

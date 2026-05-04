@@ -35,7 +35,6 @@ public:
         cc->Enable(LEVELEDSHE);
 
         keys = cc->KeyGen();
-        cc->EvalMultKeyGen(keys.secretKey);
 
         pt_one   = cc->MakePackedPlaintext({ 1 });
         pt_msg   = cc->MakePackedPlaintext({ 2 });

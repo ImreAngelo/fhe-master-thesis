@@ -86,12 +86,6 @@ namespace Context
         b.SetFormat(Format::COEFFICIENT);
         a.SetFormat(Format::COEFFICIENT);
 
-        {
-            DEBUG_TIMER("BaseDecompose");
-            b.BaseDecompose(log_B, true);
-            a.BaseDecompose(log_B, true);
-        }
-
         std::vector<DCRTPoly> v = b.BaseDecompose(log_B, true);
         std::vector<DCRTPoly> u = a.BaseDecompose(log_B, true);
 

@@ -49,10 +49,20 @@ openfhe-clean:
 # Single Release build dir, configured with -O3 -march=native everywhere so
 # tests and benchmarks observe identical codegen.
 BUILDDIR := build
+
+# Opt-in debug instrumentation for tests:  DEBUG=1 make test-<name>
+# Toggles DEBUG_TIMING / DEBUG_LOGGING on core_lib (and, transitively, tests).
+ifeq ($(DEBUG),1)
+_DEBUG_FLAGS := -DENABLE_DEBUG_TIMING=ON -DENABLE_DEBUG_LOGGING=ON
+else
+_DEBUG_FLAGS := -DENABLE_DEBUG_TIMING=OFF -DENABLE_DEBUG_LOGGING=OFF
+endif
+
 _CONFIGURE = cmake -S . -B $(BUILDDIR) \
 	-DBUILD_STATIC=ON \
 	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
+	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native" \
+	$(_DEBUG_FLAGS)
 
 # Build whatever production binaries are registered in CMakeLists.txt.
 build: openfhe
@@ -138,6 +148,7 @@ help:
 	@echo "  build              - Configure project + build registered binaries"
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
+	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build a specific benchmark binary"
 	@echo "  params             - Set up the .venv used by parameter tuning"

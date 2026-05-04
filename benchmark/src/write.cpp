@@ -26,10 +26,7 @@ public:
 
 #define MAKE_BENCHMARK(name, K, D, L, params) BENCHMARK_F(ServerWrite, name)(benchmark::State& s) { \
     auto p = params; \
-    for (auto _ : s) { \
-        auto c = server::TestServerWrite<DCRTPoly, K, D, L>(p); \
-        benchmark::DoNotOptimize(c); \
-    } \
+    for (auto _ : s) { server::TestServerWrite<DCRTPoly, K, D, L>(p); } \
 }
 
 // TODO: Only benchmark with K = D = 3

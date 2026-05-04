@@ -17,7 +17,6 @@ constexpr uint32_t RING_DIM_LOG = 14;
 constexpr uint64_t PT_MODULUS   = 65537;
 
 constexpr uint32_t B_LOG = 10;
-constexpr uint32_t ELL = 38;
 
 CCParams<CryptoContextRGSWBGV> MakeParams() {
     CCParams<CryptoContextRGSWBGV> params;
@@ -37,6 +36,9 @@ public:
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
 
+        const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
+        ell = log_q / B_LOG + 1;
+
         keys = cc->KeyGen();
         
         pt_one   = cc->MakePackedPlaintext({ 1 });
@@ -44,14 +46,15 @@ public:
         pt_scale = cc->MakePackedPlaintext({ 3 });
 
         rlwe_ct = cc->Encrypt(keys.publicKey, pt_one);
-        rgsw_ct = cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ELL);
+        rgsw_ct = cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ell);
     }
 
     Context::ExtendedCryptoContext<DCRTPoly> cc;
-    KeyPair<DCRTPoly>        keys;
+    std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
     Plaintext                pt_one, pt_msg, pt_scale;
     Ciphertext<DCRTPoly>     rlwe_ct;
-    std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
+    KeyPair<DCRTPoly>        keys;
+    size_t ell;
 };
 
 } // namespace
@@ -64,8 +67,8 @@ public:
 }
 
 
-MAKE_BENCHMARK(Encrypt, cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ELL))
-MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_ct, B_LOG))
-MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct_Textbook(rgsw_ct, rgsw_ct, B_LOG))
+MAKE_BENCHMARK(Encrypt, cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ell))
+MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_ct, ell))
+MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct_Textbook(rgsw_ct, rgsw_ct, ell))
 
 BENCHMARK_MAIN();

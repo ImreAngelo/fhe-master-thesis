@@ -57,7 +57,9 @@ bench-%:
 	@cmake -S $(ROOT) -B $(BUILDDIR) \
 		-DBUILD_STATIC=ON \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native"
+		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native" \
+		-DENABLE_DEBUG_TIMING=OFF \
+		-DENABLE_DEBUG_LOGGING=OFF
 	@cmake --build $(BUILDDIR) --target bench-$* -j$(shell nproc)
 
 build: $(addprefix bench-,$(BENCH_NAMES))

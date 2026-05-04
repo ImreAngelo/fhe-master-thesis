@@ -19,7 +19,7 @@ using namespace lbcrypto;
 
 inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(3));
+    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(2));
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
     params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
     params.SetNumLargeDigits(2);
@@ -130,7 +130,7 @@ inline int ProbeMaxIntChain_RNS(uint32_t mult_depth, uint32_t num_large_digits, 
 }
 
 TEST(RGSW, chain_no_depth_growth) {
-    constexpr int max_steps = 16;
+    constexpr int max_steps = 32;
 
     // (depth, dnum) combinations that the HYBRID key-switch setup accepts.
     // OpenFHE rejects e.g. (depth=3, dnum=3): 4 towers can't split into 3 digits.
@@ -140,23 +140,26 @@ TEST(RGSW, chain_no_depth_growth) {
     for (auto [depth, dnum] : configs) {
         const int ext = ProbeMaxExtChain_RNS(depth, dnum, max_steps);
         const int intp = ProbeMaxIntChain_RNS(depth, dnum, max_steps);
-        std::cout << "  [RNS depth=" << depth
-                  << " dnum=" << dnum << "] "
-                  << "ext-chain=" << ext
-                  << "  int-chain=" << intp
+        std::cout << " [RNS depth=" << depth
+                  << " dnum=" << dnum << "]"
+                  << " ext-chain=" << ext
+                  << " int-chain=" << intp
                   << std::endl;
     }
 }
 
 // Probe how far a chain of external products survives before noise corrupts the
 // result. Returns the largest N for which 1, 2, …, N all decrypted correctly.
-inline int ProbeMaxExtChain_Textbook(uint32_t mult_depth, uint64_t log_b, size_t ell, int max_steps) {
+inline int ProbeMaxExtChain_Textbook(uint32_t mult_depth, uint64_t log_b, int max_steps) {
     auto params = GetParams();
     params.SetMultiplicativeDepth(mult_depth);
 
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
+
+    const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
+    const size_t ell = log_q / log_b + 1;
 
     KeyPair<DCRTPoly> keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
@@ -181,13 +184,16 @@ inline int ProbeMaxExtChain_Textbook(uint32_t mult_depth, uint64_t log_b, size_t
     return max_steps;
 }
 
-inline int ProbeMaxIntChain_Textbook(uint32_t mult_depth, uint64_t log_b, size_t ell, int max_steps) {
+inline int ProbeMaxIntChain_Textbook(uint32_t mult_depth, uint64_t log_b, int max_steps) {
     auto params = GetParams();
     params.SetMultiplicativeDepth(mult_depth);
 
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
+
+    const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
+    const size_t ell = log_q / log_b + 1;
 
     KeyPair<DCRTPoly> keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
@@ -219,17 +225,16 @@ inline int ProbeMaxIntChain_Textbook(uint32_t mult_depth, uint64_t log_b, size_t
 TEST(RGSW_Textbook, chain_no_depth_growth) {
     // Sweep the textbook gadget base. Smaller log_b means more digits but
     // smaller per-step noise — the classical noise/depth tradeoff.
-    constexpr int max_steps = 16;
+    constexpr int max_steps = 20;
 
     for (uint32_t depth : { 2u, 3u }) {
-        for (auto [log_b, ell] : std::vector<std::pair<uint64_t, size_t>>{ {30, 6}, {15, 12}, {10, 18} }) {
-            const int ext = ProbeMaxExtChain_Textbook(depth, log_b, ell, max_steps);
-            const int intp = ProbeMaxIntChain_Textbook(depth, log_b, ell, max_steps);
-            std::cout << "  [textbook depth=" << depth
+        for (auto log_b : std::vector<uint64_t>{ 30, 15, 10, 5 }) {
+            const int ext = ProbeMaxExtChain_Textbook(depth, log_b, max_steps);
+            const int intp = ProbeMaxIntChain_Textbook(depth, log_b, max_steps);
+            std::cout << "  [textbook depth=" << depth << "]"
                       << " log_b=" << log_b
-                      << " ell="   << ell << "] "
-                      << "ext-chain=" << ext
-                      << "  int-chain=" << intp
+                      << " ext-chain=" << ext
+                      << " int-chain=" << intp
                       << std::endl;
         }
     }

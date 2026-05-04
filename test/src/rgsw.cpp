@@ -33,13 +33,10 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
     return params;
 }
 
-constexpr int64_t LOG_B = 30;
-constexpr int64_t ELL   = 6;
-
 /**
  * @brief Test RGSW encryption, the external product and internal product, using the textbook (un-optimized) implementations
  */
-inline void RunTest(const std::vector<int64_t>& value) {
+inline void RunTest(const std::vector<int64_t>& value, const int64_t log_b = 30) {
     const CCParams<CryptoContextRGSWBGV> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
@@ -47,23 +44,24 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     KeyPair<DCRTPoly> keyPair;
     keyPair = cc->KeyGen();
-    cc->EvalMultKeyGen(keyPair.secretKey);
+    // cc->EvalMultKeyGen(keyPair.secretKey);
     
+    // Set ell from B and Q
+    const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
+    const size_t ell = log_q / log_b + 1;
+    DEBUG_PRINT("Log Q: " << log_q << " -> ell: " << ell);
+
     Plaintext pt = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
     auto rlwe_ct = cc->Encrypt(keyPair.publicKey, pt);
-    auto rgsw_ct = cc->Encrypt_Textbook(keyPair.publicKey, cc->MakePackedPlaintext(value), LOG_B, ELL);
-
-    DEBUG_PRINT("RGSW dnum = " << rgsw_ct.size());
+    auto rgsw_ct = cc->Encrypt_Textbook(keyPair.publicKey, cc->MakePackedPlaintext(value), log_b, ell);
     
     // Test External Product
     {
-        auto res_ct = cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_ct, LOG_B);
+        auto res_ct = cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_ct, log_b);
 
         Plaintext res;
         cc->Decrypt(keyPair.secretKey, res_ct, &res);
-        res->SetLength(value.size());
-    
-        DEBUG_PRINT("Final result: " << res);
+        res->SetLength(std::max(static_cast<size_t>(8), value.size()));
     
         const auto& result_slot = res->GetPackedValue();
         for (size_t i = 0; i < value.size(); i++) {
@@ -74,14 +72,11 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     // Test Internal Product
     {
-        auto rgsw_sq = cc->EvalInternalProduct_Textbook(rgsw_ct, rgsw_ct, LOG_B);
-        auto sq_ct   = cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_sq, LOG_B);
+        auto rgsw_sq = cc->EvalInternalProduct_Textbook(rgsw_ct, rgsw_ct, log_b);
+        auto sq_ct   = cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_sq, log_b);
 
         Plaintext res;
         cc->Decrypt(keyPair.secretKey, sq_ct, &res);
-        res->SetLength(std::max(static_cast<size_t>(8), value.size()));
-
-        DEBUG_PRINT("Internal product result: " << res);
 
         const auto& result_slot = res->GetPackedValue();
         for (size_t i = 0; i < value.size(); i++) {

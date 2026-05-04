@@ -78,10 +78,10 @@ include_directories(src)
 add_library(core_lib STATIC src/core/context.cpp)
 
 # Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
-# DEBUG_LOGGING. Tests force-include common.h which sets these for test TUs,
-# but core_lib compiles separately, so we propagate them here as well.
-option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core_lib"  ON)
-option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core_lib" ON)
+# DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
+# which passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON.
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core_lib"  OFF)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core_lib" OFF)
 if(ENABLE_DEBUG_TIMING)
     target_compile_definitions(core_lib PUBLIC DEBUG_TIMING)
 endif()
