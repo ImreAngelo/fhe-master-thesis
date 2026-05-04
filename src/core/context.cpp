@@ -29,7 +29,7 @@ namespace Context
         const uint64_t log_B,
         const size_t ell
     ) {
-        DEBUG_TIMER("Encrypt RGSW (Textbook method)");
+        // DEBUG_TIMER("Encrypt RGSW (Textbook method)");
 
         const Plaintext zero   = this->MakePackedPlaintext({ 0 });
 
@@ -76,7 +76,7 @@ namespace Context
         const std::vector<Ciphertext<T>> &rgsw,
         const uint64_t log_B
     ) {
-        DEBUG_TIMER("External Product (Textbook method)");
+        // DEBUG_TIMER("External Product (Textbook method)");
 
         const size_t ell = rgsw.size() / 2;
 
@@ -117,7 +117,7 @@ namespace Context
         const std::vector<Ciphertext<T>> &right, 
         const uint64_t log_B
     ){
-        DEBUG_TIMER("Internal Product");
+        // DEBUG_TIMER("Internal Product");
 
         std::vector<Ciphertext<T>> result(left.size());
         for(size_t i = 0; i < left.size(); i++)
@@ -162,7 +162,7 @@ namespace Context
         const Ciphertext<DCRTPoly>& x,
         const RGSWCiphertext<DCRTPoly>& Y
     ) {
-        DEBUG_TIMER("External Product");
+        // DEBUG_TIMER("External Product");
 
         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         if (!cp)
@@ -211,7 +211,7 @@ namespace Context
         const PrivateKey<DCRTPoly>& secretKey,
         const Plaintext& plaintext
     ) {
-        DEBUG_TIMER("Encrypt RGSW");
+        // DEBUG_TIMER("Encrypt RGSW");
 
         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         if (!cp)
@@ -385,7 +385,7 @@ namespace Context
         const RGSWCiphertext<DCRTPoly>& A,
         const RGSWCiphertext<DCRTPoly>& B
     ) {
-        DEBUG_TIMER("Internal Product");
+        // DEBUG_TIMER("Internal Product");
 
         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         if (!cp)
@@ -446,6 +446,116 @@ namespace Context
         outTop->SetAVector(std::move(topAVec));
         outTop->SetBVector(std::move(topBVec));
         auto outBot = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
+        outBot->SetAVector(std::move(botAVec));
+        outBot->SetBVector(std::move(botBVec));
+
+        RGSWCiphertext<DCRTPoly> C;
+        C.top = std::move(outTop);
+        C.bot = std::move(outBot);
+        return C;
+    }
+
+    // ----------------------------------------------------------------------
+    // Hybrid Internal product: RGSW × RGSW → RGSW.
+    //
+    // Textbook decomposition built on the working RNS external-product kernel:
+    //   for each row j (top and bot) of B:
+    //     1. ApproxModDown row from QP → Q  (cancels gadget P factor).
+    //     2. Wrap as Ciphertext<DCRTPoly> in Q.
+    //     3. EvalExternalProduct(rlwe, A) → Q-basis RLWE encrypting
+    //          m_A · m_B · g_j   (top: also includes ·s factor)
+    //     4. Re-pack into the QP-basis RGSW row format expected downstream:
+    //          a' in QP: scale a_Q by P (PModq) in Q-towers, zero P-towers.
+    //          b' in QP: same treatment.
+    //
+    // The repack mirrors how `EncryptRGSW` builds rows except we skip the
+    // fresh `-a*s + e` randomization on P-towers (we leave them at 0). The
+    // resulting rows decrypt the same way under ApproxModDown(QP→Q), and are
+    // consumable by EvalExternalProduct via EvalFastKeySwitchCoreExt (P-side
+    // contributes 0 to the dot product).
+    // ----------------------------------------------------------------------
+    template <typename T>
+    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct_Hybrid(
+        const RGSWCiphertext<DCRTPoly>& A,
+        const RGSWCiphertext<DCRTPoly>& B
+    ) {
+        // DEBUG_TIMER("Internal Product (Hybrid)");
+
+        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        if (!cp)
+            throw std::runtime_error("EvalInternalProduct_Hybrid: cryptoparams not RNS");
+        if (A.size() != B.size())
+            throw std::runtime_error("EvalInternalProduct_Hybrid: dnum mismatch");
+        if (!A.top || !A.bot || !B.top || !B.bot)
+            throw std::runtime_error("EvalInternalProduct_Hybrid: RGSW operand has null top/bot key");
+
+        const auto paramsQ  = cp->GetElementParams();
+        const auto paramsQP = cp->GetParamsQP();
+        const auto& pparamsQP = paramsQP->GetParams();
+        const auto& PModq = cp->GetPModq();
+        const uint32_t sizeQ  = paramsQ->GetParams().size();
+        const uint32_t sizeQP = pparamsQP.size();
+        const uint32_t dnum   = static_cast<uint32_t>(B.size());
+
+        auto ccBase = A.top->GetCryptoContext();
+
+        // Treat one QP-basis (a, b) row of B as an RLWE in Q after ModDown.
+        auto rowToRlwe = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
+            DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
+            DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
+            auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(ccBase);
+            // BGV ciphertext layout: elements = { b, a }
+            ct->SetElements({ std::move(bQ), std::move(aQ) });
+            ct->SetEncodingType(PACKED_ENCODING);
+            ct->SetLevel(0);
+            ct->SetNoiseScaleDeg(1);
+            return ct;
+        };
+
+        // Lift a Q-basis DCRTPoly to QP by zero-padding the P-towers, and
+        // multiply Q-towers by P (PModq) so the row encodes m·P·g_j again.
+        auto qToQp_scaledByP = [&](const DCRTPoly& xQ) {
+            DCRTPoly y(paramsQP, Format::EVALUATION, true);
+            for (uint32_t i = 0; i < sizeQP; ++i) {
+                if (i < sizeQ) {
+                    auto t = xQ.GetElementAtIndex(i);
+                    t.SetFormat(Format::EVALUATION);
+                    t *= PModq[i];
+                    y.SetElementAtIndex(i, std::move(t));
+                }
+            }
+            return y;
+        };
+
+        std::vector<DCRTPoly> topAVec(dnum), topBVec(dnum);
+        std::vector<DCRTPoly> botAVec(dnum), botBVec(dnum);
+
+        const auto& bTopA = B.top->GetAVector();
+        const auto& bTopB = B.top->GetBVector();
+        const auto& bBotA = B.bot->GetAVector();
+        const auto& bBotB = B.bot->GetBVector();
+
+        // Process top side of B.
+        for (uint32_t j = 0; j < dnum; ++j) {
+            auto rlwe = rowToRlwe(bTopA[j], bTopB[j]);
+            auto out  = EvalExternalProduct(rlwe, A);
+            const auto& cv = out->GetElements();  // { b_Q, a_Q }
+            topBVec[j] = qToQp_scaledByP(cv[0]);
+            topAVec[j] = qToQp_scaledByP(cv[1]);
+        }
+        // Process bot side of B.
+        for (uint32_t j = 0; j < dnum; ++j) {
+            auto rlwe = rowToRlwe(bBotA[j], bBotB[j]);
+            auto out  = EvalExternalProduct(rlwe, A);
+            const auto& cv = out->GetElements();
+            botBVec[j] = qToQp_scaledByP(cv[0]);
+            botAVec[j] = qToQp_scaledByP(cv[1]);
+        }
+
+        auto outTop = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(ccBase);
+        outTop->SetAVector(std::move(topAVec));
+        outTop->SetBVector(std::move(topBVec));
+        auto outBot = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(ccBase);
         outBot->SetAVector(std::move(botAVec));
         outBot->SetBVector(std::move(botBVec));
 
@@ -524,7 +634,7 @@ namespace Context
         const Plaintext& p,
         const RGSWCiphertext<DCRTPoly>& A
     ) {
-        DEBUG_TIMER("EvalMultPlain RGSW");
+        // DEBUG_TIMER("EvalMultPlain RGSW");
 
         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         if (!cp)

@@ -138,6 +138,59 @@ TEST(RGSW, depth_for_N_internal_products) {
     EXPECT_GT(found, 0u);
 }
 
+// Same as ProbeMaxIntChain_RNS but uses EvalInternalProduct_Hybrid.
+inline int ProbeMaxIntChain_Hybrid(uint32_t mult_depth, uint32_t num_large_digits, int max_chain) {
+    auto params = GetParams();
+    params.SetMultiplicativeDepth(mult_depth);
+
+    auto cc = Context::GenExtendedCryptoContext(params);
+    cc->Enable(PKE);
+    cc->Enable(LEVELEDSHE);
+
+    KeyPair<DCRTPoly> keyPair = cc->KeyGen();
+
+    constexpr int64_t base = 2;
+    const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
+
+    auto rlwe_ct    = cc->Encrypt(keyPair.publicKey, cc->MakePackedPlaintext({ 1 }));
+    auto rgsw_c     = cc->EncryptRGSW(keyPair.secretKey, cc->MakePackedPlaintext({ base }));
+    auto rgsw_chain = rgsw_c;
+
+    int last_ok = 0;
+    for (int n = 1; n <= max_chain; ++n) {
+        rgsw_chain = cc->EvalInternalProduct_Hybrid(rgsw_chain, rgsw_c);
+
+        auto out_ct = cc->EvalExternalProduct(rlwe_ct, rgsw_chain);
+        Plaintext res;
+        cc->Decrypt(keyPair.secretKey, out_ct, &res);
+        res->SetLength(1);
+
+        int64_t v = 1;
+        for (int i = 0; i < n + 1; ++i) v = (v * base) % t;
+        if (res->GetPackedValue()[0] != CENTER(v, t)) return last_ok;
+        last_ok = n;
+    }
+    return last_ok;
+}
+
+TEST(RGSW_Hybrid, depth_for_N_internal_products) {
+    constexpr uint32_t dnum = 2;
+
+    uint32_t found = 0;
+    for (uint32_t depth = 2; depth <= kMaxDepthSweep; ++depth) {
+        TIMER(" [hybrid dnum=" + std::to_string(dnum) + " depth=" + std::to_string(depth) + "]");
+        const int max_chain = ProbeMaxIntChain_Hybrid(depth, dnum, kInternalChainN);
+        PRINT("max length " + std::to_string(max_chain));
+        if (max_chain >= kInternalChainN) { found = depth; break; }
+    }
+
+    std::cout << " [hybrid dnum=" << dnum << "]"
+              << " min depth for N=" << kInternalChainN << " internal products: ";
+    if (found > 0) std::cout << found << std::endl;
+    else           std::cout << "not found in [2, " << kMaxDepthSweep << "]" << std::endl;
+    EXPECT_GT(found, 0u);
+}
+
 TEST(RGSW_Textbook, depth_for_N_internal_products) {
     constexpr uint64_t log_b = 15;  // log_b doesn't really matter for this sweep
 

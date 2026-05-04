@@ -14,7 +14,7 @@ namespace server {
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
     // TODO: Pass as args
-    constexpr uint32_t B_LOG = 30;
+    constexpr uint32_t B_LOG = 15;
 
     // ------------------------- //
     // Swappable implementations //
@@ -136,8 +136,9 @@ namespace server {
         const Plaintext& Vr,
         std::array<std::array<RGSWCiphertext<T>, K>, (uint64_t(1) << L)>& L_mat,
         std::array<std::array<RGSWCiphertext<T>, K>, (uint64_t(1) << L)>& I_mat,
-        const std::array<std::array<RGSWCiphertext<T>, D>, (uint64_t(1) << L)>& z,
-        const PrivateKey<T>& secretKey // for debugging
+        const std::array<std::array<RGSWCiphertext<T>, (uint64_t(1) << L)>, D>& z,
+        const PrivateKey<T>& secretKey, // for debugging
+        const uint64_t iteration = 1
     ) {
         const auto one  = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
         auto hasWritten = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
@@ -145,19 +146,29 @@ namespace server {
         {
             DEBUG_TIMER("Server Write");
     
-            for(uint32_t d = 0; d < D; d++) {
-                DEBUG_PRINT("d: " << d);
-                for (uint32_t k = 0; k < K; k++) {
-                    DEBUG_PRINT("k: " << k);
+            // FASTER DEBUGGING: First user always writes in their preferred bin
+            for(uint32_t d = 0; d < std::min(D, iteration); d++) {
+                DEBUG_PRINT("candidate: " << d);
+                for (uint32_t k = 0; k < std::min(K, iteration); k++) {
+                    DEBUG_PRINT("bin: " << k);
                     for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
-                        DEBUG_PRINT("i: " << i);
+                        DEBUG_PRINT("slot: " << i);
                         DEBUG_TIMER("iteration");
-                        auto zI  = EvalInternalProduct(cc, z[i][d], I_mat[i][k]);
+                        
+                        auto zI  = EvalInternalProduct(cc, z[d][i], I_mat[i][k]);
+                        DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
+
                         auto sub = EvalSubRGSW(cc, one, hasWritten);
+                        DEBUG_PRINT("Can write? " << Decrypt(cc, secretKey, sub));
+
                         auto h   = EvalInternalProduct(cc, zI, sub);
+                        DEBUG_PRINT("Write operation? " << Decrypt(cc, secretKey, h));
     
                         L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], server::EvalMultPlain(cc, Vr, h));
+                        DEBUG_PRINT("L_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, L_mat[i][k]));
+
                         I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
+                        DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
 
                         hasWritten = EvalAddRGSW(cc, hasWritten, h);
 
@@ -185,19 +196,19 @@ namespace client {
      * @tparam L 
      */
     template <typename T = DCRTPoly, uint32_t D = 3, uint32_t L = 1>
-    inline std::array<std::array<server::RGSWCiphertext<T>, D>, (uint64_t(1) << L)> PlaceAtN(
+    inline std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> PlaceAtN(
         const Context::ExtendedCryptoContext<T>& cc,
         const PublicKey<T>& publicKey,
-        const std::array<size_t, D> index
+        const size_t index
     ) {
-        std::array<std::array<server::RGSWCiphertext<T>, D>, (uint64_t(1) << L)> z;
-        auto one = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
+        std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> z;
+        auto one  = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
         auto zero = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
 
-        for (uint64_t i = 0; i < (uint64_t(1) << L); i++)
-            for (uint32_t d = 0; d < D; d++)
-                z[i][d] = (i == index[d]) ? one : zero;
-        
+        for (uint32_t d = 0; d < D; d++)
+            for (uint64_t slot = 0; slot < (uint64_t(1) << L); slot++)
+                z[d][slot] = (slot == index) ? one : zero;
+
         return z;
     }
 }

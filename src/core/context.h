@@ -64,6 +64,24 @@ namespace Context
         );
 
         /**
+         * @brief Hybrid internal product: RGSW × RGSW → RGSW.
+         *
+         * Textbook decomposition (one external product per gadget row of B)
+         * built on top of the RNS external-product kernel. Each row of B is
+         * projected QP→Q via ApproxModDown, fed through EvalExternalProduct
+         * against A, and the resulting Q-basis RLWEs are repacked into a
+         * fresh QP-basis RGSW (multiplying by P in Q-side, zero P-side).
+         *
+         * Slower per-call than EvalInternalProduct (2·dnum external products
+         * vs. dnum-row dot product) but doesn't accumulate the QP-residue
+         * noise that breaks chained EvalInternalProduct calls.
+         */
+        RGSWCiphertext<DCRTPoly> EvalInternalProduct_Hybrid(
+            const RGSWCiphertext<DCRTPoly>& left,
+            const RGSWCiphertext<DCRTPoly>& right
+        );
+
+        /**
          * @brief Element-wise add/sub of two RGSW ciphertexts (operates in QP).
          */
         RGSWCiphertext<DCRTPoly> EvalAddRGSW(

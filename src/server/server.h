@@ -55,14 +55,24 @@ namespace server {
             const auto Vr = cc->MakePackedPlaintext({ static_cast<int64_t>(r + 1) });
 
             // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
-            const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, std::array<size_t, D>{ r });
+            const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, r);
 
             // Loop 2
-            const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey);
+            const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
             // Output results
             auto hw = server::Decrypt(cc, keys.secretKey, hasWritten, N);
             DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
+
+            for(const auto& ct : L_mat[r]) {
+                auto cell = server::Decrypt(cc, keys.secretKey, ct);
+                DEBUG_PRINT("L[" << r << "][0]: " << cell);
+            }
+
+            for(const auto& ct : I_mat[r]) {
+                auto cell = server::Decrypt(cc, keys.secretKey, ct);
+                DEBUG_PRINT("I[" << r << "]: " << cell);
+            }
 
             // Verify hasWritten is correct for this user
             ASSERT_EQ(hw[0], 1);
