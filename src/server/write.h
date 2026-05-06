@@ -29,7 +29,7 @@ namespace server {
     ) {
         const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
         const size_t ell = log_q / B_LOG + 1;
-        return cc->Encrypt_Textbook(publicKey, plaintext, B_LOG, ell);
+        return cc->EncryptRGSW(publicKey, plaintext, B_LOG, ell);
     }
 
     // EvalExternalProduct
@@ -39,7 +39,7 @@ namespace server {
         const RLWECiphertext<T>& rlwe,
         const RGSWCiphertext<T>& rgsw
     ) {
-        return cc->EvalExternalProduct_Textbook(rlwe, rgsw, B_LOG);
+        return cc->EvalExternalProduct(rlwe, rgsw, B_LOG);
     }
 
     // EvalInternalProduct
@@ -49,7 +49,7 @@ namespace server {
         const RGSWCiphertext<T>& left,
         const RGSWCiphertext<T>& right
     ) {
-        return cc->EvalInternalProduct_Textbook(left, right, B_LOG);
+        return cc->EvalInternalProduct(left, right, B_LOG);
     }
 
     // RGSW addition
@@ -103,10 +103,10 @@ namespace server {
         const size_t len = 1
     ) {
         Plaintext res;
-        auto rlwe_one = cc->Encrypt(secretKey, cc->MakePackedPlaintext({ 1 }));
+        auto rlwe_one = cc->Encrypt(secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
         cc->Decrypt(secretKey, server::EvalExternalProduct(cc, rlwe_one, rgsw), &res);
         res->SetLength(len);
-        return res->GetPackedValue();
+        return res->GetCoefPackedValue();
     }
     
     // -------------------------------- //
@@ -140,8 +140,8 @@ namespace server {
         const PrivateKey<T>& secretKey, // for debugging
         const uint32_t iteration = 1
     ) {
-        const auto one  = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
-        auto hasWritten = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
+        const auto one  = Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto hasWritten = Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         {
             DEBUG_TIMER("Server Write");
@@ -204,8 +204,8 @@ namespace client {
         const size_t index
     ) {
         std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> z;
-        auto one  = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
-        auto zero = server::Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
+        auto one  = server::Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto zero = server::Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         for (uint32_t d = 0; d < D; d++)
             for (uint64_t slot = 0; slot < (uint64_t(1) << L); slot++)

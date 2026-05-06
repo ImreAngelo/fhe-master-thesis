@@ -72,7 +72,9 @@ namespace Server
         const Context::ExtendedCryptoContext<DCRTPoly>& cc,
         const Ciphertext<DCRTPoly>&                     value,
         const std::vector<RGSWCiphertext<DCRTPoly>>&    bits
-    );
+    ) {
+        throw std::logic_error("HomPlacingSingle is not implemented yet");
+    };
 
     /**
      * @brief Algorithm 2 from the sPAR paper.
@@ -92,5 +94,7 @@ namespace Server
         const std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&        A,
         std::vector<std::vector<Ciphertext<DCRTPoly>>>&                  L_matrix,
         std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&              I_matrix
-    );
+    ) {
+        throw std::logic_error("HomPlacing is not implemented yet");
+    };
 }

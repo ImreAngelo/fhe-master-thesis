@@ -35,9 +35,9 @@ namespace server {
 
         constexpr uint64_t N = (uint64_t(1) << L);
 
-        const auto rgsw_zero = server::Encrypt(cc, keys.publicKey, cc->MakePackedPlaintext({ 0 }));
-        const auto rgsw_one  = server::Encrypt(cc, keys.publicKey, cc->MakePackedPlaintext({ 1 }));
-        const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext({ 1 }));
+        const auto rgsw_zero = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto rgsw_one  = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
 
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
@@ -52,7 +52,7 @@ namespace server {
             DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
             DEBUG_TIMER("User " + std::to_string(r + 1));
 
-            const auto Vr = cc->MakePackedPlaintext({ static_cast<int64_t>(r + 1) });
+            const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
 
             // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
             const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, r);
