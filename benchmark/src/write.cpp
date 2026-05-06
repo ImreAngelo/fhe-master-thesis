@@ -32,6 +32,9 @@ public:
 // TODO: Only benchmark with K = D = 3?
 MAKE_BENCHMARK(mvp, 1, 1, 1, CreateParams(3))
 MAKE_BENCHMARK(N2, 3, 3, 1, CreateParams(3))
+MAKE_BENCHMARK(N4, 3, 3, 2, CreateParams(3))
+MAKE_BENCHMARK(N8, 3, 3, 3, CreateParams(3))
+MAKE_BENCHMARK(N16, 3, 3, 4, CreateParams(3))
 MAKE_BENCHMARK(N32, 3, 3, 5, CreateParams(3))
 MAKE_BENCHMARK(N64, 3, 3, 6, CreateParams(3))
 MAKE_BENCHMARK(N128, 3, 3, 7, CreateParams(3))

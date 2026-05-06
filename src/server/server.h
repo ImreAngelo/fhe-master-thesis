@@ -4,6 +4,9 @@
 // TODO: Fix terrible include structure
 #include "server/write.h"
 
+// Map a centered value (-m/2, m/2] back to [0, m).
+#define RECENTER(x, m) ((x) < 0 ? (x) + (m) : (x))
+
 namespace server {
     using namespace lbcrypto;
     using namespace Context;
@@ -34,6 +37,7 @@ namespace server {
         KeyPair<DCRTPoly> keys = cc->KeyGen();
 
         constexpr uint64_t N = (uint64_t(1) << L);
+        const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
 
         const auto rgsw_zero = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
         const auto rgsw_one  = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
@@ -75,19 +79,21 @@ namespace server {
             }
 
             // Verify hasWritten is correct for this user
-            ASSERT_EQ(hw[0], 1);
+            ASSERT_EQ(RECENTER(hw[0], t), 1);
         }
 
-        // // Final state: L_mat[i] == i+1, L_mat[i] == 0.
-        // for (uint64_t i = 0; i < N; i++) {
-        //     for (uint32_t k = 0; k < K; k++) {
-        //         auto cell = cc->EvalExternalProduct(rlwe_one, L_mat[i][k]);
-        //         Plaintext pt;
-        //         cc->Decrypt(keys.secretKey, cell, &pt);
-        //         pt->SetLength(1);
-        //         const int64_t expected = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
-        //         ASSERT_EQ(pt->GetPackedValue()[0], expected);
-        //     }
-        // }
+        // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.
+        for (uint64_t i = 0; i < N; i++) {
+            for (size_t k = 0; k < K; k++) {
+                auto Lcell = server::Decrypt(cc, keys.secretKey, L_mat[i][k]);
+                const int64_t expectedL = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
+                auto L_val = RECENTER(Lcell[0], t);
+                ASSERT_EQ(L_val, expectedL) << "L[" << i << "][" << k << "]";
+
+                auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
+                auto I_val = RECENTER(Icell[0], t);
+                ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
+            }
+        }
     }
 } // namespace server

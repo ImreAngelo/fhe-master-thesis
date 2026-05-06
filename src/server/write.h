@@ -14,7 +14,7 @@ namespace server {
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
     // TODO: Pass as args
-    constexpr uint32_t B_LOG = 15;
+    constexpr uint32_t B_LOG = 4;
 
     // ------------------------- //
     // Swappable implementations //
@@ -103,8 +103,21 @@ namespace server {
         const size_t len = 1
     ) {
         Plaintext res;
-        auto rlwe_one = cc->Encrypt(secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        cc->Decrypt(secretKey, server::EvalExternalProduct(cc, rlwe_one, rgsw), &res);
+        cc->Decrypt(secretKey, rgsw[rgsw.size()/2], &res);
+        res->SetLength(len);
+        return res->GetCoefPackedValue();
+    }
+
+    // Decrypt RLWE
+    template <typename T = DCRTPoly>
+    inline std::vector<int64_t> Decrypt(
+        const Context::ExtendedCryptoContext<T>& cc,
+        const PrivateKey<T>& secretKey,
+        const RLWECiphertext<T>& rlwe,
+        const size_t len = 1
+    ) {
+        Plaintext res;
+        cc->Decrypt(secretKey, rlwe, &res);
         res->SetLength(len);
         return res->GetCoefPackedValue();
     }
@@ -174,13 +187,15 @@ namespace server {
                         I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
                         DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
 
+                        DEBUG_PRINT("hasWritten before add: " << Decrypt(cc, secretKey, hasWritten));
                         hasWritten = EvalAddRGSW(cc, hasWritten, h);
-                        DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten, 1 << L));
+                        DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten));
                     }
                 }
             }
         }
 
+        DEBUG_PRINT("");
         return hasWritten;
     };
 }
