@@ -30,8 +30,9 @@ namespace Context
         const size_t ell
     ) {
         // DEBUG_TIMER("Encrypt RGSW (Textbook method)");
+        // static_assert(plaintext.GetEncodingType() == COEFPACKED, "Encrypt_Textbook only supports COEFPACKED plaintexts");
 
-        const Plaintext zero   = this->MakePackedPlaintext({ 0 });
+        const Plaintext zero   = this->MakeCoefPackedPlaintext({ 0 });
 
         std::vector<Ciphertext<DCRTPoly>> G(2 * ell);
 
@@ -78,7 +79,7 @@ namespace Context
     ) {
         // DEBUG_TIMER("External Product (Textbook method)");
 
-        const size_t ell = rgsw.size() / 2;
+        const size_t ell = rgsw.size() / 2; // TODO: Use parameter again
 
         // Decompose both ciphertext components in base B
         DCRTPoly b = rlwe->GetElements()[0];
