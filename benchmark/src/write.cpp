@@ -29,8 +29,8 @@ public:
     for (auto _ : s) { server::TestServerWrite<DCRTPoly, K, D, L>(p); } \
 }
 
-// TODO: Only benchmark with K = D = 3
-MAKE_BENCHMARK(all_1s, 1, 1, 1, CreateParams(5))
-MAKE_BENCHMARK(all_2s, 2, 2, 1, CreateParams(12))
+// TODO: Only benchmark with K = D = 3?
+MAKE_BENCHMARK(mvp, 1, 1, 1, CreateParams(5))
+MAKE_BENCHMARK(N2, 3, 3, 1, CreateParams(10))
 
 BENCHMARK_MAIN();

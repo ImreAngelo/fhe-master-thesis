@@ -78,7 +78,7 @@ namespace server {
             ASSERT_EQ(hw[0], 1);
         }
 
-        // // Final state: L_mat[i][0] == i+1, L_mat[i][k>0] == 0.
+        // // Final state: L_mat[i] == i+1, L_mat[i] == 0.
         // for (uint64_t i = 0; i < N; i++) {
         //     for (uint32_t k = 0; k < K; k++) {
         //         auto cell = cc->EvalExternalProduct(rlwe_one, L_mat[i][k]);

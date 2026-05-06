@@ -129,7 +129,7 @@ namespace server {
      * 
      * @returns encrypted boolean indicating whether the operation was successful
      */
-    template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
+    template <typename T = DCRTPoly, uint32_t K = 3, uint32_t D = 3, uint32_t L = 1>
     inline RGSWCiphertext<T> Write(
         const Context::ExtendedCryptoContext<T>& cc,
         const PublicKey<T>& publicKey,
@@ -138,7 +138,7 @@ namespace server {
         std::array<std::array<RGSWCiphertext<T>, K>, (uint64_t(1) << L)>& I_mat,
         const std::array<std::array<RGSWCiphertext<T>, (uint64_t(1) << L)>, D>& z,
         const PrivateKey<T>& secretKey, // for debugging
-        const uint64_t iteration = 1
+        const uint32_t iteration = 1
     ) {
         const auto one  = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 1 }));
         auto hasWritten = Encrypt(cc, publicKey, cc->MakePackedPlaintext({ 0 }));
@@ -146,7 +146,7 @@ namespace server {
         {
             DEBUG_TIMER("Server Write");
     
-            // FASTER DEBUGGING: First user always writes in their preferred bin
+            // FASTER: First user always writes to their preferred slot/bin
             for(uint32_t d = 0; d < std::min(D, iteration); d++) {
                 DEBUG_PRINT("candidate: " << d);
                 for (uint32_t k = 0; k < std::min(K, iteration); k++) {
@@ -162,17 +162,19 @@ namespace server {
                         DEBUG_PRINT("Can write? " << Decrypt(cc, secretKey, sub));
 
                         auto h   = EvalInternalProduct(cc, zI, sub);
-                        DEBUG_PRINT("Write operation? " << Decrypt(cc, secretKey, h));
+                        DEBUG_PRINT("Will write? " << Decrypt(cc, secretKey, h));
     
-                        L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], server::EvalMultPlain(cc, Vr, h));
+                        auto val = server::EvalMultPlain(cc, Vr, h);
+                        DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
+
+                        DEBUG_PRINT("L_mat[" << i << "][" << k << "] before writing: " << Decrypt(cc, secretKey, L_mat[i][k]));
+                        L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], val);
                         DEBUG_PRINT("L_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, L_mat[i][k]));
 
                         I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
                         DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
 
                         hasWritten = EvalAddRGSW(cc, hasWritten, h);
-
-                        // DEBUG_PRINT("i: " << i << ", k: " << k << ", d: " << d);
                         DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten, 1 << L));
                     }
                 }

@@ -15,16 +15,16 @@
 
 using namespace lbcrypto;
 
-inline CCParams<CryptoContextRGSWBGV> GetParams() {
+inline CCParams<CryptoContextRGSWBGV> GetParams(const uint32_t log_N = 11) {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(2));
-    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
-    params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
+    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(1));
+    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(2));
+    params.SetRingDim(test_cli::g_ring_dim.value_or(1 << log_N));
+
+    // TODO: What is the security parameter?
+    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
 
     params.SetMaxRelinSkDeg(0); // Force no relinearization keys
-
-    // RGSW rows are built by hand → avoid per-level scaling (S_L = 1 needed).
-    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDMANUAL));
 
     DEBUG_PRINT("Depth = " << params.GetMultiplicativeDepth());
     DEBUG_PRINT("Ring Dim. = " << params.GetRingDim());
