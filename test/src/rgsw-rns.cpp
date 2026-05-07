@@ -6,6 +6,8 @@
 #include "core/params.h"
 #include "core/rgsw.h"
 
+#include "encoding/plaintextfactory.h"
+
 #include "../cli_params.h"
 
 #include <cstdint>
@@ -123,6 +125,27 @@ namespace BV {
     }
 }
 
+/**
+ * @brief Wrap a noise-free encoded ring element back into a packed Plaintext.
+ *
+ * Assumes `element` already represents an encoded plaintext (no scaling, no
+ * key-switching residue) — e.g. the output of the BV-RNS gadget identity.
+ * PackedEncoding::Decode() reads tower 0, applies Unpack, and reduces mod t.
+ */
+inline Plaintext DCRTToPackedPlaintext(const CryptoContext<DCRTPoly>& cc, DCRTPoly element) {
+    // PackedEncoding::Unpack expects COEFFICIENT-form input (the SIMD inverse
+    // transform is itself a "coeff → eval" NTT mod t).
+    element.SetFormat(Format::COEFFICIENT);
+    auto pt = PlaintextFactory::MakePlaintext(
+        PACKED_ENCODING,
+        cc->GetElementParams(),
+        cc->GetEncodingParams(),
+        cc->getSchemeId());
+    pt->GetElement<DCRTPoly>() = std::move(element);
+    pt->Decode();
+    return pt;
+}
+
 
 inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
@@ -165,12 +188,20 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     // Identity 1: reconstruction
     const auto g = BV::GadgetVector(cc);
-    ASSERT_EQ(BV::InnerProduct(d, g), m);
+    DCRTPoly reconstructed = BV::InnerProduct(d, g);
+    ASSERT_EQ(reconstructed, m);
+
+    // Round-trip back to a Plaintext via the high-level API.
+    Plaintext recovered = DCRTToPackedPlaintext(cc, reconstructed);
+    recovered->SetLength(value.size());
+    ASSERT_EQ(recovered->GetPackedValue(), value);
 
     // Identity 2: <D(m), P(m)> = m·m
     const auto P = BV::GadgetMul(cc, m);
     DCRTPoly mm = m * m;
     ASSERT_EQ(BV::InnerProduct(d, P), mm);
+
+    DEBUG_PRINT(recovered);
 }
 
 TEST(RGSW_RNS_BV, b0)    { RunTest({ 0 }); }
