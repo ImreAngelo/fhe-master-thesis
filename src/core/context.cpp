@@ -126,6 +126,12 @@ namespace Context
         return result;
     }
 
+
+    //------------------------------//
+    // HYBRID (RNS) IMPLEMENTATIONS //
+    //------------------------------//
+
+
 //     // ----------------------------------------------------------------------
 //     // Helper: ApproxModDown a single QP DCRTPoly back to Q (BGV t-aware).
 //     // Mirrors the call at keyswitch-hybrid.cpp:389-398.

@@ -52,6 +52,10 @@ namespace server {
             }
         }
 
+        DEBUG_PRINT("Initial state:");
+        server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+        server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
+
         for (uint64_t r = 0; r < N; r++) {
             DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
             DEBUG_TIMER("User " + std::to_string(r + 1));
@@ -65,18 +69,12 @@ namespace server {
             const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
             // Output results
-            auto hw = server::Decrypt(cc, keys.secretKey, hasWritten, N);
+            auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
             DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
 
-            for(const auto& ct : L_mat[r]) {
-                auto cell = server::Decrypt(cc, keys.secretKey, ct);
-                DEBUG_PRINT("L[" << r << "][0]: " << cell);
-            }
-
-            for(const auto& ct : I_mat[r]) {
-                auto cell = server::Decrypt(cc, keys.secretKey, ct);
-                DEBUG_PRINT("I[" << r << "]: " << cell);
-            }
+            DEBUG_PRINT("");
+            server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+            server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
 
             // Verify hasWritten is correct for this user
             ASSERT_EQ(RECENTER(hw[0], t), 1);

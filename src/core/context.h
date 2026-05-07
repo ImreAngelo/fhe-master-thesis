@@ -45,6 +45,16 @@ namespace Context
             const uint64_t log_B // TODO: Make parameter
         ) const;
 
+    // Hybrid (RNS) implementations
+    // public:
+        
+    // protected:
+    //     // TODO: Move to params class    
+    //     m_gadgetElements; // Cache of D_Qi(a) gadget elements for EvalExternalProduct
+
+    //     inline const std::vector<T>& GetGadgetElements() const;
+
+
     // /// @brief RNS-implementation
     // public:
     //     /**

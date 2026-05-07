@@ -4,12 +4,12 @@
 
 using namespace lbcrypto;
 
-inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDimLog = 14) {
+inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDimLog = 11) {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(depth);
     params.SetPlaintextModulus(8);
     params.SetRingDim(1 << ringDimLog);
-    // params.SetScalingTechnique(FIXEDMANUAL);
+    params.SetScalingTechnique(FIXEDMANUAL);
 
     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     return params;

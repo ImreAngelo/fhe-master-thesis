@@ -4,6 +4,14 @@
 #include "core/context.h"
 #include "utils/timer.h"
 
+
+#if defined(DEBUG_LOGGING) || defined(DEBUG)
+    #define DEBUG_PRINT_SAMELINE(x) std::cout << x;
+#else
+    #define DEBUG_PRINT_SAMELINE(x)
+#endif
+
+
 namespace server {
     using namespace lbcrypto;
 
@@ -28,7 +36,7 @@ namespace server {
         const Plaintext& plaintext
     ) {
         const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
-        const size_t ell = log_q / B_LOG + 1;
+        const size_t ell = std::round(log_q / B_LOG) + 1;
         return cc->EncryptRGSW(publicKey, plaintext, B_LOG, ell);
     }
 
@@ -122,9 +130,32 @@ namespace server {
         return res->GetCoefPackedValue();
     }
     
-    // -------------------------------- //
-    // Easily swappable implementations //
-    // -------------------------------- //
+    // --------- //
+    // Debugging //
+    // --------- //
+
+    namespace debug {
+        template <typename Poly, typename T, size_t K, uint64_t N>
+        void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<std::array<T, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
+            DEBUG_PRINT_SAMELINE(label << ": ");
+            for (uint64_t i = 0; i < N; i++) {
+                DEBUG_PRINT_SAMELINE("\t[ ");
+                for (size_t k = 0; k < K; k++) {
+                    auto cell = server::Decrypt(cc, secretKey, mat[i][k]);
+                    DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
+                }
+            }
+        }
+
+        template <typename Poly, typename T, size_t K>
+        void PrintRow(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<T, K>& row, const PrivateKey<DCRTPoly>& secretKey) {
+            DEBUG_PRINT_SAMELINE(label << ":\t[ ");
+            for (size_t k = 0; k < K; k++) {
+                auto cell = server::Decrypt(cc, secretKey, row[k]);
+                DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
+            }
+        }
+    }
     
     /**
      * @brief Loop 2 of sPAR Algorithm 2
@@ -161,12 +192,15 @@ namespace server {
     
             // FASTER: First user always writes to their preferred slot/bin
             for(uint32_t d = 0; d < std::min(D, iteration); d++) {
-                DEBUG_PRINT("candidate: " << d);
+                DEBUG_PRINT("candidate: " << d << " < " << std::min(D, iteration));
                 for (uint32_t k = 0; k < std::min(K, iteration); k++) {
-                    DEBUG_PRINT("bin: " << k);
+                    DEBUG_PRINT("bin: " << k << " < " << std::min(K, iteration));
                     for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
                         DEBUG_PRINT("slot: " << i);
                         DEBUG_TIMER("iteration");
+
+                        auto z_dec = Decrypt(cc, secretKey, z[d][i]);
+                        DEBUG_PRINT("Asking? " << z_dec[0]);
                         
                         auto zI  = EvalInternalProduct(cc, z[d][i], I_mat[i][k]);
                         DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
@@ -180,9 +214,13 @@ namespace server {
                         auto val = server::EvalMultPlain(cc, Vr, h);
                         DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
 
-                        DEBUG_PRINT("L_mat[" << i << "][" << k << "] before writing: " << Decrypt(cc, secretKey, L_mat[i][k]));
+                        debug::PrintRow("L_mat[" + std::to_string(i) + "] before", cc, L_mat[i], secretKey);
+
+                        // DEBUG_PRINT("L_mat[" << i << "][" << k << "] before writing: " << Decrypt(cc, secretKey, L_mat[i][k]));
                         L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], val);
-                        DEBUG_PRINT("L_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, L_mat[i][k]));
+                        // DEBUG_PRINT("L_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, L_mat[i][k]));
+                        
+                        debug::PrintRow("L_mat[" + std::to_string(i) + "] after", cc, L_mat[i], secretKey);
 
                         I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
                         DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
@@ -190,6 +228,9 @@ namespace server {
                         DEBUG_PRINT("hasWritten before add: " << Decrypt(cc, secretKey, hasWritten));
                         hasWritten = EvalAddRGSW(cc, hasWritten, h);
                         DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten));
+
+                        debug::PrintMatrix("L", cc, L_mat, secretKey); DEBUG_PRINT("");
+                        debug::PrintMatrix("I", cc, I_mat, secretKey); DEBUG_PRINT("");
                     }
                 }
             }
@@ -198,7 +239,7 @@ namespace server {
         DEBUG_PRINT("");
         return hasWritten;
     };
-}
+} // namespace server
 
 namespace client {
     using namespace lbcrypto;
