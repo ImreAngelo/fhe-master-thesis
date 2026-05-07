@@ -6,6 +6,13 @@
 
 #include <vector>
 
+// TODO: Clean up
+#if defined(TEST_INTERNAL_FUNCTIONS) 
+#define PUBLIC_FOR_TEST public
+#else
+#define PUBLIC_FOR_TEST protected
+#endif
+
 namespace Context
 {
     using namespace lbcrypto;
@@ -44,6 +51,68 @@ namespace Context
             const std::vector<Ciphertext<T>>& rgsw_right,
             const uint64_t log_B // TODO: Make parameter
         ) const;
+
+
+    /// @brief BV-RNS implementations
+    protected:
+        std::vector<NativeInteger> m_gadgetVectorScalars;
+        std::vector<NativeInteger> m_gadgetDecompVectorScalars;
+
+    PUBLIC_FOR_TEST:
+        /**
+         * @brief Create the vector D_Qi(a) = ([a(Q_i/q_0)^{-1}] mod q0, ...) from page 32 (BV-RNS)
+         * 
+         * See Appendix B.2 of https://eprint.iacr.org/2021/204 for more details.
+         * 
+         * @todo Create and cache on object creation
+         */
+        std::vector<NativeInteger> GetGadgetElements();
+
+        /**
+         * @brief Create the gadget vector D_Q(a) used in RGSW encryption from D_Q (see above) 
+         */
+        std::vector<DCRTPoly> GetGadgetVector(const Plaintext& msg);
+
+        /**
+         * @brief Create the vector P_Qi(a) = ([a(Q_i/q_0)^{-1}] mod q0, ...) from page 32 (BV-RNS)
+         * 
+         * See Appendix B.2 of https://eprint.iacr.org/2021/204 for more details.
+         * 
+         * @todo Create and cache on object creation
+         */
+        std::vector<NativeInteger> GetGadgetDecompositionElements();
+
+        /**
+         * @brief Create the gadget vector D_Q(a) used in RGSW encryption from D_Q (see above) 
+         */
+        std::vector<DCRTPoly> GetGadgetDecompositionVector(const Plaintext& msg);
+
+    public:
+        
+
+        /**
+         * @brief Computes the inner product of the Gadget Vector and Decomposition Vector.
+         * @returns The reconstructed result as a DCRTPoly for direct verification.
+         */
+        inline lbcrypto::DCRTPoly InnerProduct(
+            const std::vector<lbcrypto::DCRTPoly>& D_a, 
+            const std::vector<lbcrypto::DCRTPoly>& P_b
+        ) {
+            if (D_a.empty() || D_a.size() != P_b.size()) {
+                throw std::runtime_error("Vector sizes are invalid or do not match.");
+            }
+
+            // Initialize the sum using the parameters from the first element
+            lbcrypto::DCRTPoly resultSum(D_a[0].GetParams(), Format::EVALUATION, true);
+
+            for (size_t i = 0; i < D_a.size(); i++) {
+                // Component-wise product and accumulation
+                lbcrypto::DCRTPoly term = D_a[i] * P_b[i];
+                resultSum += term;
+            }
+
+            return resultSum;
+        }
 
     // Hybrid (RNS) implementations
     // public:

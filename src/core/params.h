@@ -5,12 +5,9 @@
 
 
 /**
- * @file params.h
  * @brief Parameters for ExtendedCryptoContext (BGV-RNS + RGSW).
  *
- * The RGSW gadget structure now reuses the hybrid keyswitch RNS digit
- * decomposition (dnum digits of α = numPerPartQ RNS limbs each). Set dnum
- * via the inherited CCParams<CryptoContextBGVRNS>::SetNumLargeDigits.
+ * Uses BV-RNS gadgets from Appendix B.2.1 of https://eprint.iacr.org/2021/204
  */
 namespace lbcrypto {
 
