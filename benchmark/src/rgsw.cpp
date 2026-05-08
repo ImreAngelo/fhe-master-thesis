@@ -13,18 +13,18 @@ using namespace lbcrypto;
 namespace {
 
 constexpr uint32_t DEPTH        = 3;
-constexpr uint32_t RING_DIM_LOG = 14;
-constexpr uint64_t PT_MODULUS   = 65537;
-
-constexpr uint32_t B_LOG = 10;
+constexpr uint64_t PT_MODULUS   = 8;
+constexpr uint32_t RING_DIM_LOG = 11;   // 2048
+constexpr uint32_t B_LOG = 15;          // 32768
 
 CCParams<CryptoContextRGSWBGV> MakeParams() {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(DEPTH);
     params.SetPlaintextModulus(PT_MODULUS);
     params.SetRingDim(1 << RING_DIM_LOG);
-    params.SetNumLargeDigits(2);
-    params.SetScalingTechnique(FIXEDMANUAL);
+    // params.SetNumLargeDigits(2);
+    // params.SetScalingTechnique(FIXEDMANUAL);
+    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     return params;
 }
 
@@ -41,12 +41,12 @@ public:
 
         keys = cc->KeyGen();
         
-        pt_one   = cc->MakePackedPlaintext({ 1 });
-        pt_msg   = cc->MakePackedPlaintext({ 2 });
-        pt_scale = cc->MakePackedPlaintext({ 3 });
+        pt_one   = cc->MakeCoefPackedPlaintext({ 1 });
+        pt_msg   = cc->MakeCoefPackedPlaintext({ 2 });
+        pt_scale = cc->MakeCoefPackedPlaintext({ 3 });
 
         rlwe_ct = cc->Encrypt(keys.publicKey, pt_one);
-        rgsw_ct = cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ell);
+        rgsw_ct = cc->EncryptRGSW(keys.publicKey, pt_msg, B_LOG, ell);
     }
 
     Context::ExtendedCryptoContext<DCRTPoly> cc;
@@ -67,8 +67,8 @@ public:
 }
 
 
-MAKE_BENCHMARK(Encrypt, cc->Encrypt_Textbook(keys.publicKey, pt_msg, B_LOG, ell))
-MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct_Textbook(rlwe_ct, rgsw_ct, ell))
-MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct_Textbook(rgsw_ct, rgsw_ct, ell))
+MAKE_BENCHMARK(Encrypt, cc->EncryptRGSW(keys.publicKey, pt_msg, B_LOG, ell))
+MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct(rlwe_ct, rgsw_ct, B_LOG))
+MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct, B_LOG))
 
 BENCHMARK_MAIN();

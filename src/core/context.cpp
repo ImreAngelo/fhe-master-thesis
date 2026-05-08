@@ -6,7 +6,126 @@
 
 namespace Context
 {
-    Ciphertext<DCRTPoly> ScalarMultCiphertext_old(
+    //------------------------//
+    // BV-RNS IMPLEMENTATIONS //
+    //------------------------//
+    
+    // TODO: Make separate context-bv.h/cpp and context-hybrid.h/cpp files
+    //       And shared Context::MakeExtendedContext(Gadgets::BV)
+    //       Consider also an implementation for the original version (with non-rns gadget decomp parameter)
+    namespace BV {
+        /**
+         * @brief Construct the BV-RNS gadget scalars used in the gadget vector
+         * 
+         * @param cc The current (base) crypto context
+         * @return std::vector<NativeInteger> with one NativeInteger per RNS-prime
+         */
+        static std::vector<NativeInteger> InverseGadgetScalars(const CryptoContextImpl<DCRTPoly>& cc) {
+            const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc.GetCryptoParameters());
+            const auto Q = params->GetElementParams()->GetModulus();
+            const auto q = params->GetElementParams()->GetParams();
+    
+            std::vector<NativeInteger> result;
+            result.reserve(q.size());
+            for (size_t i = 0; i < q.size(); i++) {
+                const auto qi = q[i]->GetModulus();
+                result.push_back((Q / BigInteger(qi)).Mod(qi).ModInverse(qi));
+            }
+            return result;
+        }
+
+        /**
+         * @brief Construct the BV-RNS gadget scalars used in the inverse gadget decomposition
+         * 
+         * @param cc The current (base) crypto context
+         * @return std::vector<NativeInteger> with one NativeInteger per RNS-prime
+         */
+        static std::vector<NativeInteger> GadgetScalars(const CryptoContextImpl<DCRTPoly>& cc) {
+            const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc.GetCryptoParameters());
+            const auto Q = params->GetElementParams()->GetModulus();
+            const auto q = params->GetElementParams()->GetParams();
+
+            std::vector<NativeInteger> result;
+            result.reserve(q.size());
+            for (size_t i = 0; i < q.size(); i++) {
+                const auto qi = q[i]->GetModulus();
+                result.push_back((Q / BigInteger(qi)).Mod(qi));
+            }
+            return result;
+        }
+    }
+
+    template <typename T>
+    ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
+    : CryptoContextImpl<T>(base), m_params(params), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
+    
+    /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::Decompose(const T& a) const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> d;
+        d.reserve(q.size());
+
+        for (size_t i = 0; i < q.size(); i++) {
+            DCRTPoly di(params->GetElementParams(), a.GetFormat(), true);
+            const auto qi = q[i]->GetModulus();
+            auto tower = a.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
+            di.SetElementAtIndex(i, tower);
+            d.push_back(std::move(di));
+        }
+
+        return d;
+    }
+
+    /// @brief P_Q(b)_i = [b · (Q/q_i)]_Q. In RNS form only tower i is non-zero.
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetMul(const T& b) const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> P;
+        P.reserve(q.size());
+
+        for (size_t i = 0; i < q.size(); i++) {
+            DCRTPoly Pi(params->GetElementParams(), b.GetFormat(), true);
+            const auto qi = q[i]->GetModulus();
+            auto tower = b.GetElementAtIndex(i).Times(m_gadgetVectorScalars[i]).Mod(qi);
+            Pi.SetElementAtIndex(i, tower);
+            P.push_back(std::move(Pi));
+        }
+        
+        return P;
+    }
+
+    /// @brief Unscaled gadget vector g_i = [Q/q_i]_Q (i.e. P_Q(1)).
+    /// Useful for verifying the reconstruction identity <D_Q(a), g> ≡ a (mod Q).
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetVector() const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> out;
+        out.reserve(q.size());
+        for (size_t i = 0; i < q.size(); i++) {
+            // Constant polynomial g_i ∈ R_Q: only tower i is non-zero, holding the constant g[i].
+            DCRTPoly poly(params->GetElementParams(), Format::COEFFICIENT, true);
+            auto tower = poly.GetElementAtIndex(i);
+            tower[0] = m_gadgetVectorScalars[i];
+            poly.SetElementAtIndex(i, tower);
+            poly.SetFormat(Format::EVALUATION);
+            out.push_back(std::move(poly));
+        }
+        return out;
+    }
+
+
+    //-----//
+    // OLD //
+    //-----//
+    
+    inline Ciphertext<DCRTPoly> ScaleRLWECiphertext(
         const Ciphertext<DCRTPoly>& ct,
         const DCRTPoly& scalar
     ) {
@@ -17,30 +136,28 @@ namespace Context
         return result;
     }
 
-    template <typename T>
-    ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
-        : CryptoContextImpl<T>(base), m_params(params) {}
-
     /// @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
     template <typename T>
-    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::Encrypt_Textbook(
+    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::EncryptRGSW(
         const PublicKey<T> &publicKey, 
         const Plaintext &plaintext,
         const uint64_t log_B,
         const size_t ell
-    ) {
-        DEBUG_TIMER("Encrypt RGSW (Textbook method)");
+    ) const {
+        // DEBUG_TIMER("Encrypt RGSW");
+        // static_assert(plaintext.GetEncodingType() == COEFPACKED, "Encrypt_Textbook only supports COEFPACKED plaintexts");
 
-        const Plaintext zero   = this->MakePackedPlaintext({ 0 });
+        const Plaintext zero   = this->MakeCoefPackedPlaintext({ 0 });
 
         std::vector<Ciphertext<DCRTPoly>> G(2 * ell);
 
-        // Scale m by B^i at the R_Q polynomial level (per-tower integer mul)
+        // Encode m*B^i in each component
         DCRTPoly mScaled = plaintext->GetElement<DCRTPoly>();
         mScaled.SetFormat(Format::EVALUATION);
 
         const NativeInteger B(1ULL << log_B);
 
+        // TODO: Optimize with RLWE(m*B^i) + RLWE(m*B^i·s), reuse Z etc.
         for (size_t i = 0; i < ell; i++) {
             // Bottom row i+ell: message is m·B^i (injected into c0).
             // c0 + c1·s = t·e + m·B^i
@@ -71,14 +188,14 @@ namespace Context
     }
 
     template <typename T>
-    Ciphertext<T> ExtendedCryptoContextImpl<T>::EvalExternalProduct_Textbook(
+    Ciphertext<T> ExtendedCryptoContextImpl<T>::EvalExternalProduct(
         const Ciphertext<T> &rlwe, 
         const std::vector<Ciphertext<T>> &rgsw,
         const uint64_t log_B
-    ) {
-        DEBUG_TIMER("External Product (Textbook method)");
+    ) const {
+        // DEBUG_TIMER("External Product");
 
-        const size_t ell = rgsw.size() / 2;
+        const size_t ell = rgsw.size() / 2; // TODO: Use parameter again
 
         // Decompose both ciphertext components in base B
         DCRTPoly b = rlwe->GetElements()[0];
@@ -102,482 +219,597 @@ namespace Context
         const size_t vLen = v.size();
 
         // Accumulate: result = sum_i u[i]*Y[i] + sum_i v[i]*Y[ell+i]
-        auto result = ScalarMultCiphertext_old(rgsw[0], u[0]);
+        auto result = ScaleRLWECiphertext(rgsw[0], u[0]);
         for (size_t i = 1; i < uLen; i++)
-            result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i],       u[i]));
+            result = this->EvalAdd(result, ScaleRLWECiphertext(rgsw[i],       u[i]));
         for (size_t i = 0; i < vLen; i++)
-            result = this->EvalAdd(result, ScalarMultCiphertext_old(rgsw[i + ell], v[i]));
+            result = this->EvalAdd(result, ScaleRLWECiphertext(rgsw[i + ell], v[i]));
 
         return result;
     }
 
     template <typename T>
-    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::EvalInternalProduct_Textbook(
+    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
         const std::vector<Ciphertext<T>> &left, 
         const std::vector<Ciphertext<T>> &right, 
         const uint64_t log_B
-    ){
-        DEBUG_TIMER("Internal Product");
-
+    ) const {
+        // DEBUG_TIMER("Internal Product");
         std::vector<Ciphertext<T>> result(left.size());
         for(size_t i = 0; i < left.size(); i++)
-            result[i] = this->EvalExternalProduct_Textbook(left[i], right, log_B);
+            result[i] = this->EvalExternalProduct(left[i], right, log_B);
         return result;
     }
 
-    // ----------------------------------------------------------------------
-    // Helper: ApproxModDown a single QP DCRTPoly back to Q (BGV t-aware).
-    // Mirrors the call at keyswitch-hybrid.cpp:389-398.
-    // ----------------------------------------------------------------------
-    template <typename T>
-    DCRTPoly ExtendedCryptoContextImpl<T>::ApproxModDownToQ(
-        const DCRTPoly& xQP,
-        const std::shared_ptr<typename DCRTPoly::Params>& paramsQl
-    ) const {
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const PlaintextModulus t = (cp->GetNoiseScale() == 1) ? 0 : cp->GetPlaintextModulus();
-        return xQP.ApproxModDown(
-            paramsQl, cp->GetParamsP(),
-            cp->GetPInvModq(),    cp->GetPInvModqPrecon(),
-            cp->GetPHatInvModp(), cp->GetPHatInvModpPrecon(),
-            cp->GetPHatModq(),    cp->GetModqBarrettMu(),
-            cp->GettInvModp(),    cp->GettInvModpPrecon(),
-            t,                    cp->GettModqPrecon());
-    }
 
-    // ----------------------------------------------------------------------
-    // External product: RLWE × RGSW → RLWE.
-    //
-    //   1 ModUp on each RLWE component (via EvalKeySwitchPrecomputeCore)
-    // + 2 EvalFastKeySwitchCoreExt calls (one per RGSW side, dot product in QlP)
-    // + tower-wise add of the two QlP results
-    // + 2 ApproxModDown back to Ql (via the BGV-t-aware helper).
-    //
-    // Per-level alignment is automatic: EvalFastKeySwitchCoreExt uses the
-    // `delta = sizeQ - sizeQl` skip pattern when indexing into the full-Q
-    // EvalKey, so mod-reduced x against full-Q Y just works.
-    // ----------------------------------------------------------------------
-    template <typename T>
-    Ciphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalExternalProduct(
-        const Ciphertext<DCRTPoly>& x,
-        const RGSWCiphertext<DCRTPoly>& Y
-    ) {
-        DEBUG_TIMER("External Product");
+    //------------------------------//
+    // HYBRID (RNS) IMPLEMENTATIONS //
+    //------------------------------//
 
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        if (!cp)
-            throw std::runtime_error("EvalExternalProduct: cryptoparams not RNS");
-        if (!Y.top || !Y.bot)
-            throw std::runtime_error("EvalExternalProduct: RGSW operand has null top/bot key");
 
-        const auto& cv = x->GetElements();
-        const auto paramsQl = cv[0].GetParams();
+//     // ----------------------------------------------------------------------
+//     // Helper: ApproxModDown a single QP DCRTPoly back to Q (BGV t-aware).
+//     // Mirrors the call at keyswitch-hybrid.cpp:389-398.
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     DCRTPoly ExtendedCryptoContextImpl<T>::ApproxModDownToQ(
+//         const DCRTPoly& xQP,
+//         const std::shared_ptr<typename DCRTPoly::Params>& paramsQl
+//     ) const {
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         const PlaintextModulus t = (cp->GetNoiseScale() == 1) ? 0 : cp->GetPlaintextModulus();
+//         return xQP.ApproxModDown(
+//             paramsQl, cp->GetParamsP(),
+//             cp->GetPInvModq(),    cp->GetPInvModqPrecon(),
+//             cp->GetPHatInvModp(), cp->GetPHatInvModpPrecon(),
+//             cp->GetPHatModq(),    cp->GetModqBarrettMu(),
+//             cp->GettInvModp(),    cp->GettInvModpPrecon(),
+//             t,                    cp->GettModqPrecon());
+//     }
 
-        KeySwitchHYBRID ks;
-        auto vDigits = ks.EvalKeySwitchPrecomputeCore(cv[0], cp);  // b → digits
-        auto uDigits = ks.EvalKeySwitchPrecomputeCore(cv[1], cp);  // a → digits
+//     // ----------------------------------------------------------------------
+//     // External product: RLWE × RGSW → RLWE.
+//     //
+//     //   1 ModUp on each RLWE component (via EvalKeySwitchPrecomputeCore)
+//     // + 2 EvalFastKeySwitchCoreExt calls (one per RGSW side, dot product in QlP)
+//     // + tower-wise add of the two QlP results
+//     // + 2 ApproxModDown back to Ql (via the BGV-t-aware helper).
+//     //
+//     // Per-level alignment is automatic: EvalFastKeySwitchCoreExt uses the
+//     // `delta = sizeQ - sizeQl` skip pattern when indexing into the full-Q
+//     // EvalKey, so mod-reduced x against full-Q Y just works.
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     Ciphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalExternalProduct(
+//         const Ciphertext<DCRTPoly>& x,
+//         const RGSWCiphertext<DCRTPoly>& Y
+//     ) {
+//         // DEBUG_TIMER("External Product");
 
-        if (uDigits->size() > Y.size())
-            throw std::runtime_error("EvalExternalProduct: RGSW has fewer digits than current level requires");
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         if (!cp)
+//             throw std::runtime_error("EvalExternalProduct: cryptoparams not RNS");
+//         if (!Y.top || !Y.bot)
+//             throw std::runtime_error("EvalExternalProduct: RGSW operand has null top/bot key");
 
-        // Two dot products in QlP via OpenFHE's primitive (delta-skip + OMP).
-        auto topRes = ks.EvalFastKeySwitchCoreExt(uDigits, Y.top, paramsQl);
-        auto botRes = ks.EvalFastKeySwitchCoreExt(vDigits, Y.bot, paramsQl);
+//         const auto& cv = x->GetElements();
+//         const auto paramsQl = cv[0].GetParams();
 
-        // Sum the two sides in QlP, then a single shared ApproxModDown per slot.
-        DCRTPoly r0 = (*topRes)[0] + (*botRes)[0];
-        DCRTPoly r1 = (*topRes)[1] + (*botRes)[1];
+//         KeySwitchHYBRID ks;
+//         auto vDigits = ks.EvalKeySwitchPrecomputeCore(cv[0], cp);  // b → digits
+//         auto uDigits = ks.EvalKeySwitchPrecomputeCore(cv[1], cp);  // a → digits
 
-        auto out0 = ApproxModDownToQ(r0, paramsQl);
-        auto out1 = ApproxModDownToQ(r1, paramsQl);
+//         if (uDigits->size() > Y.size())
+//             throw std::runtime_error("EvalExternalProduct: RGSW has fewer digits than current level requires");
 
-        auto result = x->CloneEmpty();
-        result->SetElements({ std::move(out0), std::move(out1) });
-        result->SetLevel(x->GetLevel());
-        result->SetNoiseScaleDeg(x->GetNoiseScaleDeg());
-        return result;
-    }
+//         // Two dot products in QlP via OpenFHE's primitive (delta-skip + OMP).
+//         auto topRes = ks.EvalFastKeySwitchCoreExt(uDigits, Y.top, paramsQl);
+//         auto botRes = ks.EvalFastKeySwitchCoreExt(vDigits, Y.bot, paramsQl);
 
-    // ----------------------------------------------------------------------
-    // Encrypt RGSW: build dnum (a, b) pairs in QP basis per side.
-    //
-    // Mirrors KeySwitchHYBRID::KeySwitchGenInternal(privateKey, privateKey)
-    // exactly, with `m` playing the role of `sOld` for both sides:
-    //   top: sOld ↦ m * s   (result row encrypts m * P * g_j * s)
-    //   bot: sOld ↦ m       (result row encrypts m * P * g_j)
-    // ----------------------------------------------------------------------
-    template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
-        const PrivateKey<DCRTPoly>& secretKey,
-        const Plaintext& plaintext
-    ) {
-        DEBUG_TIMER("Encrypt RGSW");
+//         // Sum the two sides in QlP, then a single shared ApproxModDown per slot.
+//         DCRTPoly r0 = (*topRes)[0] + (*botRes)[0];
+//         DCRTPoly r1 = (*topRes)[1] + (*botRes)[1];
 
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        if (!cp)
-            throw std::runtime_error("EncryptRGSW: cryptoparams not RNS");
+//         auto out0 = ApproxModDownToQ(r0, paramsQl);
+//         auto out1 = ApproxModDownToQ(r1, paramsQl);
 
-        const auto paramsQ  = cp->GetElementParams();
-        const auto paramsQP = cp->GetParamsQP();
-        const auto& pparamsQP = paramsQP->GetParams();
-        const uint32_t sizeQ  = paramsQ->GetParams().size();
-        const uint32_t sizeQP = paramsQP->GetParams().size();
+//         auto result = x->CloneEmpty();
+//         result->SetElements({ std::move(out0), std::move(out1) });
+//         result->SetLevel(x->GetLevel());
+//         result->SetNoiseScaleDeg(x->GetNoiseScaleDeg());
+//         return result;
+//     }
 
-        const uint32_t numPerPartQ = cp->GetNumPerPartQ();
-        const uint32_t numPartQ    = cp->GetNumPartQ();
+//     // ----------------------------------------------------------------------
+//     // Encrypt RGSW: build dnum (a, b) pairs in QP basis per side.
+//     //
+//     // Mirrors KeySwitchHYBRID::KeySwitchGenInternal(privateKey, privateKey)
+//     // exactly, with `m` playing the role of `sOld` for both sides:
+//     //   top: sOld ↦ m * s   (result row encrypts m * P * g_j * s)
+//     //   bot: sOld ↦ m       (result row encrypts m * P * g_j)
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
+//         const PrivateKey<DCRTPoly>& secretKey,
+//         const Plaintext& plaintext
+//     ) {
+//         // DEBUG_TIMER("Encrypt RGSW");
 
-        // Encode message as DCRTPoly in Q.
-        // Plaintext mPlain = this->MakePackedPlaintext(msg);
-        // if (!mPlain->Encode())
-        //     throw std::runtime_error("EncryptRGSW: failed to encode plaintext");
-        DCRTPoly mDCRT = plaintext->GetElement<DCRTPoly>();
-        mDCRT.SetFormat(Format::EVALUATION);
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         if (!cp)
+//             throw std::runtime_error("EncryptRGSW: cryptoparams not RNS");
 
-        // Build m*s in Q (used for top rows). m is the message; s is the secret.
-        const auto& sQ = secretKey->GetPrivateElement();
-        DCRTPoly msQ = mDCRT * sQ;
+//         const auto paramsQ  = cp->GetElementParams();
+//         const auto paramsQP = cp->GetParamsQP();
+//         const auto& pparamsQP = paramsQP->GetParams();
+//         const uint32_t sizeQ  = paramsQ->GetParams().size();
+//         const uint32_t sizeQP = paramsQP->GetParams().size();
 
-        // Extend secret s to QP (mirrors KeySwitchGenInternal lines 61-83).
-        DCRTPoly sExt(paramsQP, Format::EVALUATION, true);
-        auto s0 = sQ.GetElementAtIndex(0);
-        s0.SetFormat(Format::COEFFICIENT);
-#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(sizeQP))
-        for (uint32_t i = 0; i < sizeQP; ++i) {
-            if (i < sizeQ) {
-                auto tmp = sQ.GetElementAtIndex(i);
-                tmp.SetFormat(Format::EVALUATION);
-                sExt.SetElementAtIndex(i, std::move(tmp));
-            } else {
-                auto tmp = s0;
-                tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
-                tmp.SetFormat(Format::EVALUATION);
-                sExt.SetElementAtIndex(i, std::move(tmp));
-            }
-        }
+//         const uint32_t numPerPartQ = cp->GetNumPerPartQ();
+//         const uint32_t numPartQ    = cp->GetNumPartQ();
 
-        const auto ns = cp->GetNoiseScale();
-        const auto& PModq = cp->GetPModq();
-        auto dgg = cp->GetDiscreteGaussianGenerator();
-        typename DCRTPoly::DugType dug;
+//         // Encode message as DCRTPoly in Q.
+//         // Plaintext mPlain = this->MakePackedPlaintext(msg);
+//         // if (!mPlain->Encode())
+//         //     throw std::runtime_error("EncryptRGSW: failed to encode plaintext");
+//         DCRTPoly mDCRT = plaintext->GetElement<DCRTPoly>();
+//         mDCRT.SetFormat(Format::EVALUATION);
 
-        // Build A/B vectors for both sides into local accumulators; these are
-        // moved into freshly-allocated EvalKeyRelinImpl objects at the end.
-        std::vector<DCRTPoly> topAVec(numPartQ), topBVec(numPartQ);
-        std::vector<DCRTPoly> botAVec(numPartQ), botBVec(numPartQ);
+//         // Build m*s in Q (used for top rows). m is the message; s is the secret.
+//         const auto& sQ = secretKey->GetPrivateElement();
+//         DCRTPoly msQ = mDCRT * sQ;
 
-        // For each partition j, build (a, b) pair for top and bot.
-        // Mirrors keyswitch-hybrid.cpp:98 — outer parallel with private RNGs.
-#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(numPartQ)) private(dug, dgg)
-        for (uint32_t part = 0; part < numPartQ; ++part) {
-            const uint32_t startPartIdx = numPerPartQ * part;
-            const uint32_t endPartIdx   = (sizeQ > startPartIdx + numPerPartQ) ? (startPartIdx + numPerPartQ) : sizeQ;
+//         // Extend secret s to QP (mirrors KeySwitchGenInternal lines 61-83).
+//         DCRTPoly sExt(paramsQP, Format::EVALUATION, true);
+//         auto s0 = sQ.GetElementAtIndex(0);
+//         s0.SetFormat(Format::COEFFICIENT);
+// #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(sizeQP))
+//         for (uint32_t i = 0; i < sizeQP; ++i) {
+//             if (i < sizeQ) {
+//                 auto tmp = sQ.GetElementAtIndex(i);
+//                 tmp.SetFormat(Format::EVALUATION);
+//                 sExt.SetElementAtIndex(i, std::move(tmp));
+//             } else {
+//                 auto tmp = s0;
+//                 tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
+//                 tmp.SetFormat(Format::EVALUATION);
+//                 sExt.SetElementAtIndex(i, std::move(tmp));
+//             }
+//         }
 
-            // ---- top side: payload = m * s in Q-side ∩ partition_j ----
-            {
-                DCRTPoly a(dug, paramsQP, Format::EVALUATION);
-                DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
-                DCRTPoly b(paramsQP, Format::EVALUATION, true);
-                for (uint32_t i = 0; i < sizeQP; ++i) {
-                    const auto& ai  = a.GetElementAtIndex(i);
-                    const auto& ei  = e.GetElementAtIndex(i);
-                    const auto& sni = sExt.GetElementAtIndex(i);
-                    if (i < startPartIdx || i >= endPartIdx) {
-                        b.SetElementAtIndex(i, (-ai * sni) + (ns * ei));
-                    } else {
-                        const auto& msi = msQ.GetElementAtIndex(i);  // (m * s) in tower i (i < sizeQ here)
-                        b.SetElementAtIndex(i, (-ai * sni) + (ns * ei) + (PModq[i] * msi));
-                    }
-                }
-                topAVec[part] = std::move(a);
-                topBVec[part] = std::move(b);
-            }
+//         const auto ns = cp->GetNoiseScale();
+//         const auto& PModq = cp->GetPModq();
+//         auto dgg = cp->GetDiscreteGaussianGenerator();
+//         typename DCRTPoly::DugType dug;
 
-            // ---- bot side: payload = m in Q-side ∩ partition_j ----
-            {
-                DCRTPoly a(dug, paramsQP, Format::EVALUATION);
-                DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
-                DCRTPoly b(paramsQP, Format::EVALUATION, true);
-                for (uint32_t i = 0; i < sizeQP; ++i) {
-                    const auto& ai  = a.GetElementAtIndex(i);
-                    const auto& ei  = e.GetElementAtIndex(i);
-                    const auto& sni = sExt.GetElementAtIndex(i);
-                    if (i < startPartIdx || i >= endPartIdx) {
-                        b.SetElementAtIndex(i, (-ai * sni) + (ns * ei));
-                    } else {
-                        const auto& mi = mDCRT.GetElementAtIndex(i);
-                        b.SetElementAtIndex(i, (-ai * sni) + (ns * ei) + (PModq[i] * mi));
-                    }
-                }
-                botAVec[part] = std::move(a);
-                botBVec[part] = std::move(b);
-            }
-        }
+//         // Build A/B vectors for both sides into local accumulators; these are
+//         // moved into freshly-allocated EvalKeyRelinImpl objects at the end.
+//         std::vector<DCRTPoly> topAVec(numPartQ), topBVec(numPartQ);
+//         std::vector<DCRTPoly> botAVec(numPartQ), botBVec(numPartQ);
 
-        // Wrap the per-side vectors as EvalKeys so EvalFastKeySwitchCoreExt can
-        // consume them directly. Reuses the secret key's CryptoContext (the
-        // EvalKeyImpl base class needs it for GetCryptoParameters()).
-        auto cc = secretKey->GetCryptoContext();
-        auto topKey = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
-        topKey->SetAVector(std::move(topAVec));
-        topKey->SetBVector(std::move(topBVec));
-        auto botKey = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
-        botKey->SetAVector(std::move(botAVec));
-        botKey->SetBVector(std::move(botBVec));
+//         // For each partition j, build (a, b) pair for top and bot.
+//         // Mirrors keyswitch-hybrid.cpp:98 — outer parallel with private RNGs.
+// #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(numPartQ)) private(dug, dgg)
+//         for (uint32_t part = 0; part < numPartQ; ++part) {
+//             const uint32_t startPartIdx = numPerPartQ * part;
+//             const uint32_t endPartIdx   = (sizeQ > startPartIdx + numPerPartQ) ? (startPartIdx + numPerPartQ) : sizeQ;
 
-        RGSWCiphertext<DCRTPoly> G;
-        G.top = std::move(topKey);
-        G.bot = std::move(botKey);
-        return G;
-    }
+//             // ---- top side: payload = m * s in Q-side ∩ partition_j ----
+//             {
+//                 DCRTPoly a(dug, paramsQP, Format::EVALUATION);
+//                 DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
+//                 DCRTPoly b(paramsQP, Format::EVALUATION, true);
+//                 for (uint32_t i = 0; i < sizeQP; ++i) {
+//                     const auto& ai  = a.GetElementAtIndex(i);
+//                     const auto& ei  = e.GetElementAtIndex(i);
+//                     const auto& sni = sExt.GetElementAtIndex(i);
+//                     if (i < startPartIdx || i >= endPartIdx) {
+//                         b.SetElementAtIndex(i, (-ai * sni) + (ns * ei));
+//                     } else {
+//                         const auto& msi = msQ.GetElementAtIndex(i);  // (m * s) in tower i (i < sizeQ here)
+//                         b.SetElementAtIndex(i, (-ai * sni) + (ns * ei) + (PModq[i] * msi));
+//                     }
+//                 }
+//                 topAVec[part] = std::move(a);
+//                 topBVec[part] = std::move(b);
+//             }
 
-    // ----------------------------------------------------------------------
-    // Test/debug: decrypt one QP-basis (a, b) row by projecting back to Q
-    // (ApproxModDown cancels the P factor) then doing the standard BGV
-    // decryption b + a*s mod t.
-    // ----------------------------------------------------------------------
-    template <typename T>
-    Plaintext ExtendedCryptoContextImpl<T>::DecryptRGSWRow(
-        const PrivateKey<DCRTPoly>& secretKey,
-        const DCRTPoly& a,
-        const DCRTPoly& b
-    ) {
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto paramsQ = cp->GetElementParams();
+//             // ---- bot side: payload = m in Q-side ∩ partition_j ----
+//             {
+//                 DCRTPoly a(dug, paramsQP, Format::EVALUATION);
+//                 DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
+//                 DCRTPoly b(paramsQP, Format::EVALUATION, true);
+//                 for (uint32_t i = 0; i < sizeQP; ++i) {
+//                     const auto& ai  = a.GetElementAtIndex(i);
+//                     const auto& ei  = e.GetElementAtIndex(i);
+//                     const auto& sni = sExt.GetElementAtIndex(i);
+//                     if (i < startPartIdx || i >= endPartIdx) {
+//                         b.SetElementAtIndex(i, (-ai * sni) + (ns * ei));
+//                     } else {
+//                         const auto& mi = mDCRT.GetElementAtIndex(i);
+//                         b.SetElementAtIndex(i, (-ai * sni) + (ns * ei) + (PModq[i] * mi));
+//                     }
+//                 }
+//                 botAVec[part] = std::move(a);
+//                 botBVec[part] = std::move(b);
+//             }
+//         }
 
-        DCRTPoly aQ = ApproxModDownToQ(a, paramsQ);
-        DCRTPoly bQ = ApproxModDownToQ(b, paramsQ);
+//         // Wrap the per-side vectors as EvalKeys so EvalFastKeySwitchCoreExt can
+//         // consume them directly. Reuses the secret key's CryptoContext (the
+//         // EvalKeyImpl base class needs it for GetCryptoParameters()).
+//         auto cc = secretKey->GetCryptoContext();
+//         auto topKey = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
+//         topKey->SetAVector(std::move(topAVec));
+//         topKey->SetBVector(std::move(topBVec));
+//         auto botKey = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
+//         botKey->SetAVector(std::move(botAVec));
+//         botKey->SetBVector(std::move(botBVec));
 
-        // Construct a fresh ciphertext bound to the same CryptoContext as the
-        // secret key (the Ciphertext(Key) ctor steals the context from the key).
-        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(
-            std::static_pointer_cast<Key<DCRTPoly>>(secretKey));
-        ct->SetElements({ std::move(bQ), std::move(aQ) });
-        ct->SetEncodingType(PACKED_ENCODING);
-        ct->SetLevel(0);
-        ct->SetNoiseScaleDeg(1);
+//         RGSWCiphertext<DCRTPoly> G;
+//         G.top = std::move(topKey);
+//         G.bot = std::move(botKey);
+//         return G;
+//     }
 
-        Plaintext pt;
-        this->Decrypt(secretKey, ct, &pt);
-        return pt;
-    }
+//     // ----------------------------------------------------------------------
+//     // Test/debug: decrypt one QP-basis (a, b) row by projecting back to Q
+//     // (ApproxModDown cancels the P factor) then doing the standard BGV
+//     // decryption b + a*s mod t.
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     Plaintext ExtendedCryptoContextImpl<T>::DecryptRGSWRow(
+//         const PrivateKey<DCRTPoly>& secretKey,
+//         const DCRTPoly& a,
+//         const DCRTPoly& b
+//     ) {
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         const auto paramsQ = cp->GetElementParams();
 
-    // ----------------------------------------------------------------------
-    // Internal product: RGSW × RGSW → RGSW.
-    //
-    // For each (a, b) row of B (top and bot, dnum each):
-    //   1. ApproxModDown the row from QP → Q  (cancels the gadget P factor,
-    //      leaving an RLWE ciphertext that encrypts m_B · g_j  [bot]
-    //      or  m_B · g_j · s  [top]).
-    //   2. ModUp Q → QP via EvalKeySwitchPrecomputeCore.
-    //   3. Two EvalFastKeySwitchCoreExt calls (one against A.top, one against
-    //      A.bot), summed in QP. The QP result is *already* in RGSW gadget
-    //      format — the dot-product introduces a P factor on Q-side in the
-    //      partition we're processing and ≈ 0 elsewhere — so we keep it as-is.
-    //
-    // The original implementation rounded the QP result back to Q (one extra
-    // ApproxModDown per side) and then multiplied by P to "re-lift" — that's
-    // algebraically near-identity but a noise amplifier and a wasted pass.
-    // Skipping it cuts 4 ApproxModDowns + the P-lift loop out of every B-row
-    // and lowers the depth budget needed by the composed Internal+External.
-    // ----------------------------------------------------------------------
-    template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
-        const RGSWCiphertext<DCRTPoly>& A,
-        const RGSWCiphertext<DCRTPoly>& B
-    ) {
-        DEBUG_TIMER("Internal Product");
+//         DCRTPoly aQ = ApproxModDownToQ(a, paramsQ);
+//         DCRTPoly bQ = ApproxModDownToQ(b, paramsQ);
 
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        if (!cp)
-            throw std::runtime_error("EvalInternalProduct: cryptoparams not RNS");
-        if (A.size() != B.size())
-            throw std::runtime_error("EvalInternalProduct: dnum mismatch");
-        if (!A.top || !A.bot || !B.top || !B.bot)
-            throw std::runtime_error("EvalInternalProduct: RGSW operand has null top/bot key");
+//         // Construct a fresh ciphertext bound to the same CryptoContext as the
+//         // secret key (the Ciphertext(Key) ctor steals the context from the key).
+//         auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(
+//             std::static_pointer_cast<Key<DCRTPoly>>(secretKey));
+//         ct->SetElements({ std::move(bQ), std::move(aQ) });
+//         ct->SetEncodingType(PACKED_ENCODING);
+//         ct->SetLevel(0);
+//         ct->SetNoiseScaleDeg(1);
 
-        const auto paramsQ  = cp->GetElementParams();
-        const uint32_t dnum = static_cast<uint32_t>(A.size());
+//         Plaintext pt;
+//         this->Decrypt(secretKey, ct, &pt);
+//         return pt;
+//     }
 
-        KeySwitchHYBRID ks;
+//     // ----------------------------------------------------------------------
+//     // Internal product: RGSW × RGSW → RGSW.
+//     //
+//     // For each (a, b) row of B (top and bot, dnum each):
+//     //   1. ApproxModDown the row from QP → Q  (cancels the gadget P factor,
+//     //      leaving an RLWE ciphertext that encrypts m_B · g_j  [bot]
+//     //      or  m_B · g_j · s  [top]).
+//     //   2. ModUp Q → QP via EvalKeySwitchPrecomputeCore.
+//     //   3. Two EvalFastKeySwitchCoreExt calls (one against A.top, one against
+//     //      A.bot), summed in QP. The QP result is *already* in RGSW gadget
+//     //      format — the dot-product introduces a P factor on Q-side in the
+//     //      partition we're processing and ≈ 0 elsewhere — so we keep it as-is.
+//     //
+//     // The original implementation rounded the QP result back to Q (one extra
+//     // ApproxModDown per side) and then multiplied by P to "re-lift" — that's
+//     // algebraically near-identity but a noise amplifier and a wasted pass.
+//     // Skipping it cuts 4 ApproxModDowns + the P-lift loop out of every B-row
+//     // and lowers the depth budget needed by the composed Internal+External.
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
+//         const RGSWCiphertext<DCRTPoly>& A,
+//         const RGSWCiphertext<DCRTPoly>& B
+//     ) {
+//         // DEBUG_TIMER("Internal Product");
 
-        // Apply the external-product action of A to a single QP-basis row of
-        // B, returning the resulting QP-basis (a', b') already in RGSW gadget
-        // format for the same partition index this row came from.
-        auto applyAToRow = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
-            // (1) Project QP → Q, cancelling the gadget P factor in B's row.
-            DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
-            DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         if (!cp)
+//             throw std::runtime_error("EvalInternalProduct: cryptoparams not RNS");
+//         if (A.size() != B.size())
+//             throw std::runtime_error("EvalInternalProduct: dnum mismatch");
+//         if (!A.top || !A.bot || !B.top || !B.bot)
+//             throw std::runtime_error("EvalInternalProduct: RGSW operand has null top/bot key");
 
-            // (2) ModUp Q → QP digits.
-            auto uDig = ks.EvalKeySwitchPrecomputeCore(aQ, cp);
-            auto vDig = ks.EvalKeySwitchPrecomputeCore(bQ, cp);
+//         const auto paramsQ  = cp->GetElementParams();
+//         const uint32_t dnum = static_cast<uint32_t>(A.size());
 
-            // (3) Two dot-products in QP, summed. r0 ↔ B-side, r1 ↔ A-side.
-            // r0 + r1·s ≈ m_A · P · embed_Q(b_Q + a_Q·s) = m_A · m_B · P · g_j,
-            // i.e., already an RGSW row. No ApproxModDown / re-lift needed.
-            auto topRes = ks.EvalFastKeySwitchCoreExt(uDig, A.top, paramsQ);
-            auto botRes = ks.EvalFastKeySwitchCoreExt(vDig, A.bot, paramsQ);
+//         KeySwitchHYBRID ks;
 
-            DCRTPoly r0 = (*topRes)[0] + (*botRes)[0];
-            DCRTPoly r1 = (*topRes)[1] + (*botRes)[1];
+//         // Apply the external-product action of A to a single QP-basis row of
+//         // B, returning the resulting QP-basis (a', b') already in RGSW gadget
+//         // format for the same partition index this row came from.
+//         auto applyAToRow = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
+//             // (1) Project QP → Q, cancelling the gadget P factor in B's row.
+//             DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
+//             DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
 
-            return std::pair<DCRTPoly, DCRTPoly>{ std::move(r1), std::move(r0) };
-        };
+//             // (2) ModUp Q → QP digits.
+//             auto uDig = ks.EvalKeySwitchPrecomputeCore(aQ, cp);
+//             auto vDig = ks.EvalKeySwitchPrecomputeCore(bQ, cp);
 
-        std::vector<DCRTPoly> topAVec(dnum), topBVec(dnum);
-        std::vector<DCRTPoly> botAVec(dnum), botBVec(dnum);
+//             // (3) Two dot-products in QP, summed. r0 ↔ B-side, r1 ↔ A-side.
+//             // r0 + r1·s ≈ m_A · P · embed_Q(b_Q + a_Q·s) = m_A · m_B · P · g_j,
+//             // i.e., already an RGSW row. No ApproxModDown / re-lift needed.
+//             auto topRes = ks.EvalFastKeySwitchCoreExt(uDig, A.top, paramsQ);
+//             auto botRes = ks.EvalFastKeySwitchCoreExt(vDig, A.bot, paramsQ);
 
-        const auto& bTopA = B.top->GetAVector();
-        const auto& bTopB = B.top->GetBVector();
-        const auto& bBotA = B.bot->GetAVector();
-        const auto& bBotB = B.bot->GetBVector();
+//             DCRTPoly r0 = (*topRes)[0] + (*botRes)[0];
+//             DCRTPoly r1 = (*topRes)[1] + (*botRes)[1];
 
-        for (uint32_t j = 0; j < dnum; ++j) {
-            auto top = applyAToRow(bTopA[j], bTopB[j]);
-            auto bot = applyAToRow(bBotA[j], bBotB[j]);
-            topAVec[j] = std::move(top.first);
-            topBVec[j] = std::move(top.second);
-            botAVec[j] = std::move(bot.first);
-            botBVec[j] = std::move(bot.second);
-        }
+//             return std::pair<DCRTPoly, DCRTPoly>{ std::move(r1), std::move(r0) };
+//         };
 
-        auto cc = A.top->GetCryptoContext();
-        auto outTop = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
-        outTop->SetAVector(std::move(topAVec));
-        outTop->SetBVector(std::move(topBVec));
-        auto outBot = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
-        outBot->SetAVector(std::move(botAVec));
-        outBot->SetBVector(std::move(botBVec));
+//         std::vector<DCRTPoly> topAVec(dnum), topBVec(dnum);
+//         std::vector<DCRTPoly> botAVec(dnum), botBVec(dnum);
 
-        RGSWCiphertext<DCRTPoly> C;
-        C.top = std::move(outTop);
-        C.bot = std::move(outBot);
-        return C;
-    }
+//         const auto& bTopA = B.top->GetAVector();
+//         const auto& bTopB = B.top->GetBVector();
+//         const auto& bBotA = B.bot->GetAVector();
+//         const auto& bBotB = B.bot->GetBVector();
 
-    namespace {
-        // Element-wise combine the two sides of two RGSWs with a binary op on
-        // DCRTPoly (op is + or -). Both operands must have matching dnum and a
-        // non-null top/bot key.
-        template <typename Op>
-        RGSWCiphertext<DCRTPoly> CombineRGSW(
-            const RGSWCiphertext<DCRTPoly>& A,
-            const RGSWCiphertext<DCRTPoly>& B,
-            Op op,
-            const char* opName
-        ) {
-            if (A.size() != B.size())
-                throw std::runtime_error(std::string(opName) + ": dnum mismatch");
-            if (!A.top || !A.bot || !B.top || !B.bot)
-                throw std::runtime_error(std::string(opName) + ": RGSW operand has null top/bot key");
+//         for (uint32_t j = 0; j < dnum; ++j) {
+//             auto top = applyAToRow(bTopA[j], bTopB[j]);
+//             auto bot = applyAToRow(bBotA[j], bBotB[j]);
+//             topAVec[j] = std::move(top.first);
+//             topBVec[j] = std::move(top.second);
+//             botAVec[j] = std::move(bot.first);
+//             botBVec[j] = std::move(bot.second);
+//         }
 
-            const size_t d = A.size();
-            auto combineSide = [&](const EvalKey<DCRTPoly>& a, const EvalKey<DCRTPoly>& b) {
-                const auto& aA = a->GetAVector(); const auto& aB = a->GetBVector();
-                const auto& bA = b->GetAVector(); const auto& bB = b->GetBVector();
-                std::vector<DCRTPoly> outA, outB;
-                outA.reserve(d); outB.reserve(d);
-                for (size_t j = 0; j < d; ++j) {
-                    outA.push_back(op(aA[j], bA[j]));
-                    outB.push_back(op(aB[j], bB[j]));
-                }
-                auto out = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(a->GetCryptoContext());
-                out->SetAVector(std::move(outA));
-                out->SetBVector(std::move(outB));
-                return out;
-            };
+//         auto cc = A.top->GetCryptoContext();
+//         auto outTop = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
+//         outTop->SetAVector(std::move(topAVec));
+//         outTop->SetBVector(std::move(topBVec));
+//         auto outBot = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(cc);
+//         outBot->SetAVector(std::move(botAVec));
+//         outBot->SetBVector(std::move(botBVec));
 
-            RGSWCiphertext<DCRTPoly> R;
-            R.top = combineSide(A.top, B.top);
-            R.bot = combineSide(A.bot, B.bot);
-            return R;
-        }
-    }
+//         RGSWCiphertext<DCRTPoly> C;
+//         C.top = std::move(outTop);
+//         C.bot = std::move(outBot);
+//         return C;
+//     }
 
-    template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalAddRGSW(
-        const RGSWCiphertext<DCRTPoly>& A,
-        const RGSWCiphertext<DCRTPoly>& B
-    ) {
-        return CombineRGSW(A, B, [](const DCRTPoly& x, const DCRTPoly& y) { return x + y; }, "EvalAddRGSW");
-    }
+//     // ----------------------------------------------------------------------
+//     // Hybrid Internal product: RGSW × RGSW → RGSW.
+//     //
+//     // Textbook decomposition built on the working RNS external-product kernel:
+//     //   for each row j (top and bot) of B:
+//     //     1. ApproxModDown row from QP → Q  (cancels gadget P factor).
+//     //     2. Wrap as Ciphertext<DCRTPoly> in Q.
+//     //     3. EvalExternalProduct(rlwe, A) → Q-basis RLWE encrypting
+//     //          m_A · m_B · g_j   (top: also includes ·s factor)
+//     //     4. Re-pack into the QP-basis RGSW row format expected downstream:
+//     //          a' in QP: scale a_Q by P (PModq) in Q-towers, zero P-towers.
+//     //          b' in QP: same treatment.
+//     //
+//     // The repack mirrors how `EncryptRGSW` builds rows except we skip the
+//     // fresh `-a*s + e` randomization on P-towers (we leave them at 0). The
+//     // resulting rows decrypt the same way under ApproxModDown(QP→Q), and are
+//     // consumable by EvalExternalProduct via EvalFastKeySwitchCoreExt (P-side
+//     // contributes 0 to the dot product).
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct_Hybrid(
+//         const RGSWCiphertext<DCRTPoly>& A,
+//         const RGSWCiphertext<DCRTPoly>& B
+//     ) {
+//         // DEBUG_TIMER("Internal Product (Hybrid)");
 
-    template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalSubRGSW(
-        const RGSWCiphertext<DCRTPoly>& A,
-        const RGSWCiphertext<DCRTPoly>& B
-    ) {
-        return CombineRGSW(A, B, [](const DCRTPoly& x, const DCRTPoly& y) { return x - y; }, "EvalSubRGSW");
-    }
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         if (!cp)
+//             throw std::runtime_error("EvalInternalProduct_Hybrid: cryptoparams not RNS");
+//         if (A.size() != B.size())
+//             throw std::runtime_error("EvalInternalProduct_Hybrid: dnum mismatch");
+//         if (!A.top || !A.bot || !B.top || !B.bot)
+//             throw std::runtime_error("EvalInternalProduct_Hybrid: RGSW operand has null top/bot key");
 
-    // ----------------------------------------------------------------------
-    // Plaintext × RGSW: scale every QP-basis (a, b) row by the plaintext.
-    //
-    // Encode the plaintext to its Q-basis DCRTPoly, lift to QP (Q-side as is,
-    // P-side via SwitchModulus on each P-tower — same pattern used to extend
-    // the secret key in EncryptRGSW), then element-wise multiply each of
-    // topA/topB/botA/botB by the lifted polynomial. Linearity preserves the
-    // RGSW gadget structure: row j now encrypts (m · p) · P · g_j.
-    // ----------------------------------------------------------------------
-    template <typename T>
-    RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalMultPlain(
-        const Plaintext& p,
-        const RGSWCiphertext<DCRTPoly>& A
-    ) {
-        DEBUG_TIMER("EvalMultPlain RGSW");
+//         const auto paramsQ  = cp->GetElementParams();
+//         const auto paramsQP = cp->GetParamsQP();
+//         const auto& pparamsQP = paramsQP->GetParams();
+//         const auto& PModq = cp->GetPModq();
+//         const uint32_t sizeQ  = paramsQ->GetParams().size();
+//         const uint32_t sizeQP = pparamsQP.size();
+//         const uint32_t dnum   = static_cast<uint32_t>(B.size());
 
-        const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        if (!cp)
-            throw std::runtime_error("EvalMultPlain: cryptoparams not RNS");
+//         auto ccBase = A.top->GetCryptoContext();
 
-        const auto paramsQ    = cp->GetElementParams();
-        const auto paramsQP   = cp->GetParamsQP();
-        const auto& pparamsQP = paramsQP->GetParams();
-        const uint32_t sizeQ  = paramsQ->GetParams().size();
-        const uint32_t sizeQP = paramsQP->GetParams().size();
+//         // Treat one QP-basis (a, b) row of B as an RLWE in Q after ModDown.
+//         auto rowToRlwe = [&](const DCRTPoly& aQP, const DCRTPoly& bQP) {
+//             DCRTPoly aQ = ApproxModDownToQ(aQP, paramsQ);
+//             DCRTPoly bQ = ApproxModDownToQ(bQP, paramsQ);
+//             auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(ccBase);
+//             // BGV ciphertext layout: elements = { b, a }
+//             ct->SetElements({ std::move(bQ), std::move(aQ) });
+//             ct->SetEncodingType(PACKED_ENCODING);
+//             ct->SetLevel(0);
+//             ct->SetNoiseScaleDeg(1);
+//             return ct;
+//         };
 
-        if (!p->Encode())
-            throw std::runtime_error("EvalMultPlain: failed to encode plaintext");
-        DCRTPoly pQ = p->GetElement<DCRTPoly>();
-        pQ.SetFormat(Format::EVALUATION);
+//         // Lift a Q-basis DCRTPoly to QP by zero-padding the P-towers, and
+//         // multiply Q-towers by P (PModq) so the row encodes m·P·g_j again.
+//         auto qToQp_scaledByP = [&](const DCRTPoly& xQ) {
+//             DCRTPoly y(paramsQP, Format::EVALUATION, true);
+//             for (uint32_t i = 0; i < sizeQP; ++i) {
+//                 if (i < sizeQ) {
+//                     auto t = xQ.GetElementAtIndex(i);
+//                     t.SetFormat(Format::EVALUATION);
+//                     t *= PModq[i];
+//                     y.SetElementAtIndex(i, std::move(t));
+//                 }
+//             }
+//             return y;
+//         };
 
-        DCRTPoly pQP(paramsQP, Format::EVALUATION, true);
-        for (uint32_t i = 0; i < sizeQ; ++i) {
-            pQP.SetElementAtIndex(i, pQ.GetElementAtIndex(i));
-        }
-        auto p0 = pQ.GetElementAtIndex(0);
-        p0.SetFormat(Format::COEFFICIENT);
-        for (uint32_t i = sizeQ; i < sizeQP; ++i) {
-            auto tmp = p0;
-            tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
-            tmp.SetFormat(Format::EVALUATION);
-            pQP.SetElementAtIndex(i, std::move(tmp));
-        }
+//         std::vector<DCRTPoly> topAVec(dnum), topBVec(dnum);
+//         std::vector<DCRTPoly> botAVec(dnum), botBVec(dnum);
 
-        if (!A.top || !A.bot)
-            throw std::runtime_error("EvalMultPlain: RGSW operand has null top/bot key");
+//         const auto& bTopA = B.top->GetAVector();
+//         const auto& bTopB = B.top->GetBVector();
+//         const auto& bBotA = B.bot->GetAVector();
+//         const auto& bBotB = B.bot->GetBVector();
 
-        const size_t dnum = A.size();
-        auto scaleSide = [&](const EvalKey<DCRTPoly>& side) {
-            const auto& aVec = side->GetAVector();
-            const auto& bVec = side->GetBVector();
-            std::vector<DCRTPoly> outA, outB;
-            outA.reserve(dnum); outB.reserve(dnum);
-            for (size_t j = 0; j < dnum; ++j) {
-                outA.push_back(aVec[j] * pQP);
-                outB.push_back(bVec[j] * pQP);
-            }
-            auto out = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(side->GetCryptoContext());
-            out->SetAVector(std::move(outA));
-            out->SetBVector(std::move(outB));
-            return out;
-        };
+//         // Process top side of B.
+//         for (uint32_t j = 0; j < dnum; ++j) {
+//             auto rlwe = rowToRlwe(bTopA[j], bTopB[j]);
+//             auto out  = EvalExternalProduct(rlwe, A);
+//             const auto& cv = out->GetElements();  // { b_Q, a_Q }
+//             topBVec[j] = qToQp_scaledByP(cv[0]);
+//             topAVec[j] = qToQp_scaledByP(cv[1]);
+//         }
+//         // Process bot side of B.
+//         for (uint32_t j = 0; j < dnum; ++j) {
+//             auto rlwe = rowToRlwe(bBotA[j], bBotB[j]);
+//             auto out  = EvalExternalProduct(rlwe, A);
+//             const auto& cv = out->GetElements();
+//             botBVec[j] = qToQp_scaledByP(cv[0]);
+//             botAVec[j] = qToQp_scaledByP(cv[1]);
+//         }
 
-        RGSWCiphertext<DCRTPoly> R;
-        R.top = scaleSide(A.top);
-        R.bot = scaleSide(A.bot);
-        return R;
-    }
+//         auto outTop = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(ccBase);
+//         outTop->SetAVector(std::move(topAVec));
+//         outTop->SetBVector(std::move(topBVec));
+//         auto outBot = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(ccBase);
+//         outBot->SetAVector(std::move(botAVec));
+//         outBot->SetBVector(std::move(botBVec));
+
+//         RGSWCiphertext<DCRTPoly> C;
+//         C.top = std::move(outTop);
+//         C.bot = std::move(outBot);
+//         return C;
+//     }
+
+//     namespace {
+//         // Element-wise combine the two sides of two RGSWs with a binary op on
+//         // DCRTPoly (op is + or -). Both operands must have matching dnum and a
+//         // non-null top/bot key.
+//         template <typename Op>
+//         RGSWCiphertext<DCRTPoly> CombineRGSW(
+//             const RGSWCiphertext<DCRTPoly>& A,
+//             const RGSWCiphertext<DCRTPoly>& B,
+//             Op op,
+//             const char* opName
+//         ) {
+//             if (A.size() != B.size())
+//                 throw std::runtime_error(std::string(opName) + ": dnum mismatch");
+//             if (!A.top || !A.bot || !B.top || !B.bot)
+//                 throw std::runtime_error(std::string(opName) + ": RGSW operand has null top/bot key");
+
+//             const size_t d = A.size();
+//             auto combineSide = [&](const EvalKey<DCRTPoly>& a, const EvalKey<DCRTPoly>& b) {
+//                 const auto& aA = a->GetAVector(); const auto& aB = a->GetBVector();
+//                 const auto& bA = b->GetAVector(); const auto& bB = b->GetBVector();
+//                 std::vector<DCRTPoly> outA, outB;
+//                 outA.reserve(d); outB.reserve(d);
+//                 for (size_t j = 0; j < d; ++j) {
+//                     outA.push_back(op(aA[j], bA[j]));
+//                     outB.push_back(op(aB[j], bB[j]));
+//                 }
+//                 auto out = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(a->GetCryptoContext());
+//                 out->SetAVector(std::move(outA));
+//                 out->SetBVector(std::move(outB));
+//                 return out;
+//             };
+
+//             RGSWCiphertext<DCRTPoly> R;
+//             R.top = combineSide(A.top, B.top);
+//             R.bot = combineSide(A.bot, B.bot);
+//             return R;
+//         }
+//     }
+
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalAddRGSW(
+//         const RGSWCiphertext<DCRTPoly>& A,
+//         const RGSWCiphertext<DCRTPoly>& B
+//     ) {
+//         return CombineRGSW(A, B, [](const DCRTPoly& x, const DCRTPoly& y) { return x + y; }, "EvalAddRGSW");
+//     }
+
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalSubRGSW(
+//         const RGSWCiphertext<DCRTPoly>& A,
+//         const RGSWCiphertext<DCRTPoly>& B
+//     ) {
+//         return CombineRGSW(A, B, [](const DCRTPoly& x, const DCRTPoly& y) { return x - y; }, "EvalSubRGSW");
+//     }
+
+//     // ----------------------------------------------------------------------
+//     // Plaintext × RGSW: scale every QP-basis (a, b) row by the plaintext.
+//     //
+//     // Encode the plaintext to its Q-basis DCRTPoly, lift to QP (Q-side as is,
+//     // P-side via SwitchModulus on each P-tower — same pattern used to extend
+//     // the secret key in EncryptRGSW), then element-wise multiply each of
+//     // topA/topB/botA/botB by the lifted polynomial. Linearity preserves the
+//     // RGSW gadget structure: row j now encrypts (m · p) · P · g_j.
+//     // ----------------------------------------------------------------------
+//     template <typename T>
+//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalMultPlain(
+//         const Plaintext& p,
+//         const RGSWCiphertext<DCRTPoly>& A
+//     ) {
+//         // DEBUG_TIMER("EvalMultPlain RGSW");
+
+//         const auto cp = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+//         if (!cp)
+//             throw std::runtime_error("EvalMultPlain: cryptoparams not RNS");
+
+//         const auto paramsQ    = cp->GetElementParams();
+//         const auto paramsQP   = cp->GetParamsQP();
+//         const auto& pparamsQP = paramsQP->GetParams();
+//         const uint32_t sizeQ  = paramsQ->GetParams().size();
+//         const uint32_t sizeQP = paramsQP->GetParams().size();
+
+//         if (!p->Encode())
+//             throw std::runtime_error("EvalMultPlain: failed to encode plaintext");
+//         DCRTPoly pQ = p->GetElement<DCRTPoly>();
+//         pQ.SetFormat(Format::EVALUATION);
+
+//         DCRTPoly pQP(paramsQP, Format::EVALUATION, true);
+//         for (uint32_t i = 0; i < sizeQ; ++i) {
+//             pQP.SetElementAtIndex(i, pQ.GetElementAtIndex(i));
+//         }
+//         auto p0 = pQ.GetElementAtIndex(0);
+//         p0.SetFormat(Format::COEFFICIENT);
+//         for (uint32_t i = sizeQ; i < sizeQP; ++i) {
+//             auto tmp = p0;
+//             tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
+//             tmp.SetFormat(Format::EVALUATION);
+//             pQP.SetElementAtIndex(i, std::move(tmp));
+//         }
+
+//         if (!A.top || !A.bot)
+//             throw std::runtime_error("EvalMultPlain: RGSW operand has null top/bot key");
+
+//         const size_t dnum = A.size();
+//         auto scaleSide = [&](const EvalKey<DCRTPoly>& side) {
+//             const auto& aVec = side->GetAVector();
+//             const auto& bVec = side->GetBVector();
+//             std::vector<DCRTPoly> outA, outB;
+//             outA.reserve(dnum); outB.reserve(dnum);
+//             for (size_t j = 0; j < dnum; ++j) {
+//                 outA.push_back(aVec[j] * pQP);
+//                 outB.push_back(bVec[j] * pQP);
+//             }
+//             auto out = std::make_shared<EvalKeyRelinImpl<DCRTPoly>>(side->GetCryptoContext());
+//             out->SetAVector(std::move(outA));
+//             out->SetBVector(std::move(outB));
+//             return out;
+//         };
+
+//         RGSWCiphertext<DCRTPoly> R;
+//         R.top = scaleSide(A.top);
+//         R.bot = scaleSide(A.bot);
+//         return R;
+//     }
 
     template <typename T>
     std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::ExpandRLWEHoisted(
