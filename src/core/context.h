@@ -6,7 +6,7 @@
 
 #include <vector>
 
-// TODO: Clean up
+// TODO: Clean up -> common.h or utils
 #if defined(TEST_INTERNAL_FUNCTIONS) 
 #define PUBLIC_FOR_TEST public
 #else
@@ -18,11 +18,9 @@ namespace Context
     using namespace lbcrypto;
 
     /**
-     * @brief BGV-RNS context extended with RGSW-on-hybrid-keyswitch operations.
+     * @brief BGV-RNS context extended with RGSW operations.
      *
-     * RGSW ciphertexts use the hybrid-keyswitch RNS digit gadget: dnum (a, b)
-     * pairs in QP basis, one per Q-partition. External product reuses
-     * KeySwitchHYBRID::EvalKeySwitchPrecomputeCore + EvalFastKeySwitchCore.
+     * Uses BV-RNS gadgets, one for each RNS prime.
      */
     template <typename T = DCRTPoly>
     class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {

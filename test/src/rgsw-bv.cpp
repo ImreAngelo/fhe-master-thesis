@@ -51,6 +51,7 @@ inline DCRTPoly InnerProduct(const std::vector<DCRTPoly>& u, const std::vector<D
     return result;
 }
 
+/// @todo Move to cli_params.h or create abstraction to get common set of params
 inline CCParams<CryptoContextRGSWBGV> GetParams() {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(1));
@@ -105,12 +106,13 @@ inline void RunTest(const std::vector<int64_t>& value) {
     DCRTPoly mm = m * m;
     ASSERT_EQ(InnerProduct(d, P), mm);
 
-    DEBUG_PRINT(recovered);
+    // Multiplication
+    
 }
 
-TEST(RGSW_RNS_BV, b0)    { RunTest({ 0 }); }
-TEST(RGSW_RNS_BV, b1)    { RunTest({ 1 }); }
-TEST(RGSW_RNS_BV, multi) { RunTest({ 1, 2, 3, 4, 5, 6, 7, 8 }); }
+TEST(RGSW_BVRNS, b0)    { RunTest({ 0 }); }
+TEST(RGSW_BVRNS, b1)    { RunTest({ 1 }); }
+TEST(RGSW_BVRNS, multi) { RunTest({ 1, 2, 3, 4, 5, 6, 7, 8 }); }
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
