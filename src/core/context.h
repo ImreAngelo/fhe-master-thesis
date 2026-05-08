@@ -26,7 +26,7 @@ namespace Context
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
 
-        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const Plaintext& plaintext) const;
+        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
 
     protected:
         const std::vector<NativeInteger> m_gadgetVectorScalars;

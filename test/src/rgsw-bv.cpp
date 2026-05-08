@@ -52,8 +52,8 @@ inline DCRTPoly InnerProduct(const std::vector<DCRTPoly>& u, const std::vector<D
 }
 
 /// @todo Move to cli_params.h or create abstraction to get common set of params
-inline CCParams<CryptoContextRGSWBGV> GetParams() {
-    CCParams<CryptoContextRGSWBGV> params;
+inline CCParams<CryptoContextBGVRNS> GetParams() {
+    CCParams<CryptoContextBGVRNS> params;
     params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(1));
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
     params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
@@ -78,12 +78,12 @@ inline CCParams<CryptoContextRGSWBGV> GetParams() {
  *   2. <D_Q(m), P_Q(m)> ≡ m·m (mod Q)   — multiplicative pairing
  */
 inline void RunTest(const std::vector<int64_t>& value) {
-    const CCParams<CryptoContextRGSWBGV> params = GetParams();
+    const CCParams<CryptoContextBGVRNS> params = GetParams();
     auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
 
-    cc->KeyGen();
+    auto keys = cc->KeyGen();
 
     Plaintext pt = cc->MakePackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
@@ -105,6 +105,9 @@ inline void RunTest(const std::vector<int64_t>& value) {
     const auto P = cc->GadgetMul(m);
     DCRTPoly mm = m * m;
     ASSERT_EQ(InnerProduct(d, P), mm);
+
+    // RGSW
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
 }
 
 TEST(RGSW_BVRNS, b0)    { RunTest({ 0 }); }

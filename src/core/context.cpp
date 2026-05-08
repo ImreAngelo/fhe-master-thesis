@@ -59,10 +59,28 @@ namespace Context
     : CryptoContextImpl<DCRTPoly>(base), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
 
     /// @brief Return RGSW ciphertext
-    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const Plaintext& plaintext) const
+    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
     {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        throw new std::logic_error("Not implemented");
+        const auto zero = this->MakePackedPlaintext({0});
+        const auto mg = GadgetMul(plaintext->GetElement<DCRTPoly>());
+
+        // TODO: Make work for CoefPackedPlaintext as well
+        // zero->SetFormat(plaintext->format) or something
+        
+        std::vector<Ciphertext<DCRTPoly>> rgsw;
+        rgsw.reserve(2*mg.size());
+        
+        for(size_t col = 0; col < 2; col++) {
+            for(const auto& mgi : mg) {
+                // TODO: This should be safe to reuse as its only public encryption
+                auto z = this->Encrypt(publicKey, zero);
+                z->GetElements()[col] += mgi;
+                rgsw.push_back(std::move(z));
+            }
+        }
+
+        return rgsw;
     }
 
     /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).
