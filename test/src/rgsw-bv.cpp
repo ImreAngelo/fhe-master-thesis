@@ -105,9 +105,6 @@ inline void RunTest(const std::vector<int64_t>& value) {
     const auto P = cc->GadgetMul(m);
     DCRTPoly mm = m * m;
     ASSERT_EQ(InnerProduct(d, P), mm);
-
-    // Multiplication
-    
 }
 
 TEST(RGSW_BVRNS, b0)    { RunTest({ 0 }); }

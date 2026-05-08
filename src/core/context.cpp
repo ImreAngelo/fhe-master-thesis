@@ -55,13 +55,18 @@ namespace Context
         }
     }
 
-    template <typename T>
-    ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
-    : CryptoContextImpl<T>(base), m_params(params), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
-    
+    ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base, const CCParams<CryptoContextRGSWBGV>& params)
+    : CryptoContextImpl<DCRTPoly>(base), m_params(params), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
+
+    /// @brief Return RGSW ciphertext
+    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const Plaintext& plaintext) const
+    {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        throw new std::logic_error("Not implemented");
+    }
+
     /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).
-    template <typename T>
-    std::vector<T> ExtendedCryptoContextImpl<T>::Decompose(const T& a) const {
+    std::vector<DCRTPoly> ExtendedCryptoContextImpl::Decompose(const DCRTPoly& a) const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto q = params->GetElementParams()->GetParams();
 
@@ -80,8 +85,7 @@ namespace Context
     }
 
     /// @brief P_Q(b)_i = [b · (Q/q_i)]_Q. In RNS form only tower i is non-zero.
-    template <typename T>
-    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetMul(const T& b) const {
+    std::vector<DCRTPoly> ExtendedCryptoContextImpl::GadgetMul(const DCRTPoly& b) const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto q = params->GetElementParams()->GetParams();
 
@@ -95,14 +99,13 @@ namespace Context
             Pi.SetElementAtIndex(i, tower);
             P.push_back(std::move(Pi));
         }
-        
+
         return P;
     }
 
     /// @brief Unscaled gadget vector g_i = [Q/q_i]_Q (i.e. P_Q(1)).
     /// Useful for verifying the reconstruction identity <D_Q(a), g> ≡ a (mod Q).
-    template <typename T>
-    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetVector() const {
+    std::vector<DCRTPoly> ExtendedCryptoContextImpl::GadgetVector() const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto q = params->GetElementParams()->GetParams();
 
@@ -126,15 +129,14 @@ namespace Context
     //--------------//
 
     /// @todo Check if still works
-    template <typename T>
-    std::vector<Ciphertext<T>> ExtendedCryptoContextImpl<T>::ExpandRLWEHoisted(
-        const Ciphertext<T>& ciphertext,
-        const PublicKey<T>& publicKey,
+    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::ExpandRLWEHoisted(
+        const Ciphertext<DCRTPoly>& ciphertext,
+        const PublicKey<DCRTPoly>& publicKey,
         const uint32_t len
     ) {
         const auto ciphertext_n = this->Encrypt(publicKey, this->MakePackedPlaintext({ 1 }));
 
-        std::vector<Ciphertext<T>> c(len);
+        std::vector<Ciphertext<DCRTPoly>> c(len);
         c[0] = this->EvalMult(ciphertext, ciphertext_n);
 
         const auto precomputed = this->EvalFastRotationPrecompute(ciphertext);
@@ -145,6 +147,4 @@ namespace Context
 
         return c;
     }
-
-    template class ExtendedCryptoContextImpl<DCRTPoly>;
 }

@@ -22,41 +22,22 @@ namespace Context
      *
      * Uses BV-RNS gadgets, one for each RNS prime.
      */
-    template <typename T = DCRTPoly>
-    class ExtendedCryptoContextImpl : public CryptoContextImpl<T> {
+    class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
         CCParams<CryptoContextRGSWBGV> m_params;
 
     public:
-        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params);
+        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base, const CCParams<CryptoContextRGSWBGV>& params);
 
-    /// @brief BV-RNS implementations
+        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const Plaintext& plaintext) const;
+
     protected:
         const std::vector<NativeInteger> m_gadgetVectorScalars;
         const std::vector<NativeInteger> m_gadgetDecompVectorScalars;
 
     PUBLIC_FOR_TEST:
-        /**
-         * @brief 
-         * 
-         * @param a 
-         * @return std::vector<DCRTPoly> 
-         */
-        std::vector<T> Decompose(const T& a) const; 
-
-        /**
-         * @brief 
-         * 
-         * @param b 
-         * @return std::vector<DCRTPoly> 
-         */
-        std::vector<T> GadgetMul(const T& b) const;
-
-        /**
-         * @brief 
-         * 
-         * @return std::vector<DCRTPoly> 
-         */
-        std::vector<T> GadgetVector() const;
+        std::vector<DCRTPoly> Decompose(const DCRTPoly& a) const;
+        std::vector<DCRTPoly> GadgetMul(const DCRTPoly& b) const;
+        std::vector<DCRTPoly> GadgetVector() const;
 
 
     PUBLIC_FOR_TEST:
@@ -66,9 +47,9 @@ namespace Context
          * Returns a vector of RLWE ciphertexts where c[i] encrypts the i-th
          * coefficient/slot of the input. Conversion to RGSW is a separate step.
          */
-        std::vector<Ciphertext<T>> ExpandRLWEHoisted(
-            const Ciphertext<T>& ciphertext,
-            const PublicKey<T>& publicKey,
+        std::vector<Ciphertext<DCRTPoly>> ExpandRLWEHoisted(
+            const Ciphertext<DCRTPoly>& ciphertext,
+            const PublicKey<DCRTPoly>& publicKey,
             const uint32_t len
         );
     };
@@ -76,8 +57,10 @@ namespace Context
     //-------------------------//
     // OpenFHE-Context Factory //
     //-------------------------//
-    template <typename T>
-    using ExtendedCryptoContext = std::shared_ptr<ExtendedCryptoContextImpl<T>>;
+    // Templated alias kept for call-site compatibility; the impl is
+    // DCRTPoly-only, so the parameter is ignored.
+    template <typename T = DCRTPoly>
+    using ExtendedCryptoContext = std::shared_ptr<ExtendedCryptoContextImpl>;
 
     template <typename T>
     struct ContextRegistrar : protected CryptoContextFactory<T> {
@@ -87,7 +70,7 @@ namespace Context
     };
 
     inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextRGSWBGV>& params) {
-        auto ext = std::make_shared<ExtendedCryptoContextImpl<DCRTPoly>>(
+        auto ext = std::make_shared<ExtendedCryptoContextImpl>(
             *GenCryptoContext(static_cast<const CCParams<CryptoContextBGVRNS>&>(params)), params);
         ContextRegistrar<DCRTPoly>::Register(ext);
         return ext;
