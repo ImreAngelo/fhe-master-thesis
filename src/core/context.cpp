@@ -6,6 +6,125 @@
 
 namespace Context
 {
+    //------------------------//
+    // BV-RNS IMPLEMENTATIONS //
+    //------------------------//
+    
+    // TODO: Make separate context-bv.h/cpp and context-hybrid.h/cpp files
+    //       And shared Context::MakeExtendedContext(Gadgets::BV)
+    //       Consider also an implementation for the original version (with non-rns gadget decomp parameter)
+    namespace BV {
+        /**
+         * @brief Construct the BV-RNS gadget scalars used in the gadget vector
+         * 
+         * @param cc The current (base) crypto context
+         * @return std::vector<NativeInteger> with one NativeInteger per RNS-prime
+         */
+        static std::vector<NativeInteger> InverseGadgetScalars(const CryptoContextImpl<DCRTPoly>& cc) {
+            const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc.GetCryptoParameters());
+            const auto Q = params->GetElementParams()->GetModulus();
+            const auto q = params->GetElementParams()->GetParams();
+    
+            std::vector<NativeInteger> result;
+            result.reserve(q.size());
+            for (size_t i = 0; i < q.size(); i++) {
+                const auto qi = q[i]->GetModulus();
+                result.push_back((Q / BigInteger(qi)).Mod(qi).ModInverse(qi));
+            }
+            return result;
+        }
+
+        /**
+         * @brief Construct the BV-RNS gadget scalars used in the inverse gadget decomposition
+         * 
+         * @param cc The current (base) crypto context
+         * @return std::vector<NativeInteger> with one NativeInteger per RNS-prime
+         */
+        static std::vector<NativeInteger> GadgetScalars(const CryptoContextImpl<DCRTPoly>& cc) {
+            const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc.GetCryptoParameters());
+            const auto Q = params->GetElementParams()->GetModulus();
+            const auto q = params->GetElementParams()->GetParams();
+
+            std::vector<NativeInteger> result;
+            result.reserve(q.size());
+            for (size_t i = 0; i < q.size(); i++) {
+                const auto qi = q[i]->GetModulus();
+                result.push_back((Q / BigInteger(qi)).Mod(qi));
+            }
+            return result;
+        }
+    }
+
+    template <typename T>
+    ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
+    : CryptoContextImpl<T>(base), m_params(params), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
+    
+    /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::Decompose(const T& a) const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> d;
+        d.reserve(q.size());
+
+        for (size_t i = 0; i < q.size(); i++) {
+            DCRTPoly di(params->GetElementParams(), a.GetFormat(), true);
+            const auto qi = q[i]->GetModulus();
+            auto tower = a.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
+            di.SetElementAtIndex(i, tower);
+            d.push_back(std::move(di));
+        }
+
+        return d;
+    }
+
+    /// @brief P_Q(b)_i = [b · (Q/q_i)]_Q. In RNS form only tower i is non-zero.
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetMul(const T& b) const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> P;
+        P.reserve(q.size());
+
+        for (size_t i = 0; i < q.size(); i++) {
+            DCRTPoly Pi(params->GetElementParams(), b.GetFormat(), true);
+            const auto qi = q[i]->GetModulus();
+            auto tower = b.GetElementAtIndex(i).Times(m_gadgetVectorScalars[i]).Mod(qi);
+            Pi.SetElementAtIndex(i, tower);
+            P.push_back(std::move(Pi));
+        }
+        
+        return P;
+    }
+
+    /// @brief Unscaled gadget vector g_i = [Q/q_i]_Q (i.e. P_Q(1)).
+    /// Useful for verifying the reconstruction identity <D_Q(a), g> ≡ a (mod Q).
+    template <typename T>
+    std::vector<T> ExtendedCryptoContextImpl<T>::GadgetVector() const {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const auto q = params->GetElementParams()->GetParams();
+
+        std::vector<DCRTPoly> out;
+        out.reserve(q.size());
+        for (size_t i = 0; i < q.size(); i++) {
+            // Constant polynomial g_i ∈ R_Q: only tower i is non-zero, holding the constant g[i].
+            DCRTPoly poly(params->GetElementParams(), Format::COEFFICIENT, true);
+            auto tower = poly.GetElementAtIndex(i);
+            tower[0] = m_gadgetVectorScalars[i];
+            poly.SetElementAtIndex(i, tower);
+            poly.SetFormat(Format::EVALUATION);
+            out.push_back(std::move(poly));
+        }
+        return out;
+    }
+
+
+    //-----//
+    // OLD //
+    //-----//
+    
     inline Ciphertext<DCRTPoly> ScaleRLWECiphertext(
         const Ciphertext<DCRTPoly>& ct,
         const DCRTPoly& scalar
@@ -16,10 +135,6 @@ namespace Context
         elems[1] *= scalar;
         return result;
     }
-
-    template <typename T>
-    ExtendedCryptoContextImpl<T>::ExtendedCryptoContextImpl(const CryptoContextImpl<T>& base, const CCParams<CryptoContextRGSWBGV>& params)
-        : CryptoContextImpl<T>(base), m_params(params) {}
 
     /// @brief Encrypt message as RGSW ciphertext (dnum (a,b) pairs per side, in QP).
     template <typename T>
@@ -126,119 +241,6 @@ namespace Context
         return result;
     }
 
-    //------------------------//
-    // BV-RNS IMPLEMENTATIONS //
-    //------------------------//
-    template <typename T>
-    std::vector<NativeInteger> ExtendedCryptoContextImpl<T>::GetGadgetElements()
-    {
-        // Get RNS primes q_i 
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto Q = params->GetElementParams()->GetModulus();
-        const auto q = params->GetElementParams()->GetParams();
-
-        DEBUG_PRINT("Gadget elements: " << q.size() << " moduli");
-
-        // TODO: Cache on object creation
-        if(m_gadgetVectorScalars.size() == 0) {
-            m_gadgetVectorScalars.reserve(q.size());
-    
-            // Calculate pre-computable gadget elements
-            for (size_t i = 0; i < q.size(); i++) {
-                auto qi = q[i]->GetModulus();
-                auto div = (Q / lbcrypto::BigInteger(qi)).Mod(qi);
-                auto inv = div.ModInverse(qi);
-    
-                DEBUG_PRINT("Gadget element (Q/q_" << i << ")^{-1}: " << inv);
-                m_gadgetVectorScalars.push_back(inv);
-            }
-        }
-        
-        return m_gadgetVectorScalars;
-    }
-
-    template <typename T>
-    std::vector<DCRTPoly> ExtendedCryptoContextImpl<T>::GetGadgetVector(const Plaintext &msg)
-    {
-        const auto gadgetElements = GetGadgetElements(); // TODO: Use m_gadgetVectorScalars directly
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto q = params->GetElementParams()->GetParams();
-
-        const auto a = msg->GetElement<DCRTPoly>();
-        DEBUG_PRINT("Message polynomial size: " << a.GetNumOfElements() << " moduli");
-
-        std::vector<lbcrypto::DCRTPoly> gadgetVector;
-        gadgetVector.reserve(gadgetElements.size());
-
-        for (size_t i = 0; i < gadgetElements.size(); i++) {
-            DCRTPoly poly(params->GetElementParams(), Format::EVALUATION, true);
-
-            auto tower = a.GetElementAtIndex(i);
-            auto element = tower.Times(gadgetElements[i]).Mod(q[i]->GetModulus());
-
-            poly.SetElementAtIndex(i, element);
-            gadgetVector.push_back(poly);
-        }
-
-        return gadgetVector;
-    }
-
-    template <typename T>
-    std::vector<NativeInteger> ExtendedCryptoContextImpl<T>::GetGadgetDecompositionElements()
-    {
-        // Get RNS primes q_i 
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto Q = params->GetElementParams()->GetModulus();
-        const auto q = params->GetElementParams()->GetParams();
-
-        DEBUG_PRINT("Gadget decomposition elements: " << q.size() << " moduli");
-
-        // TODO: Create in object constructor
-        if(m_gadgetDecompVectorScalars.size() == 0) {
-            m_gadgetDecompVectorScalars.reserve(q.size());
-    
-            // Calculate pre-computable gadget elements
-            for (size_t i = 0; i < q.size(); i++) {
-                auto qi = q[i]->GetModulus();
-                auto div = (Q / lbcrypto::BigInteger(qi)).Mod(qi);
-    
-                DEBUG_PRINT("Gadget decomposition element (Q/q_" << i << ")^{-1}: " << div);
-                m_gadgetDecompVectorScalars.push_back(div);
-            }
-        }
-
-        return m_gadgetDecompVectorScalars;
-    }
-
-    template <typename T>
-    std::vector<DCRTPoly> ExtendedCryptoContextImpl<T>::GetGadgetDecompositionVector(const Plaintext &msg)
-    {
-        const auto gadgetElements = GetGadgetDecompositionElements();
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-
-        const auto Q = params->GetElementParams()->GetModulus();
-        const auto q = params->GetElementParams()->GetParams();
-        const auto b = msg->GetElement<DCRTPoly>();
-
-        std::vector<lbcrypto::DCRTPoly> gadgetVector;
-        gadgetVector.reserve(q.size());
-
-        for (size_t i = 0; i < q.size(); i++) {
-            // VIKTIG: hatQi er et BigInteger, ikke bare en NativeInteger mod qi
-            lbcrypto::BigInteger hatQi = Q / lbcrypto::BigInteger(q[i]->GetModulus());
-
-            // P_b[i] skal være b * (Q/qi). 
-            // Dette tallet er 0 mod qj for alle j != i, og b*(Q/qi) mod qi.
-            lbcrypto::DCRTPoly poly = b;
-            
-            // Times(BigInteger) skalerer alle limbs i DCRTPoly riktig
-            poly.Times(hatQi); 
-            
-            gadgetVector.push_back(poly);
-        }
-
-        return gadgetVector;
-    }
 
     //------------------------------//
     // HYBRID (RNS) IMPLEMENTATIONS //
