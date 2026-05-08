@@ -5,9 +5,7 @@
 
 
 /**
- * @brief Parameters for ExtendedCryptoContext (BGV-RNS + RGSW).
- *
- * Uses BV-RNS gadgets from Appendix B.2.1 of https://eprint.iacr.org/2021/204
+ * @brief Parameters for ExtendedCryptoContext (not used in RNS)
  */
 namespace lbcrypto {
 

@@ -55,8 +55,8 @@ namespace Context
         }
     }
 
-    ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base, const CCParams<CryptoContextRGSWBGV>& params)
-    : CryptoContextImpl<DCRTPoly>(base), m_params(params), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
+    ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base)
+    : CryptoContextImpl<DCRTPoly>(base), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
 
     /// @brief Return RGSW ciphertext
     std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const Plaintext& plaintext) const

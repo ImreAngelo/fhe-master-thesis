@@ -23,10 +23,8 @@ namespace Context
      * Uses BV-RNS gadgets, one for each RNS prime.
      */
     class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
-        CCParams<CryptoContextRGSWBGV> m_params;
-
     public:
-        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base, const CCParams<CryptoContextRGSWBGV>& params);
+        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
 
         std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const Plaintext& plaintext) const;
 
@@ -57,8 +55,8 @@ namespace Context
     //-------------------------//
     // OpenFHE-Context Factory //
     //-------------------------//
-    // Templated alias kept for call-site compatibility; the impl is
-    // DCRTPoly-only, so the parameter is ignored.
+    /// @brief Templated alias kept for call-site compatibility; the impl is DCRTPoly-only, so the parameter is ignored.
+    /// @todo Remove poly template from everywhere
     template <typename T = DCRTPoly>
     using ExtendedCryptoContext = std::shared_ptr<ExtendedCryptoContextImpl>;
 
@@ -69,9 +67,8 @@ namespace Context
         }
     };
 
-    inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextRGSWBGV>& params) {
-        auto ext = std::make_shared<ExtendedCryptoContextImpl>(
-            *GenCryptoContext(static_cast<const CCParams<CryptoContextBGVRNS>&>(params)), params);
+    inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextBGVRNS>& params) {
+        auto ext = std::make_shared<ExtendedCryptoContextImpl>(*GenCryptoContext(params));
         ContextRegistrar<DCRTPoly>::Register(ext);
         return ext;
     }
