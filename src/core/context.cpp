@@ -59,7 +59,7 @@ namespace Context
     : CryptoContextImpl<DCRTPoly>(base), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
 
     /// @brief Return RGSW ciphertext
-    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
+    RGSW ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
     {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto zero = this->MakePackedPlaintext({0});
@@ -81,6 +81,12 @@ namespace Context
         }
 
         return rgsw;
+    }
+
+    /// @brief Returns the external product between the rlwe and rgsw
+    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw)
+    {
+        
     }
 
     /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).

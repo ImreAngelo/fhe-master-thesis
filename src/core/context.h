@@ -17,6 +17,9 @@ namespace Context
 {
     using namespace lbcrypto;
 
+    using RLWE = Ciphertext<DCRTPoly>;
+    using RGSW = std::vector<RLWE>;
+
     /**
      * @brief BGV-RNS context extended with RGSW operations.
      *
@@ -26,7 +29,8 @@ namespace Context
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
 
-        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
+        RGSW EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
+        RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw);
 
     protected:
         const std::vector<NativeInteger> m_gadgetVectorScalars;
