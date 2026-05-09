@@ -86,7 +86,7 @@ namespace Context
     }
 
     /// @brief Returns the external product between the rlwe and rgsw
-    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw)
+    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw) const
     {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const size_t L = params->GetElementParams()->GetParams().size();
@@ -114,6 +114,15 @@ namespace Context
         result->GetElements()[0] = std::move(out0);
         result->GetElements()[1] = std::move(out1);
 
+        return result;
+    }
+
+    RGSW ExtendedCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const
+    {
+        RGSW result = lhs;
+        for(auto& rlwe : result) {
+            rlwe = EvalAdd(rlwe, EvalExternalProduct(rlwe, rhs));
+        }
         return result;
     }
 

@@ -118,7 +118,20 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     // Internal product: RGSW(a) x RGSW(b) = RGSW(a*b)
     {
+        auto one = cc->EncryptRGSW(keys.publicKey, cc->MakePackedPlaintext({1}));
+        auto res = cc->EvalInternalProduct(one, rgsw);
 
+        Plaintext decrypted;
+        cc->Decrypt(keyPair.secretKey, res, &decrypted);
+        
+        const auto& result_slots = decrypted->GetPackedValue();
+
+        DEBUG_PRINT(result_slots);
+
+        // for (size_t i = 0; i < value.size(); i++) {
+        //     // auto modval = CENTER(value[i], static_cast<int64_t>(params.GetPlaintextModulus()));
+        //     // ASSERT_EQ(modval, result_slot[i]) << "slot " << i << std::endl;
+        // }
     }
 }
 
