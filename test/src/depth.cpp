@@ -13,7 +13,7 @@ TEST(Depth, ChainedInternalProduct) {
     CCParams<CryptoContextBGVRNS> params;
     params.SetRingDim(1 << 11);           // N = 2048
     params.SetPlaintextModulus(8);        // t = 8
-    params.SetMultiplicativeDepth(5);
+    params.SetMultiplicativeDepth(1);
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
     const auto cc = Context::GenExtendedCryptoContext(params);

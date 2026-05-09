@@ -22,6 +22,11 @@ namespace Context
      *
      * Uses BV-RNS gadgets, one for each RNS prime.
      */
+    // Base for the second-level digit decomposition within each RNS tower.
+    // Noise per external product scales as omega/2 instead of q_i/2.
+    static constexpr uint64_t GADGET_LOG  = 4;
+    static constexpr uint64_t GADGET_BASE = 1u << GADGET_LOG;
+
     class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
@@ -38,6 +43,9 @@ namespace Context
         const std::vector<NativeInteger> m_gadgetDecompVectorScalars;
 
     PUBLIC_FOR_TEST:
+        // Number of base-GADGET_BASE digits needed to cover the largest RNS prime.
+        size_t GadgetDigits() const;
+
         std::vector<DCRTPoly> Decompose(const DCRTPoly& a) const;
         std::vector<DCRTPoly> GadgetMul(const DCRTPoly& b) const;
         std::vector<DCRTPoly> GadgetVector() const;
