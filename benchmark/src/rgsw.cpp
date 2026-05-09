@@ -12,9 +12,8 @@ using namespace lbcrypto;
 
 namespace {
 
-constexpr uint32_t DEPTH        = 3;
-constexpr uint64_t PT_MODULUS   = 65537;    // 8 for small params case
-constexpr uint32_t RING_DIM_LOG = 14;       // 11 = 2048, 14 = 16384
+constexpr uint64_t PT_MODULUS   = 8;        // 8 for small params case, else 65537 for slotwise packed plaintext
+constexpr uint32_t RING_DIM_LOG = 11;       // 11 = 2048, 14 = 16384
 
 class RGSW : public benchmark::Fixture {
 public:
@@ -22,7 +21,7 @@ public:
         if (cc) return;
         
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(2);
+        params.SetMultiplicativeDepth(1);
         params.SetPlaintextModulus(PT_MODULUS);
         params.SetRingDim(1 << RING_DIM_LOG);
         params.SetScalingTechnique(FIXEDMANUAL);
@@ -32,9 +31,6 @@ public:
         cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
-
-        // const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
-        // ell = log_q / B_LOG + 1;
 
         keys = cc->KeyGen();
         

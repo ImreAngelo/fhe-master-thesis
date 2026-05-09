@@ -62,11 +62,13 @@ namespace Context
     RGSW ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
     {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto zero = this->MakePackedPlaintext({0});
+        // CoefPackedPlaintext encodes the zero polynomial directly. Unlike
+        // MakePackedPlaintext, it does not require `t` to be prime nor
+        // `t ≡ 1 (mod 2N)`, so it works for any plaintext modulus the rest of
+        // the scheme already accepts. The encoded element is the zero poly
+        // either way, so this is a strict generalisation (no math change).
+        const auto zero = this->MakeCoefPackedPlaintext({0});
         const auto mg = GadgetMul(plaintext->GetElement<DCRTPoly>());
-
-        // TODO: Make work for CoefPackedPlaintext as well
-        // zero->SetFormat(plaintext->format) or something
         
         std::vector<Ciphertext<DCRTPoly>> rgsw;
         rgsw.reserve(2*mg.size());
@@ -76,6 +78,7 @@ namespace Context
         for(size_t col = 0; col < 2; col++) {
             for(const auto& mgi : mg) {
                 // auto z = Z->Clone();
+                // Using fresh encryptions is much slower
                 auto z = this->Encrypt(publicKey, zero);
                 z->GetElements()[col] += mgi;
                 rgsw.push_back(std::move(z));
