@@ -63,15 +63,8 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
-register_test(test-rgsw-rns         SOURCE src/rgsw-rns CUSTOM_MAIN)
-register_test(test-rgsw             SOURCE src/rgsw CUSTOM_MAIN)
-register_test(test-depth            SOURCE src/depth CUSTOM_MAIN)
+register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
 register_test(test-write            SOURCE src/write)
-# The targets below depend on the legacy vector<Ciphertext>-based RGSW API and
-# will be re-enabled once the V2 (RGSWCiphertext struct) migration is complete.
-# register_test(test-main             SOURCE src/main CUSTOM_MAIN)
-# register_test(test-homplacing       SOURCE src/homplacing)
-# register_test(test-homexpand        SOURCE src/homexpand)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)

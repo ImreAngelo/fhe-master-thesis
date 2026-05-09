@@ -89,10 +89,6 @@ if(ENABLE_DEBUG_LOGGING)
     target_compile_definitions(core_lib PUBLIC DEBUG_LOGGING)
 endif()
 
-# ── Server library ───────────────────────────────────────────────────────────
-add_library(server_lib STATIC src/server/homplacing.cpp)
-target_link_libraries(server_lib PUBLIC core_lib)
-
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
 # Without it gtest_discover_tests() has nowhere to register tests and CTest reports
