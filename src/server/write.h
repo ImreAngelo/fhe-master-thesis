@@ -21,44 +21,9 @@ namespace server {
     template <typename T = DCRTPoly>
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
-    // TODO: Pass as args
-    constexpr uint32_t B_LOG = 4;
-
     // ------------------------- //
     // Swappable implementations //
     // ------------------------- //
-
-    // Encrypt RGSW
-    template <typename T = DCRTPoly>
-    inline RGSWCiphertext<T> Encrypt(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const PublicKey<T>& publicKey,
-        const Plaintext& plaintext
-    ) {
-        const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
-        const size_t ell = std::round(log_q / B_LOG) + 1;
-        return cc->EncryptRGSW(publicKey, plaintext, B_LOG, ell);
-    }
-
-    // EvalExternalProduct
-    template <typename T = DCRTPoly>
-    inline RLWECiphertext<T> EvalExternalProduct(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const RLWECiphertext<T>& rlwe,
-        const RGSWCiphertext<T>& rgsw
-    ) {
-        return cc->EvalExternalProduct(rlwe, rgsw, B_LOG);
-    }
-
-    // EvalInternalProduct
-    template <typename T = DCRTPoly>
-    inline RGSWCiphertext<T> EvalInternalProduct(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const RGSWCiphertext<T>& left,
-        const RGSWCiphertext<T>& right
-    ) {
-        return cc->EvalInternalProduct(left, right, B_LOG);
-    }
 
     // RGSW addition
     template <typename T = DCRTPoly>
@@ -135,7 +100,7 @@ namespace server {
     // --------- //
 
     namespace debug {
-        template <typename Poly, typename T, size_t K, uint64_t N>
+        template <typename Poly = DCRTPoly, typename T, size_t K, uint64_t N>
         void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<std::array<T, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
             DEBUG_PRINT_SAMELINE(label << ": ");
             for (uint64_t i = 0; i < N; i++) {
@@ -147,7 +112,7 @@ namespace server {
             }
         }
 
-        template <typename Poly, typename T, size_t K>
+        template <typename Poly = DCRTPoly, typename T, size_t K>
         void PrintRow(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<T, K>& row, const PrivateKey<DCRTPoly>& secretKey) {
             DEBUG_PRINT_SAMELINE(label << ":\t[ ");
             for (size_t k = 0; k < K; k++) {
@@ -184,8 +149,8 @@ namespace server {
         const PrivateKey<T>& secretKey, // for debugging
         const uint32_t iteration = 1
     ) {
-        const auto one  = Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        auto hasWritten = Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto one  = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto hasWritten = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         {
             DEBUG_TIMER("Server Write");
@@ -199,19 +164,18 @@ namespace server {
                         DEBUG_PRINT("slot: " << i);
                         DEBUG_TIMER("iteration");
 
-                        auto z_dec = Decrypt(cc, secretKey, z[d][i]);
-                        DEBUG_PRINT("Asking? " << z_dec[0]);
+                        // DEBUG_PRINT("Asking? " << Decrypt(secretKey, z[d][i]));
                         
-                        auto zI  = EvalInternalProduct(cc, z[d][i], I_mat[i][k]);
+                        auto zI  = cc->EvalInternalProduct(z[d][i], I_mat[i][k]);
                         DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
 
                         auto sub = EvalSubRGSW(cc, one, hasWritten);
                         DEBUG_PRINT("Can write? " << Decrypt(cc, secretKey, sub));
 
-                        auto h   = EvalInternalProduct(cc, zI, sub);
+                        auto h   = cc->EvalInternalProduct(zI, sub);
                         DEBUG_PRINT("Will write? " << Decrypt(cc, secretKey, h));
     
-                        auto val = server::EvalMultPlain(cc, Vr, h);
+                        auto val = EvalMultPlain(cc, Vr, h);
                         DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
 
                         debug::PrintRow("L_mat[" + std::to_string(i) + "] before", cc, L_mat[i], secretKey);
@@ -260,8 +224,8 @@ namespace client {
         const size_t index
     ) {
         std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> z;
-        auto one  = server::Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        auto zero = server::Encrypt(cc, publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        auto one  = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto zero = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         for (uint32_t d = 0; d < D; d++)
             for (uint64_t slot = 0; slot < (uint64_t(1) << L); slot++)

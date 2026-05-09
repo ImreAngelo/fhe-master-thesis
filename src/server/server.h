@@ -30,10 +30,10 @@ namespace server {
         KeyPair<DCRTPoly> keys = cc->KeyGen();
 
         constexpr uint64_t N = (uint64_t(1) << L);
-        const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
+        // const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
 
-        const auto rgsw_zero = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
-        const auto rgsw_one  = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rgsw_zero = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto rgsw_one  = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
         const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
 
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
