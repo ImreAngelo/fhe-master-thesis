@@ -66,12 +66,6 @@ endif()
 ### Include source files
 include_directories(src)
 
-# ── C++20 for our own code ────────────────────────────────────────────────────
-# Link any src/ or test/ target against this to get C++20 without changing the
-# global standard (which would break OpenFHE / GTest).
-add_library(project_cxx20 INTERFACE)
-target_compile_features(project_cxx20 INTERFACE cxx_std_20)
-
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.
 # "make" / "make all" builds only what is listed here — tests are excluded.
@@ -82,11 +76,22 @@ target_compile_features(project_cxx20 INTERFACE cxx_std_20)
 
 # ── Core library ─────────────────────────────────────────────────────────────
 add_library(core_lib STATIC src/core/context.cpp)
-target_link_libraries(core_lib PUBLIC project_cxx20)
+
+# Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
+# DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
+# which passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON.
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core_lib"  OFF)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core_lib" OFF)
+if(ENABLE_DEBUG_TIMING)
+    target_compile_definitions(core_lib PUBLIC DEBUG_TIMING)
+endif()
+if(ENABLE_DEBUG_LOGGING)
+    target_compile_definitions(core_lib PUBLIC DEBUG_LOGGING)
+endif()
 
 # ── Server library ───────────────────────────────────────────────────────────
-add_library(server_lib STATIC src/server/homplacing.cpp)
-target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
+add_library(server_lib STATIC src/server)
+target_link_libraries(server_lib PUBLIC core_lib)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
@@ -95,3 +100,7 @@ target_link_libraries(server_lib PUBLIC project_cxx20 core_lib)
 # binary out of the default "make" target.
 enable_testing()
 add_subdirectory(test EXCLUDE_FROM_ALL)
+
+# ── Benchmark suite ──────────────────────────────────────────────────────────
+# Same pattern as the test suite: kept out of the default "make" target.
+add_subdirectory(benchmark EXCLUDE_FROM_ALL)

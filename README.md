@@ -33,9 +33,8 @@ __Research Questions:__
 > The project will statically link OpenFHE by default. 
 > To build the project using a version of OpenFHE already installed on the system, ... <!-- run `make build-dynamic` -->
 
-
-## Project Layout
-TBD...
+<!-- ## Project Layout
+TBD... -->
 
 
 ## Unit Tests
@@ -55,4 +54,15 @@ Configured with [GoogleTest](https://github.com/google/googletest).
 > ```
 
 > [!TIP]
+> Enable debug logging and timing by setting the debug environment variable
+> ```
+> DEBUG=1 make test
+> ```
+
+> [!TIP]
 > [VSCode Extension for GoogleTest](https://github.com/matepek/vscode-catch2-test-adapter)
+
+## TODO
+- [ ] Add/verify support for MakeCoefPackedPlaintext (and smaller params)
+- [ ] Add/verify support for BFV
+- [ ]

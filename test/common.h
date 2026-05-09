@@ -1,24 +1,35 @@
 /**
- * This file contains helpers used by multiple tests
+ * @file common.h
+ * @brief This file contains helpers used by all the tests
  */
 #pragma once
 
-#include "openfhe.h"
 #include <gtest/gtest.h>
+#include "cli_params.h"
+#include "openfhe.h"
 
+// DEBUG_TIMING / DEBUG_LOGGING are opt-in via `DEBUG=1 make test-<name>`,
+// which configures core_lib with PUBLIC compile defs that also reach tests.
+#include "utils/timer.h"
+#include "utils/logging.h"
 
-/// @brief Print a list of RLWE ciphertexts 
-template <typename CC, typename T>
-inline void PrintRGSW(
-    const CC& cc, 
-    const lbcrypto::KeyPair<T> keys, 
-    const std::vector<lbcrypto::Ciphertext<T>>& vec, 
-    size_t columns
-) {
-    lbcrypto::Plaintext plaintext;
-    for(const auto &c : vec) {
-        cc->Decrypt(keys.secretKey, c, &plaintext);
-        plaintext->SetLength(columns);
-        std::cout << plaintext << std::endl;
+// TODO: Make parameters shared with benchmarks and match benchmark values with unit tests
+namespace params {
+    /// @brief Create parameters shared by all tests
+    /// @todo More complex construction, and store common parameter sets
+    template<typename T>
+    inline lbcrypto::CCParams<T> Create() {
+        lbcrypto::CCParams<T> params;
+        params.SetMultiplicativeDepth(1);
+        params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
+        params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
+        
+        // Tuneable parameter
+        // params.SetNumLargeDigits(2);
+
+        // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
+        params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(lbcrypto::FIXEDMANUAL));
+
+        return params;
     }
 }

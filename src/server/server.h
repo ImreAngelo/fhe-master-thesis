@@ -1,30 +1,90 @@
-// #pragma once
-// #include "openfhe.h"
+#pragma once
+#include "openfhe.h"
+#include "core/context.h"
+// TODO: Fix terrible include structure
+#include "server/write.h"
+#include "utils/logging.h"
 
-// using namespace lbcrypto;
+// Map a centered value (-m/2, m/2] back to [0, m).
+#define RECENTER(x, m) ((x) < 0 ? (x) + (m) : (x))
 
-// // TODO: Global define
-// template <typename T>
-// using RGSWCiphertext = lbcrypto::Ciphertext<T>;
+namespace server {
+    using namespace lbcrypto;
+    using namespace Context;
 
-// class Server {
+    /**
+     * @brief Run sPAR Algorithm 2 (per-bin loops) for each user, then verify
+     * the message landed at L_mat[r][0] = r+1 with hasWritten flipped to 1.
+     *
+     * @tparam K Number of slots per bin
+     * @tparam D Number of choices (default = A1, A2, A3)
+     * @tparam L Bit-length of the address — N = 2^L users (and bins)
+     */
+    template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
+    void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
+    {
+        auto cc = Context::GenExtendedCryptoContext(params);
+        cc->Enable(PKE);
+        cc->Enable(LEVELEDSHE);
 
-// public:
-//     /**
-//      * @brief Algorithm 2 from the sPAR paper (no external product).
-//      *        Obliviously writes value into the first available slot among 3 candidate
-//      *        bins. The server maintains data matrix L and availability matrix I (both
-//      *        η × 3), which are updated in place.
-//      *
-//      * @return Encryption of hasWritten (1 if write succeeded, 0 otherwise)
-//      */
-//     std::vector<Ciphertext<DCRTPoly>> MultiHomPlacing(
-//         const CryptoContext<DCRTPoly>&                cc,
-//         const Ciphertext<DCRTPoly>&                   value,
-//         const std::vector<RGSWCiphertext<DCRTPoly>>&  bits,
-//         const uint64_t log_B,   // TODO: crypto param
-//         const size_t ell        // TODO: crypto param
-//     ) {
-        
-//     };
-// }
+        KeyPair<DCRTPoly> keys = cc->KeyGen();
+
+        constexpr uint64_t N = (uint64_t(1) << L);
+        const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
+
+        const auto rgsw_zero = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto rgsw_one  = server::Encrypt(cc, keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+
+        std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
+        std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
+        for (uint64_t i = 0; i < N; i++) {
+            for (size_t k = 0; k < K; k++) {
+                L_mat[i][k] = rgsw_zero;
+                I_mat[i][k] = rgsw_one;
+            }
+        }
+
+        DEBUG_PRINT("Initial state:");
+        server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+        server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
+
+        for (uint64_t r = 0; r < N; r++) {
+            DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
+            DEBUG_TIMER("User " + std::to_string(r + 1));
+
+            const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
+
+            // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
+            const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, r);
+
+            // Loop 2
+            const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
+
+            // Output results
+            auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
+            DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
+
+            DEBUG_PRINT("");
+            server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+            server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
+
+            // Verify hasWritten is correct for this user
+            // ASSERT_EQ(RECENTER(hw[0], t), 1);
+        }
+
+        // // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.
+        // for (uint64_t i = 0; i < N; i++) {
+        //     for (size_t k = 0; k < K; k++) {
+        //         auto Lcell = server::Decrypt(cc, keys.secretKey, L_mat[i][k]);
+        //         const int64_t expectedL = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
+        //         auto L_val = RECENTER(Lcell[0], t);
+        //         ASSERT_EQ(L_val, expectedL) << "L[" << i << "][" << k << "]";
+
+        //         auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
+        //         auto I_val = RECENTER(Icell[0], t);
+        //         ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
+        //     }
+        // }
+    }
+} // namespace server

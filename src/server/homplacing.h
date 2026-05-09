@@ -11,20 +11,20 @@ namespace Server
      * @brief Algorithm 1 without external product. 
      *        Places value in the slot encoded in bits. 
      * 
-     * @tparam Element DCRTPoly
+     * @tparam Poly DCRTPoly
      * @param cc The crypto context 
      * @param value Encrypted value to ble placed in slot n
      * @param c The encrypted bits of n
      */
-    template <typename Element>
-    std::vector<Ciphertext<Element>> HomPlacingNoExt(
-        const CryptoContext<Element>&          cc,
-        const Ciphertext<Element>&             value,
-        const std::vector<Ciphertext<Element>> c
+    template <typename Poly>
+    std::vector<Ciphertext<Poly>> HomPlacingSingleRLWE(
+        const CryptoContext<Poly>&          cc,
+        const Ciphertext<Poly>&             value,
+        const std::vector<Ciphertext<Poly>> c
     )
     {
-        using RLWE = Ciphertext<Element>;
-        using Vec = std::vector<Ciphertext<Element>>;
+        using RLWE = Ciphertext<Poly>;
+        using Vec = std::vector<Ciphertext<Poly>>;
 
         // Levels in tree L = log(n)
         const uint32_t L = c.size();
@@ -58,39 +58,4 @@ namespace Server
 
         return leaves;
     }
-
-    /**
-     * @brief Algorithm 1 without external product. 
-     *        Places value in the slot encoded in bits. 
-     * 
-     * @tparam Element DCRTPoly
-     * @param cc The crypto context 
-     * @param value Encrypted value to ble placed in slot n
-     * @param c The encrypted bits of n
-     */
-    std::vector<Ciphertext<DCRTPoly>> HomPlacing(
-        const Context::ExtendedCryptoContext<DCRTPoly>& cc,
-        const Ciphertext<DCRTPoly>&                     value,
-        const std::vector<RGSWCiphertext<DCRTPoly>>&    bits
-    );
-
-    /**
-     * @brief Algorithm 2 from the sPAR paper.
-     *
-     * @param cc          Extended crypto context
-     * @param publicKey   Common public key (used to initialize encrypted constants)
-     * @param value       Encrypted value to be placed
-     * @param A           D candidate addresses, each as L encrypted RGSW bits
-     * @param L_matrix    Data matrix (η × K), mutated
-     * @param I_matrix    Availability matrix (η × K), mutated
-     * @return            Encryption of hasWritten (1 if a write succeeded, 0 otherwise)
-     */
-    Ciphertext<DCRTPoly> MultiHomPlacing(
-        const Context::ExtendedCryptoContext<DCRTPoly>&              cc,
-        const PublicKey<DCRTPoly>&                                   publicKey,
-        const Ciphertext<DCRTPoly>&                                  value,
-        const std::vector<std::vector<RGSWCiphertext<DCRTPoly>>>&    A,
-        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              L_matrix,
-        std::vector<std::vector<Ciphertext<DCRTPoly>>>&              I_matrix
-    );
 }

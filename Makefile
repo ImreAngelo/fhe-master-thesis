@@ -1,89 +1,142 @@
-.PHONY: all build ci clean clean-build clean-cmake clean-openfhe help test
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params tune-% latex clean clean-build clean-cmake help
 
 all: build
 
-#########
-# Build #
-#########
+#######################
+# OpenFHE (optimized) #
+#######################
 
-# Build OpenFHE with CI flags (no benchmarks/tests/examples) and install to vendors/install
-# TODO: https://github.com/openfheorg/openfhe-development/blob/main/docs/static_docs/Best_Performance.md
-ci:
-	@echo "Building OpenFHE (CI mode)..."
-	@cmake -S vendors/openfhe-development \
-	       -B vendors/openfhe-development/build \
-	       -DBUILD_STATIC=ON \
-	       -DBUILD_BENCHMARKS=OFF \
-	       -DBUILD_UNITTESTS=OFF \
-	       -DBUILD_EXAMPLES=OFF \
-	       -DBUILD_EXTRAS=OFF \
-		   -DCMAKE_BUILD_TYPE=Release \
-	       -DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
+# One canonical OpenFHE install used by every target.
+# Built with full optimizations:
+#   NATIVEOPT, OpenMP, tcmalloc, reduced-noise, static, NATIVE_SIZE=64, Release.
+# Delete vendors/install to force a rebuild.
+OPENFHE_STAMP := vendors/install/lib/OpenFHE/OpenFHEConfig.cmake
+TCM_STAMP     := vendors/install/lib/libtcmalloc_static.a
+
+openfhe: $(OPENFHE_STAMP) $(TCM_STAMP)
+
+$(OPENFHE_STAMP) $(TCM_STAMP):
+	@echo "Building OpenFHE with full optimizations..."
+	@rm -rf vendors/openfhe-development/build vendors/install
+	@cmake -S vendors/openfhe-development -B vendors/openfhe-development/build \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_STATIC=ON \
+		-DBUILD_SHARED=OFF \
+		-DBUILD_BENCHMARKS=OFF \
+		-DBUILD_UNITTESTS=OFF \
+		-DBUILD_EXAMPLES=OFF \
+		-DBUILD_EXTRAS=OFF \
+		-DWITH_NATIVEOPT=ON \
+		-DWITH_OPENMP=ON \
+		-DWITH_REDUCED_NOISE=ON \
+		-DWITH_TCM=ON \
+		-DNATIVE_SIZE=64 \
+		-DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
+	@cmake --build vendors/openfhe-development/build --target tcm -j$(shell nproc)
 	@cmake --build vendors/openfhe-development/build -j$(shell nproc)
 	@cmake --install vendors/openfhe-development/build
+	@cd vendors/install/lib && \
+		ln -sf libtcmalloc_minimal.a libtcmalloc_static.a && \
+		ln -sf libtcmalloc_minimal.so libtcmalloc_static.so
 
-# Build OpenFHE locally and link statically (no -static flag, just static archives)
-build:
-	@echo "Building OpenFHE as static library (local install)..."
-	@cd vendors/openfhe-development && mkdir -p build && cd build && \
-		cmake .. -DBUILD_STATIC=ON -DCMAKE_INSTALL_PREFIX=../../install && \
-		make && make install -j$(shell nproc)
-	@echo "Building project with static OpenFHE..."
-	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && make -j$(shell nproc)
+openfhe-clean:
+	@rm -rf vendors/install vendors/openfhe-development/build
 
-# Build using vendored OpenFHE shared libraries (no sudo required)
-# build-dynamic:
-# 	@echo "Building OpenFHE locally (shared libraries)..."
-# 	@cd vendors/openfhe-development && mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
-# 	@echo "Building project with shared OpenFHE..."
-# 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=OFF && make -j$(shell nproc)
+###########
+# Project #
+###########
 
-# Future production binaries — uncomment when add_executable() exists in CMakeLists.txt
-# app client server:
-# 	@mkdir -p build && cd build && cmake .. -DBUILD_STATIC=ON && cmake --build . --target $@ -j$(shell nproc)
+# Single Release build dir, configured with -O3 -march=native everywhere so
+# tests and benchmarks observe identical codegen.
+BUILDDIR := build
 
+# Opt-in debug instrumentation for tests:  DEBUG=1 make test-<name>
+# Toggles DEBUG_TIMING / DEBUG_LOGGING on core_lib (and, transitively, tests).
+ifeq ($(DEBUG),1)
+_DEBUG_FLAGS := -DENABLE_DEBUG_TIMING=ON -DENABLE_DEBUG_LOGGING=ON
+else
+_DEBUG_FLAGS := -DENABLE_DEBUG_TIMING=OFF -DENABLE_DEBUG_LOGGING=OFF
+endif
+
+_CONFIGURE = cmake -S . -B $(BUILDDIR) \
+	-DBUILD_STATIC=ON \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native" \
+	$(_DEBUG_FLAGS)
+
+# Build whatever production binaries are registered in CMakeLists.txt.
+build: openfhe
+	@$(_CONFIGURE)
+	@cmake --build $(BUILDDIR) -j$(shell nproc)
 
 #########
 # Tests #
 #########
 
-_CMAKE = cd build && cmake .. -DBUILD_STATIC=ON -DNATIVE_SIZE=64
+# Build and run all tests against the optimized OpenFHE.
+test: openfhe
+	@$(_CONFIGURE)
+	@cmake --build $(BUILDDIR) --target check -j$(shell nproc)
 
-# Build and run all tests
-test:
-	@mkdir -p build && $(_CMAKE) && cmake --build . --target check -j$(shell nproc)
+# Build and run a specific test:  make test-rgsw
+test-%: openfhe
+	@$(_CONFIGURE)
+	@cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
 
-# Build and run a specific test:
-#   make test-rgsw
-#   make test-expand-rlwe
-#   make test-algorithm-1
-test-%:
-	@mkdir -p build && $(_CMAKE) && cmake --build . --target run-test-$* -j$(shell nproc)
+##############
+# Benchmarks #
+##############
 
+# Delegated to benchmark/Makefile, which uses the same $(BUILDDIR) and depends
+# on the openfhe target above. See `make -C benchmark help`.
+bench: openfhe
+	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
+
+bench-%: openfhe
+	@$(MAKE) -C benchmark $@ BUILDDIR="$(CURDIR)/$(BUILDDIR)"
+
+#####################
+# Parameter tuning #
+####################
+
+# Set up a venv with Optuna installed. Always re-checks pip + optuna so this
+# can be re-run whenever requirements change.
+params:
+	@python3 -m venv .venv
+	@.venv/bin/pip install --upgrade pip optuna
+	@touch .venv/.params-stamp
+
+.venv/.params-stamp:
+	@$(MAKE) params
+
+# One-click tuning. Builds the matching test binary, then hands the target
+# name to the search script which decides per-target search space + filter.
+#   make tune-rgsw  →  scripts/parameter-search.py rgsw
+tune-%: openfhe .venv/.params-stamp
+	@$(_CONFIGURE)
+	@cmake --build $(BUILDDIR) --target test-$* -j$(shell nproc)
+	@.venv/bin/python scripts/parameter-search.py $*
 
 ############
 # Clean-up #
 ############
 
-# Clean everything
 clean: clean-cmake clean-build
 
-# Remove build artifacts
 clean-build:
 	@echo "Cleaning project build..."
-	@rm -rf build
+	@rm -rf $(BUILDDIR)
 
-# Clean CMake cache
 clean-cmake:
 	@echo "Removing CMake cache..."
-	@rm -rf build/CMakeCache.txt
+	@rm -rf $(BUILDDIR)/CMakeCache.txt
 
-# Why would you need this..? Rebuild time is very long! 
-# clean-openfhe:
-# 	@echo "Cleaning OpenFHE build..."
-# 	@rm -rf vendors/openfhe-development/build 
-# 	@rm -rf vendors/install
+################
+# Latex Thesis #
+################
 
+latex:
+	$(MAKE) -C docs/latex
 
 ################
 # Instructions #
@@ -91,9 +144,14 @@ clean-cmake:
 
 help:
 	@echo "Available targets:"
-	@echo "  build              - Build OpenFHE (static) and link project against it"
+	@echo "  openfhe            - Build the optimized OpenFHE install (idempotent)"
+	@echo "  build              - Configure project + build registered binaries"
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
+	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
+	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
+	@echo "  bench-<name>       - Build a specific benchmark binary"
+	@echo "  params             - Set up the .venv used by parameter tuning"
+	@echo "  tune-<name>        - Run Optuna against test-<name>"
 	@echo "  clean              - Clean project build artifacts"
-	@echo "  clean-openfhe      - Clean OpenFHE build artifacts"
 	@echo "  help               - Show this help message"
