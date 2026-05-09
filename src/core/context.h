@@ -27,7 +27,11 @@ namespace Context
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
 
         RGSW EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
-        Ciphertext<DCRTPoly> EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw);
+        Ciphertext<DCRTPoly> EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const;
+        RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const;
+        
+        /// @brief Decrypt RGSW by decrypting central row OR taking external product with 1
+        // DecryptResult Decrypt(const RGSW& ciphertext, const PrivateKey<DCRTPoly>& privateKey, Plaintext* plaintext) const;
 
     protected:
         const std::vector<NativeInteger> m_gadgetVectorScalars;

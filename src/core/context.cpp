@@ -86,7 +86,7 @@ namespace Context
     }
 
     /// @brief Returns the external product between the rlwe and rgsw
-    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw)
+    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw) const
     {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const size_t L = params->GetElementParams()->GetParams().size();
@@ -116,6 +116,21 @@ namespace Context
 
         return result;
     }
+
+    RGSW ExtendedCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const
+    {
+        RGSW result = lhs;
+        for(auto& rlwe : result) {
+            rlwe = EvalExternalProduct(rlwe, rhs);
+        }
+        return result;
+    }
+
+    // DecryptResult ExtendedCryptoContextImpl::Decrypt(const RGSW &ciphertext, const PrivateKey<DCRTPoly> &privateKey, Plaintext *plaintext) const
+    // {
+    //     const auto rlwe = ciphertext[ciphertext.size()/2];
+    //     return CryptoContextImpl<DCRTPoly>::Decrypt(rlwe, privateKey, &plaintext);
+    // }
 
     /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i} as a *small* integer polynomial in R,
     ///        embedded consistently across all towers (each tower = the same small poly mod q_k).
