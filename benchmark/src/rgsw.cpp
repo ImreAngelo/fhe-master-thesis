@@ -13,8 +13,8 @@ using namespace lbcrypto;
 namespace {
 
 constexpr uint32_t DEPTH        = 3;
-constexpr uint64_t PT_MODULUS   = 8;
-constexpr uint32_t RING_DIM_LOG = 11;   // 2048
+constexpr uint64_t PT_MODULUS   = 65537;    // 8 for small params case
+constexpr uint32_t RING_DIM_LOG = 14;       // 11 = 2048, 14 = 16384
 
 class RGSW : public benchmark::Fixture {
 public:
@@ -26,7 +26,7 @@ public:
         params.SetPlaintextModulus(PT_MODULUS);
         params.SetRingDim(1 << RING_DIM_LOG);
         params.SetScalingTechnique(FIXEDMANUAL);
-        // params.SetSecurityLevel(SecurityLevel::HEStd_NotSet); // Required for small params
+        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet); // Required for small params
         // params.SetNumLargeDigits(2);
 
         cc = Context::GenExtendedCryptoContext(params);

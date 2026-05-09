@@ -3,7 +3,7 @@
 #include "openfhe.h"
 #include "core/context.h"
 #include "utils/timer.h"
-
+#include "utils/logging.h"
 
 #if defined(DEBUG_LOGGING) || defined(DEBUG)
     #define DEBUG_PRINT_SAMELINE(x) std::cout << x;
