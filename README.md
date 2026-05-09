@@ -68,6 +68,8 @@ make bench
 ```
 
 ## TODO
-- [ ] Add/verify support for MakeCoefPackedPlaintext (and smaller params)
+- [x] Add/verify support for MakeCoefPackedPlaintext (and smaller params)
 - [ ] Add/verify support for BFV
-- [ ]
+- [ ] Verify depth requirements
+- [ ] Make code multi-threaded where possible
+- [ ] Test multi-threaded performance

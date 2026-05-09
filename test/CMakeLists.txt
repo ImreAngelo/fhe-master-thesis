@@ -66,6 +66,7 @@ endfunction()
 register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
 register_test(test-rgsw-coef        SOURCE src/rgsw-coef CUSTOM_MAIN)
 register_test(test-write            SOURCE src/write)
+register_test(test-depth            SOURCE src/depth)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)
