@@ -20,7 +20,7 @@ namespace params {
     template<typename T>
     inline lbcrypto::CCParams<T> Create() {
         lbcrypto::CCParams<T> params;
-        params.SetMultiplicativeDepth(1);
+        params.SetMultiplicativeDepth(2);
         params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
         params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
         
