@@ -30,7 +30,6 @@ namespace server {
         KeyPair<DCRTPoly> keys = cc->KeyGen();
 
         constexpr uint64_t N = (uint64_t(1) << L);
-        // const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
 
         const auto rgsw_zero = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
         const auto rgsw_one  = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
@@ -40,19 +39,12 @@ namespace server {
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
         for (uint64_t i = 0; i < N; i++) {
             for (size_t k = 0; k < K; k++) {
-                L_mat[i][k] = rgsw_zero;
-                I_mat[i][k] = rgsw_one;
+                L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+                I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
             }
         }
 
-        DEBUG_PRINT("Initial state:");
-        server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
-        server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
-
         for (uint64_t r = 0; r < N; r++) {
-            DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
-            DEBUG_TIMER("User " + std::to_string(r + 1));
-
             const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
 
             // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
@@ -62,29 +54,7 @@ namespace server {
             const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
             // Output results
-            auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
-            DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
-
-            DEBUG_PRINT("");
-            server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
-            server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
-
-            // Verify hasWritten is correct for this user
-            // ASSERT_EQ(RECENTER(hw[0], t), 1);
+            DEBUG_PRINT(server::Decrypt(cc, keys.secretKey, hasWritten));
         }
-
-        // // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.
-        // for (uint64_t i = 0; i < N; i++) {
-        //     for (size_t k = 0; k < K; k++) {
-        //         auto Lcell = server::Decrypt(cc, keys.secretKey, L_mat[i][k]);
-        //         const int64_t expectedL = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
-        //         auto L_val = RECENTER(Lcell[0], t);
-        //         ASSERT_EQ(L_val, expectedL) << "L[" << i << "][" << k << "]";
-
-        //         auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
-        //         auto I_val = RECENTER(Icell[0], t);
-        //         ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
-        //     }
-        // }
     }
 } // namespace server

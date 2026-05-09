@@ -20,7 +20,7 @@ namespace params {
     template<typename T>
     inline lbcrypto::CCParams<T> Create() {
         lbcrypto::CCParams<T> params;
-        params.SetMultiplicativeDepth(2);
+        params.SetMultiplicativeDepth(1);
         params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
         params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
         
@@ -29,6 +29,20 @@ namespace params {
 
         // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
         params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(lbcrypto::FIXEDMANUAL));
+
+        return params;
+    }
+
+    template<typename T>
+    inline lbcrypto::CCParams<T> Small() {
+        lbcrypto::CCParams<T> params;
+        params.SetMultiplicativeDepth(1);
+        params.SetPlaintextModulus(4);
+        params.SetRingDim(1 << 11);
+
+        // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
+        params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+        params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
         return params;
     }

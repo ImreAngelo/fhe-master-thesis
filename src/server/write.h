@@ -21,9 +21,9 @@ namespace server {
     template <typename T = DCRTPoly>
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
-    // ------------------------- //
-    // Swappable implementations //
-    // ------------------------- //
+    //-----------------//
+    // implementations //
+    //-----------------//
 
     // RGSW addition
     template <typename T = DCRTPoly>
@@ -103,6 +103,7 @@ namespace server {
         template <typename Poly = DCRTPoly, typename T, size_t K, uint64_t N>
         void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<std::array<T, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
             DEBUG_PRINT_SAMELINE(label << ": ");
+        #if defined(DEBUG_LOGGING)
             for (uint64_t i = 0; i < N; i++) {
                 DEBUG_PRINT_SAMELINE("\t[ ");
                 for (size_t k = 0; k < K; k++) {
@@ -110,15 +111,18 @@ namespace server {
                     DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
                 }
             }
+        #endif
         }
 
         template <typename Poly = DCRTPoly, typename T, size_t K>
         void PrintRow(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<T, K>& row, const PrivateKey<DCRTPoly>& secretKey) {
             DEBUG_PRINT_SAMELINE(label << ":\t[ ");
+        #if defined(DEBUG_LOGGING)
             for (size_t k = 0; k < K; k++) {
                 auto cell = server::Decrypt(cc, secretKey, row[k]);
                 DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
             }
+        #endif
         }
     }
     
@@ -163,8 +167,6 @@ namespace server {
                     for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
                         DEBUG_PRINT("slot: " << i);
                         DEBUG_TIMER("iteration");
-
-                        // DEBUG_PRINT("Asking? " << Decrypt(secretKey, z[d][i]));
                         
                         auto zI  = cc->EvalInternalProduct(z[d][i], I_mat[i][k]);
                         DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
@@ -179,11 +181,7 @@ namespace server {
                         DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
 
                         debug::PrintRow("L_mat[" + std::to_string(i) + "] before", cc, L_mat[i], secretKey);
-
-                        // DEBUG_PRINT("L_mat[" << i << "][" << k << "] before writing: " << Decrypt(cc, secretKey, L_mat[i][k]));
                         L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], val);
-                        // DEBUG_PRINT("L_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, L_mat[i][k]));
-                        
                         debug::PrintRow("L_mat[" + std::to_string(i) + "] after", cc, L_mat[i], secretKey);
 
                         I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);

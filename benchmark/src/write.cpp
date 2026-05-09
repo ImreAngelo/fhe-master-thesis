@@ -7,31 +7,27 @@
 
 using namespace lbcrypto;
 
-inline CCParams<CryptoContextBGVRNS> CreateParams() {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(8);
-    params.SetRingDim(2048);
-    params.SetScalingTechnique(FIXEDMANUAL);
-    // params.SetNumLargeDigits(3);
-
-    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-    return params;
-}
 
 class ServerWrite : public benchmark::Fixture {
 public:
-    void SetUp(const benchmark::State&) override {}
+    void SetUp(const benchmark::State&) override {
+        params.SetMultiplicativeDepth(5);
+        params.SetPlaintextModulus(256);
+        params.SetRingDim(2048);
+        params.SetScalingTechnique(FIXEDMANUAL);
+        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+    }
+
+    CCParams<CryptoContextBGVRNS> params;
 }; 
 
-#define MAKE_BENCHMARK(name, K, D, L, params) BENCHMARK_F(ServerWrite, name)(benchmark::State& s) { \
-    auto p = params; \
-    for (auto _ : s) { server::TestServerWrite<DCRTPoly, K, D, L>(p); } \
+#define MAKE_BENCHMARK(name, K, D, L) BENCHMARK_F(ServerWrite, name)(benchmark::State& s) { \
+    for (auto _ : s) { server::TestServerWrite<DCRTPoly, K, D, L>(params); } \
 }
 
 // TODO: Only benchmark with K = D = 3?
-// MAKE_BENCHMARK(mvp, 1, 1, 1, CreateParams(3))
-// MAKE_BENCHMARK(N2, 3, 3, 1, CreateParams(3))
+MAKE_BENCHMARK(mvp, 1, 1, 1)
+MAKE_BENCHMARK(N2, 3, 3, 1)
 // MAKE_BENCHMARK(N4, 3, 3, 2, CreateParams(3))
 // MAKE_BENCHMARK(N8, 3, 3, 3, CreateParams(3))
 // MAKE_BENCHMARK(N16, 3, 3, 4, CreateParams(3))
