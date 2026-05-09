@@ -4,14 +4,14 @@
 
 using namespace lbcrypto;
 
-inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ringDimLog = 14) {
+inline CCParams<CryptoContextRGSWBGV> CreateParams() {
     CCParams<CryptoContextRGSWBGV> params;
-    params.SetMultiplicativeDepth(depth);
-    params.SetPlaintextModulus(8);
-    params.SetRingDim(1 << ringDimLog);
-    // params.SetScalingTechnique(FIXEDMANUAL);
-
-    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+    params.SetMultiplicativeDepth(4);
+    params.SetPlaintextModulus(1 << 8);
+    params.SetRingDim(1 << 11);
+    params.SetScalingTechnique(FIXEDMANUAL);
+    params.SetSecurityLevel(HEStd_NotSet);
+    params.SetMaxRelinSkDeg(0);
     return params;
 }
 
@@ -22,7 +22,7 @@ inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ring
 // TEST(Server, Write_2k1d) { server::TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
 
 // Main tests
-TEST(ServerWrite, N2)  { server::TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams(3)); }
+TEST(ServerWrite, N2)  { server::TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams()); }
 // TEST(ServerWrite, N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
 // TEST(ServerWrite, N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
 // TEST(ServerWrite, N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }

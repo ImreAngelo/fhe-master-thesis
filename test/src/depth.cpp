@@ -13,6 +13,7 @@ inline void RunDepthTest(uint32_t mult_depth, int max = 500) {
     params.SetMultiplicativeDepth(mult_depth);
     params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(1 << 8));
     params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 11));
+    params.SetScalingTechnique(FIXEDMANUAL);
     params.SetSecurityLevel(HEStd_NotSet);
     params.SetMaxRelinSkDeg(0);
 
@@ -81,6 +82,8 @@ inline void RunDepthTest(uint32_t mult_depth, int max = 500) {
     EXPECT_GT(int_count, 0) << "no internal products survived at depth " << mult_depth;
 }
 
+TEST(Depth, d1) { RunDepthTest(1); }
+TEST(Depth, d2) { RunDepthTest(2); }
 TEST(Depth, d3) { RunDepthTest(3); }
 TEST(Depth, d4) { RunDepthTest(4); }
 

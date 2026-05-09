@@ -52,6 +52,10 @@ namespace server {
             }
         }
 
+        DEBUG_PRINT("Initial state:");
+        server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+        server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
+
         for (uint64_t r = 0; r < N; r++) {
             DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
             DEBUG_TIMER("User " + std::to_string(r + 1));
@@ -68,15 +72,9 @@ namespace server {
             auto hw = server::Decrypt(cc, keys.secretKey, hasWritten, N);
             DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
 
-            for(const auto& ct : L_mat[r]) {
-                auto cell = server::Decrypt(cc, keys.secretKey, ct);
-                DEBUG_PRINT("L[" << r << "][0]: " << cell);
-            }
-
-            for(const auto& ct : I_mat[r]) {
-                auto cell = server::Decrypt(cc, keys.secretKey, ct);
-                DEBUG_PRINT("I[" << r << "]: " << cell);
-            }
+            DEBUG_PRINT("");
+            server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
+            server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");           
 
             // Verify hasWritten is correct for this user
             ASSERT_EQ(RECENTER(hw[0], t), 1);
@@ -92,7 +90,8 @@ namespace server {
 
                 auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
                 auto I_val = RECENTER(Icell[0], t);
-                ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
+                auto expected = (k == 0) ? 0 : 1;
+                ASSERT_EQ(I_val, expected) << "I[" << i << "][" << k << "]";
             }
         }
     }

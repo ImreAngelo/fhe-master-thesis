@@ -17,7 +17,7 @@ using namespace lbcrypto;
 inline CCParams<CryptoContextRGSWBGV> GetParams(const uint32_t log_N = 11) {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(2));
-    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(1 << 2));
+    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(1 << 8));
     params.SetRingDim(test_cli::g_ring_dim.value_or(1 << log_N));
     // params.SetScalingTechnique(FIXEDMANUAL); // TODO: Check if this is better for noise growth
 

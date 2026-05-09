@@ -4,6 +4,12 @@
 #include "core/context.h"
 #include "utils/timer.h"
 
+#if defined(DEBUG_LOGGING) || defined(DEBUG)
+    #define DEBUG_PRINT_SAMELINE(x) std::cout << x;
+#else
+    #define DEBUG_PRINT_SAMELINE(x)
+#endif
+
 namespace server {
     using namespace lbcrypto;
 
@@ -122,9 +128,40 @@ namespace server {
         return res->GetCoefPackedValue();
     }
     
-    // -------------------------------- //
-    // Easily swappable implementations //
-    // -------------------------------- //
+    // --------- //
+    // Debugging //
+    // --------- //
+
+    namespace debug {
+        template <typename Poly = DCRTPoly, typename T, size_t K, uint64_t N>
+        void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<std::array<T, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
+            DEBUG_PRINT_SAMELINE(label << ": ");
+        #if defined(DEBUG_LOGGING)
+            for (uint64_t i = 0; i < N; i++) {
+                DEBUG_PRINT_SAMELINE("\t[ ");
+                for (size_t k = 0; k < K; k++) {
+                    auto cell = server::Decrypt(cc, secretKey, mat[i][k]);
+                    DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
+                }
+            }
+        #endif
+        }
+
+        template <typename Poly = DCRTPoly, typename T, size_t K>
+        void PrintRow(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<T, K>& row, const PrivateKey<DCRTPoly>& secretKey) {
+            DEBUG_PRINT_SAMELINE(label << ":\t[ ");
+        #if defined(DEBUG_LOGGING)
+            for (size_t k = 0; k < K; k++) {
+                auto cell = server::Decrypt(cc, secretKey, row[k]);
+                DEBUG_PRINT_SAMELINE(cell[0] << (k == K - 1 ? " ]\n" : ", "));
+            }
+        #endif
+        }
+    }
+    
+    // ------------- //
+    //  Algorithm 2  //
+    // ------------- //
     
     /**
      * @brief Loop 2 of sPAR Algorithm 2
