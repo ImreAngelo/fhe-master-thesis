@@ -24,7 +24,7 @@ namespace Context
      */
     // Base for the second-level digit decomposition within each RNS tower.
     // Noise per external product scales as omega/2 instead of q_i/2.
-    static constexpr uint64_t GADGET_LOG  = 4;
+    static constexpr uint64_t GADGET_LOG  = 5;
     static constexpr uint64_t GADGET_BASE = 1u << GADGET_LOG;
 
     class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {

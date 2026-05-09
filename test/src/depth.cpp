@@ -15,6 +15,7 @@ TEST(Depth, ChainedInternalProduct) {
     params.SetPlaintextModulus(8);        // t = 8
     params.SetMultiplicativeDepth(1);
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
+    params.SetScalingTechnique(FIXEDMANUAL);
 
     const auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
@@ -24,9 +25,9 @@ TEST(Depth, ChainedInternalProduct) {
 
     constexpr int64_t t = 8;
 
-    // RGSW(2): the fixed multiplier applied each round.
-    const auto pt2   = cc->MakeCoefPackedPlaintext({2});
-    const auto rgsw2 = cc->EncryptRGSW(keys.publicKey, pt2);
+    // RGSW(3): the fixed multiplier applied each round.
+    const auto pt3   = cc->MakeCoefPackedPlaintext({3});
+    const auto rgsw2 = cc->EncryptRGSW(keys.publicKey, pt3);
 
     // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
     const auto pt1   = cc->MakeCoefPackedPlaintext({1});
@@ -38,12 +39,15 @@ TEST(Depth, ChainedInternalProduct) {
 
     for (int n = 1; n <= 64; ++n) {
         val      = cc->EvalInternalProduct(rgsw2, val);
-        expected = (expected * 2) % t;
+        expected = (expected * 3) % t;
         if (expected > t / 2) expected -= t;
 
         const auto res = cc->EvalExternalProduct(rlwe1, val);
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, res, &decrypted);
+        
+        decrypted->SetLength(4);
+        std::cout << n << ":\t" << decrypted << std::endl;
 
         const auto& coef = decrypted->GetCoefPackedValue();
         const int64_t got = coef.empty() ? 0 : coef[0];
