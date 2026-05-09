@@ -94,6 +94,7 @@ inline void RunTest(const std::vector<int64_t>& value) {
         decrypted->SetLength(value.size());
     
         ASSERT_EQ(decrypted->GetPackedValue(), value);
+        DEBUG_PRINT("External x 1 = " << decrypted);
     }
 
     // External product:  RGSW(value) x RLWE(n) = RLWE(n*value),  slot-wise for MakePackedPlaintext
@@ -114,20 +115,27 @@ inline void RunTest(const std::vector<int64_t>& value) {
         }
 
         ASSERT_EQ(decrypted->GetPackedValue(), scaled);
+        DEBUG_PRINT("External x " << scale << " = " << decrypted);
     }
 
     // Internal product: RGSW(a) x RGSW(b) = RGSW(a*b)
     {
-        auto one = cc->EncryptRGSW(keys.publicKey, cc->MakePackedPlaintext({1}));
-        auto res = cc->EvalInternalProduct(one, rgsw);
+        constexpr int64_t scale = 3;
+
+        const auto scalar = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), scale));
+        const auto identity = cc->EncryptRGSW(keys.publicKey, scalar);
+        const auto res = cc->EvalInternalProduct(identity, rgsw);
+        
+        const auto one_ct = cc->Encrypt(keys.publicKey, scalar);
+        const auto rlwe = cc->EvalExternalProduct(one_ct, res);
 
         Plaintext decrypted;
-        cc->Decrypt(keyPair.secretKey, res, &decrypted);
+        cc->Decrypt(keys.secretKey, rlwe, &decrypted);
+        decrypted->SetLength(value.size());
         
-        const auto& result_slots = decrypted->GetPackedValue();
-
-        DEBUG_PRINT(result_slots);
-
+        DEBUG_PRINT("Internal x " << scale << " = " << decrypted);
+        
+        // const auto& result_slots = decrypted->GetPackedValue();
         // for (size_t i = 0; i < value.size(); i++) {
         //     // auto modval = CENTER(value[i], static_cast<int64_t>(params.GetPlaintextModulus()));
         //     // ASSERT_EQ(modval, result_slot[i]) << "slot " << i << std::endl;

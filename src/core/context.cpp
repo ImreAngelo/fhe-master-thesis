@@ -121,10 +121,16 @@ namespace Context
     {
         RGSW result = lhs;
         for(auto& rlwe : result) {
-            rlwe = EvalAdd(rlwe, EvalExternalProduct(rlwe, rhs));
+            rlwe = EvalExternalProduct(rlwe, rhs);
         }
         return result;
     }
+
+    // DecryptResult ExtendedCryptoContextImpl::Decrypt(const RGSW &ciphertext, const PrivateKey<DCRTPoly> &privateKey, Plaintext *plaintext) const
+    // {
+    //     const auto rlwe = ciphertext[ciphertext.size()/2];
+    //     return CryptoContextImpl<DCRTPoly>::Decrypt(rlwe, privateKey, &plaintext);
+    // }
 
     /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i} as a *small* integer polynomial in R,
     ///        embedded consistently across all towers (each tower = the same small poly mod q_k).
