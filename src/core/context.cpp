@@ -133,11 +133,19 @@ namespace Context
         return result;
     }
 
-    // DecryptResult ExtendedCryptoContextImpl::Decrypt(const RGSW &ciphertext, const PrivateKey<DCRTPoly> &privateKey, Plaintext *plaintext) const
-    // {
-    //     const auto rlwe = ciphertext[ciphertext.size()/2];
-    //     return CryptoContextImpl<DCRTPoly>::Decrypt(rlwe, privateKey, &plaintext);
-    // }
+    /// @brief Decrypt RGSW
+    DecryptResult ExtendedCryptoContextImpl::Decrypt(const PrivateKey<DCRTPoly> &privateKey, const RGSW &ciphertext, Plaintext *plaintext)
+    {
+        // Take external product RGSW(a) x RLWE(1) = RLWE(a)
+        const auto rlwe = Encrypt(privateKey, MakeCoefPackedPlaintext({1}));
+        const auto intr = EvalExternalProduct(rlwe, ciphertext);
+        return CryptoContextImpl<DCRTPoly>::Decrypt(intr, privateKey, plaintext);
+
+        // TODO: Decrypt row that has gadget = 1 
+        // const auto rlwe = ciphertext[0];
+        // std::cout << "Decrypting level " << rlwe->GetLevel() << std::endl;
+        // return CryptoContextImpl<DCRTPoly>::Decrypt(rlwe, privateKey, plaintext);
+    }
 
     /// @brief Number of base-GADGET_BASE digits needed to cover the largest RNS prime.
     /// Digits per tower: ell = ceil(log_GADGET_BASE(max_qi)).

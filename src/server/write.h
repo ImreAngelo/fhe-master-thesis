@@ -153,49 +153,60 @@ namespace server {
         const PrivateKey<T>& secretKey, // for debugging
         const uint32_t iteration = 1
     ) {
+        constexpr uint64_t N = (uint64_t(1) << L);
+
         const auto one  = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        auto hasWritten = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto zero = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
+        // Phase 2: parallel availability — depth 1, all N products per (d,k) are independent.
+        // avail[d][k] = Σ_i (z[d][i] ⊠ I_mat[i][k])  collapses to I_mat[sel_d][k] obliviously.
+        std::array<std::array<RGSWCiphertext<T>, K>, D> avail;
         {
-            DEBUG_TIMER("Server Write");
-    
-            // FASTER: First user always writes to their preferred slot/bin
-            for(uint32_t d = 0; d < std::min(D, iteration); d++) {
-                DEBUG_PRINT("candidate: " << d << " < " << std::min(D, iteration));
-                for (uint32_t k = 0; k < std::min(K, iteration); k++) {
-                    DEBUG_PRINT("bin: " << k << " < " << std::min(K, iteration));
-                    for (uint64_t i = 0; i < (uint64_t(1) << L); i++) {
-                        DEBUG_PRINT("slot: " << i);
-                        DEBUG_TIMER("iteration");
-                        
-                        auto zI  = cc->EvalInternalProduct(z[d][i], I_mat[i][k]);
-                        DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
+            DEBUG_TIMER("Phase 2: availability");
+            for (uint32_t d = 0; d < D; d++) {
+                for (uint32_t k = 0; k < K; k++) {
+                    avail[d][k] = zero;
+                    for (uint64_t i = 0; i < N; i++) {
+                        auto term = cc->EvalInternalProduct(z[d][i], I_mat[i][k]);
+                        avail[d][k] = EvalAddRGSW(cc, avail[d][k], term);
+                    }
+                    DEBUG_PRINT("avail[" << d << "][" << k << "]: " << Decrypt(cc, secretKey, avail[d][k]));
+                }
+            }
+        }
 
-                        auto sub = EvalSubRGSW(cc, one, hasWritten);
-                        DEBUG_PRINT("Can write? " << Decrypt(cc, secretKey, sub));
+        // Phase 3: fixed-depth D×K-way priority selection — depth grows by 1 per (d,k) step,
+        // bounded at D×K regardless of N.
+        std::array<std::array<RGSWCiphertext<T>, K>, D> w;
+        auto hasWritten = zero;
+        {
+            DEBUG_TIMER("Phase 3: selection");
+            for (uint32_t d = 0; d < D; d++) {
+                for (uint32_t k = 0; k < K; k++) {
+                    auto not_written = EvalSubRGSW(cc, one, hasWritten);
+                    w[d][k] = cc->EvalInternalProduct(avail[d][k], not_written);
+                    hasWritten = EvalAddRGSW(cc, hasWritten, w[d][k]);
+                    DEBUG_PRINT("w[" << d << "][" << k << "]: " << Decrypt(cc, secretKey, w[d][k]));
+                }
+            }
+            DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten));
+        }
 
-                        auto h   = cc->EvalInternalProduct(zI, sub);
-                        DEBUG_PRINT("Will write? " << Decrypt(cc, secretKey, h));
-    
-                        auto val = EvalMultPlain(cc, Vr, h);
-                        DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
-
-                        debug::PrintRow("L_mat[" + std::to_string(i) + "] before", cc, L_mat[i], secretKey);
+        // Phase 4: parallel write-back — depth 1 more (= D×K+1 total), all N products independent.
+        {
+            DEBUG_TIMER("Phase 4: write-back");
+            for (uint32_t d = 0; d < D; d++) {
+                for (uint32_t k = 0; k < K; k++) {
+                    for (uint64_t i = 0; i < N; i++) {
+                        auto selected = cc->EvalInternalProduct(w[d][k], z[d][i]);
+                        auto val = EvalMultPlain(cc, Vr, selected);
                         L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], val);
-                        debug::PrintRow("L_mat[" + std::to_string(i) + "] after", cc, L_mat[i], secretKey);
-
-                        I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
-                        DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
-
-                        DEBUG_PRINT("hasWritten before add: " << Decrypt(cc, secretKey, hasWritten));
-                        hasWritten = EvalAddRGSW(cc, hasWritten, h);
-                        DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten));
-
-                        debug::PrintMatrix("L", cc, L_mat, secretKey); DEBUG_PRINT("");
-                        debug::PrintMatrix("I", cc, I_mat, secretKey); DEBUG_PRINT("");
+                        I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], selected);
                     }
                 }
             }
+            debug::PrintMatrix("L", cc, L_mat, secretKey); DEBUG_PRINT("");
+            debug::PrintMatrix("I", cc, I_mat, secretKey); DEBUG_PRINT("");
         }
 
         DEBUG_PRINT("");

@@ -24,7 +24,7 @@ namespace Context
      */
     // Base for the second-level digit decomposition within each RNS tower.
     // Noise per external product scales as omega/2 instead of q_i/2.
-    static constexpr uint64_t GADGET_LOG  = 1;
+    static constexpr uint64_t GADGET_LOG  = 5;
     static constexpr uint64_t GADGET_BASE = 1u << GADGET_LOG;
 
     class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
@@ -36,7 +36,8 @@ namespace Context
         RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const;
         
         /// @brief Decrypt RGSW by decrypting central row OR taking external product with 1
-        // DecryptResult Decrypt(const RGSW& ciphertext, const PrivateKey<DCRTPoly>& privateKey, Plaintext* plaintext) const;
+        DecryptResult Decrypt(const PrivateKey<DCRTPoly>&, const RGSW&, Plaintext*);
+        using CryptoContextImpl<DCRTPoly>::Decrypt;
 
     protected:
         const std::vector<NativeInteger> m_gadgetVectorScalars;

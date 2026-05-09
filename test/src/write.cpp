@@ -59,15 +59,19 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
         const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
         // Output results
-        auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
-        DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
+        DEBUG_PRINT("User " << (r + 1) << " hasWritten (raw rgsw decrypt): " << server::Decrypt(cc, keys.secretKey, hasWritten));
 
         DEBUG_PRINT("");
         server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
         server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
 
-        // Verify hasWritten is correct for this user
-        ASSERT_EQ(hw[0], 1);
+        // Verify hasWritten encrypts 1 via external product: RGSW(hasWritten) ⊠ RLWE(1) → RLWE(1).
+        // Direct RGSW decrypt reads a gadget-scaled row (gives m·g₀·s mod t, not m).
+        auto hw_rlwe = cc->EvalExternalProduct(rlwe_one, hasWritten);
+        Plaintext hw_pt;
+        cc->Decrypt(keys.secretKey, hw_rlwe, &hw_pt);
+        hw_pt->SetLength(1);
+        ASSERT_EQ(hw_pt->GetCoefPackedValue()[0], 1) << "User " << (r + 1) << " hasWritten should encrypt 1";
     }
 
     // // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.

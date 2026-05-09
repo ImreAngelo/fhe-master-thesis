@@ -65,6 +65,11 @@ inline void RunTest(const std::vector<int64_t>& value) {
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
     const auto d = cc->Decompose(m);
 
+    Plaintext tmp;
+    cc->Decrypt(keys.secretKey, rgsw, &tmp);
+    tmp->SetLength(value.size());
+    DEBUG_PRINT("Encrypted -> " << tmp);
+
     // Gadget Identity 1: reconstruction
     {
         const auto g = cc->GadgetVector();
@@ -125,13 +130,9 @@ inline void RunTest(const std::vector<int64_t>& value) {
         const auto scalar = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), scale));
         const auto identity = cc->EncryptRGSW(keys.publicKey, scalar);
         const auto res = cc->EvalInternalProduct(identity, rgsw);
-        
-        const auto ones = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
-        const auto one = cc->Encrypt(keys.publicKey, ones);
-        const auto rlwe = cc->EvalExternalProduct(one, res);
 
         Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, rlwe, &decrypted);
+        cc->Decrypt(keys.secretKey, res, &decrypted);
         decrypted->SetLength(value.size());
         
         DEBUG_PRINT("Internal x " << scale << " = " << decrypted);
@@ -140,6 +141,17 @@ inline void RunTest(const std::vector<int64_t>& value) {
         for (size_t i = 0; i < value.size(); i++) {
             auto expected = scale * value[i];
             ASSERT_EQ(expected, slots[i]) << "slot " << i << std::endl;
+        }
+
+        // Internal product twice
+        {
+            const auto sqr = cc->EvalInternalProduct(res, res);
+
+            Plaintext decrypted;
+            cc->Decrypt(keys.secretKey, sqr, &decrypted);
+            decrypted->SetLength(value.size());
+
+            DEBUG_PRINT("Internal squared: " << decrypted);
         }
     }
 }

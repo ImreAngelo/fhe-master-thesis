@@ -36,8 +36,8 @@ namespace params {
     template<typename T>
     inline lbcrypto::CCParams<T> Small() {
         lbcrypto::CCParams<T> params;
-        params.SetMultiplicativeDepth(1);
-        params.SetPlaintextModulus(4);
+        params.SetMultiplicativeDepth(4);
+        params.SetPlaintextModulus(256);
         params.SetRingDim(1 << 11);
 
         // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
