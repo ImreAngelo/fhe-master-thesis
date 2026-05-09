@@ -22,7 +22,7 @@ public:
         if (cc) return;
         
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(1);
+        params.SetMultiplicativeDepth(2);
         params.SetPlaintextModulus(PT_MODULUS);
         params.SetRingDim(1 << RING_DIM_LOG);
         params.SetScalingTechnique(FIXEDMANUAL);
@@ -66,6 +66,6 @@ public:
 
 MAKE_BENCHMARK(Encrypt, cc->EncryptRGSW(keys.publicKey, pt_msg))
 MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct(rlwe_ct, rgsw_ct))
-// MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct))
+MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct))
 
 BENCHMARK_MAIN();

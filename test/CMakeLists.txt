@@ -64,6 +64,7 @@ endfunction()
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
 register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
+register_test(test-rgsw-coef        SOURCE src/rgsw-coef CUSTOM_MAIN)
 register_test(test-write            SOURCE src/write)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
