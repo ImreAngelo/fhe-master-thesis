@@ -89,39 +89,60 @@ inline void RunTest(const std::vector<int64_t>& value) {
     DCRTPoly m = pt->GetElement<DCRTPoly>();
     m.SetFormat(Format::EVALUATION);
 
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
     const auto d = cc->Decompose(m);
 
-    // Identity 1: reconstruction
-    const auto g = cc->GadgetVector();
-    DCRTPoly reconstructed = InnerProduct(d, g);
-    ASSERT_EQ(reconstructed, m);
+    // Gadget Identity 1: reconstruction
+    {
+        const auto g = cc->GadgetVector();
+        DCRTPoly reconstructed = InnerProduct(d, g);
+        ASSERT_EQ(reconstructed, m);
 
-    // Round-trip back to a Plaintext via the high-level API.
-    Plaintext recovered = DCRTToPackedPlaintext(cc, reconstructed);
-    recovered->SetLength(value.size());
-    ASSERT_EQ(recovered->GetPackedValue(), value);
+        // Round-trip back to a Plaintext via the high-level API.
+        Plaintext recovered = DCRTToPackedPlaintext(cc, reconstructed);
+        recovered->SetLength(value.size());
+        ASSERT_EQ(recovered->GetPackedValue(), value);
+    }
 
-    // Identity 2: <D(m), P(m)> = m·m
-    const auto P = cc->GadgetMul(m);
-    DCRTPoly mm = m * m;
-    ASSERT_EQ(InnerProduct(d, P), mm);
+    // Gadget Identity 2: <D(m), P(m)> = m·m
+    {
+        const auto P = cc->GadgetMul(m);
+        DCRTPoly mm = m * m;
+        ASSERT_EQ(InnerProduct(d, P), mm);
+    }
 
-    // RGSW
-    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
+    // External product:  RGSW(value) x RLWE(1) = RLWE(value),  slot-wise for MakePackedPlaintext
+    {
+        const auto ones = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), 1));
+        const auto rlwe = cc->Encrypt(keys.publicKey, ones);
+        const auto res = cc->EvalExternalProduct(rlwe, rgsw);
+    
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, res, &decrypted);
+        decrypted->SetLength(value.size());
+    
+        ASSERT_EQ(decrypted->GetPackedValue(), value);
+    }
 
-    // External product:  RGSW(value) ⊡ RLWE(ones)  →  RLWE(value)  (slot-wise mul).
-    const std::vector<int64_t> ones(value.size(), 1);
-    const auto rlwe_ones = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext(ones));
-    const auto res = cc->EvalExternalProduct(rlwe_ones, rgsw);
+    // External product:  RGSW(value) x RLWE(n) = RLWE(n*value),  slot-wise for MakePackedPlaintext
+    {
+        constexpr int64_t scale = 3;
 
-    Plaintext decrypted;
-    cc->Decrypt(keys.secretKey, res, &decrypted);
-    decrypted->SetLength(value.size());
+        const auto scalars = cc->MakePackedPlaintext(std::vector<int64_t>(value.size(), scale));
+        const auto rlwe = cc->Encrypt(keys.publicKey, scalars);
+        const auto res = cc->EvalExternalProduct(rlwe, rgsw);
+    
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, res, &decrypted);
+        decrypted->SetLength(value.size());
+    
+        std::vector<int64_t> scaled(value.size());
+        for (size_t i = 0; i < value.size(); ++i) {
+            scaled[i] = value[i] * scale;
+        }
 
-    DEBUG_PRINT(pt);
-    DEBUG_PRINT(decrypted);
-
-    ASSERT_EQ(decrypted->GetPackedValue(), value);
+        ASSERT_EQ(decrypted->GetPackedValue(), scaled);
+    }
 }
 
 TEST(RGSW_BVRNS, b0)    { RunTest({ 0 }); }

@@ -157,7 +157,7 @@ namespace Context
         return d;
     }
 
-    /// @brief P_Q(b)_i = [b · (Q/q_i)]_Q. In RNS form only tower i is non-zero.
+    /// @brief P_Q(b)_i = [b*(Q/q_i)]_Q. In RNS form only tower i is non-zero.
     std::vector<DCRTPoly> ExtendedCryptoContextImpl::GadgetMul(const DCRTPoly& b) const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto q = params->GetElementParams()->GetParams();
