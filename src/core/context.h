@@ -1,9 +1,6 @@
 #pragma once
 
 #include "openfhe.h"
-#include "params.h"
-#include "rgsw.h"
-
 #include <vector>
 
 // TODO: Clean up -> common.h or utils

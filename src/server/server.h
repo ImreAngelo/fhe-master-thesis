@@ -15,20 +15,12 @@ namespace server {
      * @brief Run sPAR Algorithm 2 (per-bin loops) for each user, then verify
      * the message landed at L_mat[r][0] = r+1 with hasWritten flipped to 1.
      *
-     * Loop 1 (binary-tree demux of the chosen index) is collapsed at the client
-     * to a one-hot RGSW vector to limit noise; the test sets all D choices to r,
-     * so z[i][d] is RGSW(1) when i==r and RGSW(0) otherwise. Loop 2 runs
-     * server-side fully in RGSW: internal product for z·I and the (1−hasWritten)
-     * gate, plaintext × RGSW for the L update (Vr is encrypted under a different,
-     * non-FHE scheme, so FHE never sees its semantic meaning), and RGSW add/sub
-     * for the running L/I/hasWritten state.
-     *
      * @tparam K Number of slots per bin
      * @tparam D Number of choices (default = A1, A2, A3)
      * @tparam L Bit-length of the address — N = 2^L users (and bins)
      */
     template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
-    void TestServerWrite(const CCParams<CryptoContextRGSWBGV>& params)
+    void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
     {
         auto cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);

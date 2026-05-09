@@ -1,14 +1,6 @@
 #define TEST_INTERNAL_FUNCTIONS
-#define CENTER(integer, modulus) (((integer) > (modulus) / 2) ? ((integer % (2*modulus)) - (modulus)) : (integer))
 
 #include "core/context.h"
-#include "core/helpers.h"
-#include "core/params.h"
-#include "core/rgsw.h"
-
-#include "encoding/plaintextfactory.h"
-
-#include "../cli_params.h"
 
 #include <cstdint>
 #include <cmath>
@@ -51,26 +43,6 @@ inline DCRTPoly InnerProduct(const std::vector<DCRTPoly>& u, const std::vector<D
     return result;
 }
 
-/// @todo Move to cli_params.h or create abstraction to get common set of params
-inline CCParams<CryptoContextBGVRNS> GetParams() {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(test_cli::g_mult_depth.value_or(1));
-    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
-    params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
-    // params.SetNumLargeDigits(2);
-
-    params.SetMaxRelinSkDeg(0); // Force no relinearization keys
-
-    // RGSW rows are built by hand; avoid per-level scaling (S_L = 1 needed).
-    params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(FIXEDMANUAL));
-
-    DEBUG_PRINT("Depth = " << params.GetMultiplicativeDepth());
-    DEBUG_PRINT("Ring Dim. = " << params.GetRingDim());
-    DEBUG_PRINT("Plaintext mod = " << params.GetPlaintextModulus());
-
-    return params;
-}
-
 /**
  * @brief Verify the BV-RNS gadget identities for an arbitrary plaintext element.
  *
@@ -78,8 +50,9 @@ inline CCParams<CryptoContextBGVRNS> GetParams() {
  *   2. <D_Q(m), P_Q(m)> ≡ m·m (mod Q)   — multiplicative pairing
  */
 inline void RunTest(const std::vector<int64_t>& value) {
-    const CCParams<CryptoContextBGVRNS> params = GetParams();
-    auto cc = Context::GenExtendedCryptoContext(params);
+    const auto params = params::Create<CryptoContextBGVRNS>();
+
+    const auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
 
@@ -98,7 +71,6 @@ inline void RunTest(const std::vector<int64_t>& value) {
         DCRTPoly reconstructed = InnerProduct(d, g);
         ASSERT_EQ(reconstructed, m);
 
-        // Round-trip back to a Plaintext via the high-level API.
         Plaintext recovered = DCRTToPackedPlaintext(cc, reconstructed);
         recovered->SetLength(value.size());
         ASSERT_EQ(recovered->GetPackedValue(), value);
@@ -142,6 +114,11 @@ inline void RunTest(const std::vector<int64_t>& value) {
         }
 
         ASSERT_EQ(decrypted->GetPackedValue(), scaled);
+    }
+
+    // Internal product: RGSW(a) x RGSW(b) = RGSW(a*b)
+    {
+
     }
 }
 
