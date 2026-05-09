@@ -70,10 +70,12 @@ namespace Context
         
         std::vector<Ciphertext<DCRTPoly>> rgsw;
         rgsw.reserve(2*mg.size());
+
+        // auto Z = this->Encrypt(publicKey, zero);
         
         for(size_t col = 0; col < 2; col++) {
             for(const auto& mgi : mg) {
-                // TODO: This should be safe to reuse as its only public encryption
+                // auto z = Z->Clone();
                 auto z = this->Encrypt(publicKey, zero);
                 z->GetElements()[col] += mgi;
                 rgsw.push_back(std::move(z));
@@ -86,22 +88,69 @@ namespace Context
     /// @brief Returns the external product between the rlwe and rgsw
     RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw)
     {
-        
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
+        const size_t L = params->GetElementParams()->GetParams().size();
+
+        auto c0 = rlwe->GetElements()[0];
+        auto c1 = rlwe->GetElements()[1];
+        c0.SetFormat(Format::EVALUATION);
+        c1.SetFormat(Format::EVALUATION);
+
+        const auto d0 = Decompose(c0);
+        const auto d1 = Decompose(c1);
+
+        DCRTPoly out0(params->GetElementParams(), Format::EVALUATION, true);
+        DCRTPoly out1(params->GetElementParams(), Format::EVALUATION, true);
+        for (size_t i = 0; i < L; i++) {
+            const auto& m0 = rgsw[i]->GetElements();
+            const auto& m1 = rgsw[L + i]->GetElements();
+            out0 += d0[i] * m0[0];
+            out1 += d0[i] * m0[1];
+            out0 += d1[i] * m1[0];
+            out1 += d1[i] * m1[1];
+        }
+
+        auto result = rlwe->Clone();
+        result->GetElements()[0] = std::move(out0);
+        result->GetElements()[1] = std::move(out1);
+
+        return result;
     }
 
-    /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i}, embedded in tower i (other towers zero).
+    /// @brief D_Q(a)_i = [a · (Q/q_i)^{-1}]_{q_i} as a *small* integer polynomial in R,
+    ///        embedded consistently across all towers (each tower = the same small poly mod q_k).
+    /// This is required for BV-RNS use with encrypted gadget vectors so that noise terms
+    /// d_i · e_i remain small integer polynomials when interpreted mod Q.
     std::vector<DCRTPoly> ExtendedCryptoContextImpl::Decompose(const DCRTPoly& a) const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto q = params->GetElementParams()->GetParams();
+        const auto& q = params->GetElementParams()->GetParams();
+        const size_t L = q.size();
+
+        // Need COEFFICIENT form to construct the small integer polynomial.
+        DCRTPoly aCoef(a);
+        aCoef.SetFormat(Format::COEFFICIENT);
 
         std::vector<DCRTPoly> d;
-        d.reserve(q.size());
+        d.reserve(L);
 
-        for (size_t i = 0; i < q.size(); i++) {
-            DCRTPoly di(params->GetElementParams(), a.GetFormat(), true);
+        for (size_t i = 0; i < L; i++) {
             const auto qi = q[i]->GetModulus();
-            auto tower = a.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
-            di.SetElementAtIndex(i, tower);
+            // small_poly_i = a.tower(i) · (Q/q_i)^{-1} mod q_i  (a NativePoly with values in [0, q_i))
+            auto smallPoly = aCoef.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
+
+            DCRTPoly di(params->GetElementParams(), Format::COEFFICIENT, true);
+            for (size_t k = 0; k < L; k++) {
+                if (k == i) {
+                    di.SetElementAtIndex(k, smallPoly);
+                } else {
+                    // SwitchModulus interprets `smallPoly` as a centered integer in [-q_i/2, q_i/2]
+                    // and reduces it mod q_k, giving the same small poly's residues in tower k.
+                    auto tk = smallPoly;
+                    tk.SwitchModulus(q[k]->GetModulus(), q[k]->GetRootOfUnity(), 0, 0);
+                    di.SetElementAtIndex(k, std::move(tk));
+                }
+            }
+            di.SetFormat(Format::EVALUATION);
             d.push_back(std::move(di));
         }
 

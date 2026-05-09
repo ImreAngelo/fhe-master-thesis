@@ -108,6 +108,20 @@ inline void RunTest(const std::vector<int64_t>& value) {
 
     // RGSW
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
+
+    // External product:  RGSW(value) ⊡ RLWE(ones)  →  RLWE(value)  (slot-wise mul).
+    const std::vector<int64_t> ones(value.size(), 1);
+    const auto rlwe_ones = cc->Encrypt(keys.publicKey, cc->MakePackedPlaintext(ones));
+    const auto res = cc->EvalExternalProduct(rlwe_ones, rgsw);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, res, &decrypted);
+    decrypted->SetLength(value.size());
+
+    DEBUG_PRINT(pt);
+    DEBUG_PRINT(decrypted);
+
+    ASSERT_EQ(decrypted->GetPackedValue(), value);
 }
 
 TEST(RGSW_BVRNS, b0)    { RunTest({ 0 }); }
