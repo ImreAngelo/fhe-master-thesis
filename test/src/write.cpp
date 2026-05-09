@@ -22,7 +22,7 @@ inline CCParams<CryptoContextRGSWBGV> CreateParams(uint32_t depth, uint32_t ring
 // TEST(Server, Write_2k1d) { server::TestServerWrite<DCRTPoly, 1, 2, 1>(CreateParams(8)); }
 
 // Main tests
-TEST(ServerWrite, N2)  { server::TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams(1)); }
+TEST(ServerWrite, N2)  { server::TestServerWrite<DCRTPoly, 3, 3, 1>(CreateParams(3)); }
 // TEST(ServerWrite, N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
 // TEST(ServerWrite, N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
 // TEST(ServerWrite, N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }

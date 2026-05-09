@@ -11,7 +11,7 @@ using namespace lbcrypto;
 inline void RunDepthTest(uint32_t mult_depth, int max = 500) {
     CCParams<CryptoContextRGSWBGV> params;
     params.SetMultiplicativeDepth(mult_depth);
-    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(1 << 2));
+    params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(1 << 8));
     params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 11));
     params.SetSecurityLevel(HEStd_NotSet);
     params.SetMaxRelinSkDeg(0);
@@ -26,22 +26,36 @@ inline void RunDepthTest(uint32_t mult_depth, int max = 500) {
     const size_t log_q  = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
     const size_t ell    = log_q / log_b + 1;
 
-    auto rgsw_one = cc->EncryptRGSW(keyPair.publicKey, cc->MakeCoefPackedPlaintext({1}), log_b, ell);
+    auto rgsw_one = cc->EncryptRGSW(keyPair.publicKey, cc->MakeCoefPackedPlaintext({3}), log_b, ell);
     auto rlwe_one = cc->Encrypt(keyPair.publicKey, cc->MakeCoefPackedPlaintext({1}));
 
-    auto decryptsToOne = [&](const Ciphertext<DCRTPoly>& ct) {
+    const int64_t t = params.GetPlaintextModulus();
+
+    // Returns the centered representative of x in [-t/2, t/2).
+    auto centeredMod = [t](int64_t x) -> int64_t {
+        x = ((x % t) + t) % t;
+        return x >= t / 2 ? x - t : x;
+    };
+
+    auto decryptsTo = [&](const Ciphertext<DCRTPoly>& ct, int64_t expected) {
         Plaintext res;
         cc->Decrypt(keyPair.secretKey, ct, &res);
-        return res->GetCoefPackedValue()[0] == 1;
+
+        res->SetLength(4);
+        DEBUG_PRINT(res);
+
+        return res->GetCoefPackedValue()[0] == centeredMod(expected);
     };
 
     int ext_count = 0;
     {
         auto chain = rlwe_one;
+        int64_t expected = 3; // rlwe_one(1) * rgsw_one(3) = 3 after first mult
         while (ext_count < max) {
             chain = cc->EvalExternalProduct(chain, rgsw_one, log_b);
-            if (!decryptsToOne(chain)) break;
+            if (!decryptsTo(chain, expected)) break;
             ++ext_count;
+            expected = (expected * 3) % t;
             DEBUG_PRINT("[External Product] " << ext_count << " chain pass");
         }
     }
@@ -49,10 +63,12 @@ inline void RunDepthTest(uint32_t mult_depth, int max = 500) {
     int int_count = 0;
     {
         auto chain = rgsw_one;
+        int64_t expected = 9; // rlwe_one(1) * rgsw_one^2(9) = 9 after first internal product
         while (int_count < max) {
             chain = cc->EvalInternalProduct(chain, rgsw_one, log_b);
-            if (!decryptsToOne(cc->EvalExternalProduct(rlwe_one, chain, log_b))) break;
+            if (!decryptsTo(cc->EvalExternalProduct(rlwe_one, chain, log_b), expected)) break;
             ++int_count;
+            expected = (expected * 3) % t;
             DEBUG_PRINT("[Internal Product] " << int_count << " chain pass");
         }
     }
