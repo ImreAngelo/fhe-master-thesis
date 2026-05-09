@@ -73,13 +73,14 @@ namespace Context
         std::vector<Ciphertext<DCRTPoly>> rgsw;
         rgsw.reserve(2*mg.size());
 
-        // auto Z = this->Encrypt(publicKey, zero);
+        auto Z = this->Encrypt(publicKey, zero);
         
         for(size_t col = 0; col < 2; col++) {
             for(const auto& mgi : mg) {
-                // auto z = Z->Clone();
-                // Using fresh encryptions is much slower
-                auto z = this->Encrypt(publicKey, zero);
+                auto z = Z->Clone();
+                // Using fresh encryptions is slower (1.63ms vs 0.517ms)
+                // TODO: Check if this affects noise
+                // auto z = this->Encrypt(publicKey, zero);
                 z->GetElements()[col] += mgi;
                 rgsw.push_back(std::move(z));
             }

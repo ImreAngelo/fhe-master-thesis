@@ -39,10 +39,7 @@ TBD... -->
 
 ## Unit Tests
 Unit tests are located inside the `tests` directory.
-Configured with [GoogleTest](https://github.com/google/googletest).
-
-> [!IMPORTANT]
-> The unit tests require C++20, while the rest of the project uses C++17
+Configured with [Google Test](https://github.com/google/googletest).
 
 > [!NOTE]
 > Each test has a make target
@@ -61,6 +58,14 @@ Configured with [GoogleTest](https://github.com/google/googletest).
 
 > [!TIP]
 > [VSCode Extension for GoogleTest](https://github.com/matepek/vscode-catch2-test-adapter)
+
+## Benchmarks
+Benchmarks are located inside the `benchmark` directory.
+Configured with [Google Benchmark](https://github.com/google/benchmark).
+
+```sh
+make bench
+```
 
 ## TODO
 - [ ] Add/verify support for MakeCoefPackedPlaintext (and smaller params)
