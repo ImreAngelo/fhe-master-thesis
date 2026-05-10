@@ -10,13 +10,7 @@ using namespace lbcrypto;
 
 
 TEST(Depth, ChainedInternalProduct) {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetRingDim(1 << 11);           // N = 2048
-    params.SetPlaintextModulus(8);        // t = 8
-    params.SetMultiplicativeDepth(2);
-    params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
-    params.SetScalingTechnique(FIXEDMANUAL);
-
+    const auto params = params::Small<CryptoContextBGVRNS>();
     const auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);

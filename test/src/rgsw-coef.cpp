@@ -78,12 +78,7 @@ inline std::vector<int64_t> PolyMulModXN(
  *   External product: RGSW(a) ⊡ RLWE(b) → RLWE(a·b mod (x^N+1, t)).
  */
 inline void RunTest(const std::vector<int64_t>& value, const std::vector<int64_t>& multiplier) {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetRingDim(1 << 11);
-    params.SetPlaintextModulus(128);
-    params.SetMultiplicativeDepth(2);
-    params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
-    
+    const auto params = params::Small<CryptoContextBGVRNS>();
     const auto cc = Context::GenExtendedCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
