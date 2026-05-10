@@ -1,11 +1,11 @@
-#include "gadget-bv.h"
+#include "gadget-hybrid.h"
 
 #include "utils/logging.h"
 #include "utils/timer.h"
 
 using namespace lbcrypto;
 
-std::vector<DCRTPoly> bvrns::UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
+std::vector<DCRTPoly> hybrid::UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     // DEBUG_TIMER("NTT Digit Decomposition");
 
@@ -40,7 +40,7 @@ std::vector<DCRTPoly> bvrns::UnsignedDigitDecompose(const std::shared_ptr<Crypto
     return g;
 }
 
-std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
+std::vector<DCRTPoly> hybrid::SignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     // DEBUG_TIMER("Coefficient Digit Decomposition");
 
@@ -82,7 +82,7 @@ std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoPa
     return g;
 }
 
-std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
+std::vector<DCRTPoly> hybrid::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     // DEBUG_TIMER("Projection");
 
@@ -114,7 +114,7 @@ std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersR
     return P;
 }
 
-std::vector<Ciphertext<DCRTPoly>> bvrns::Encrypt(const CryptoContext<DCRTPoly> &cc, const PublicKey<DCRTPoly> &publicKey, const Plaintext &plaintext)
+std::vector<Ciphertext<DCRTPoly>> hybrid::Encrypt(const CryptoContext<DCRTPoly> &cc, const PublicKey<DCRTPoly> &publicKey, const Plaintext &plaintext)
 {
     // DEBUG_TIMER("Encrypt RGSW");
 
@@ -125,7 +125,7 @@ std::vector<Ciphertext<DCRTPoly>> bvrns::Encrypt(const CryptoContext<DCRTPoly> &
         : cc->MakePackedPlaintext({0});
         
     // TODO: Check noise Signed/Power here and performance /w pre-computed D-tables.
-    const auto mg = bvrns::PowerOfBase(params, plaintext->GetElement<DCRTPoly>());
+    const auto mg = hybrid::PowerOfBase(params, plaintext->GetElement<DCRTPoly>());
 
     // TODO: Check noise vs fresh zero-encryptions
     // std::vector<Ciphertext<DCRTPoly>> rows(2*l, cc->Encrypt(publicKey, zero));
@@ -143,7 +143,7 @@ std::vector<Ciphertext<DCRTPoly>> bvrns::Encrypt(const CryptoContext<DCRTPoly> &
     return rows;
 }
 
-Ciphertext<DCRTPoly> bvrns::EvalExternalProduct(const CryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &rlwe, const std::vector<Ciphertext<DCRTPoly>> &rgsw)
+Ciphertext<DCRTPoly> hybrid::EvalExternalProduct(const CryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &rlwe, const std::vector<Ciphertext<DCRTPoly>> &rgsw)
 {
     // DEBUG_TIMER("External Product");
 
@@ -151,8 +151,8 @@ Ciphertext<DCRTPoly> bvrns::EvalExternalProduct(const CryptoContext<DCRTPoly> &c
     // const auto& l = rgsw.size();
 
     // const auto c = rlwe->GetElements();
-    // const auto p0 = bvrns::PowerOfBase(params, c[0]);
-    // const auto p1 = bvrns::PowerOfBase(params, c[1]);
+    // const auto p0 = hybrid::PowerOfBase(params, c[0]);
+    // const auto p1 = hybrid::PowerOfBase(params, c[1]);
 
     // auto result = rlwe->Clone();
 
@@ -169,8 +169,8 @@ Ciphertext<DCRTPoly> bvrns::EvalExternalProduct(const CryptoContext<DCRTPoly> &c
     c0.SetFormat(Format::EVALUATION);
     c1.SetFormat(Format::EVALUATION);
 
-    const auto d0 = bvrns::SignedDigitDecompose(params, c0);
-    const auto d1 = bvrns::SignedDigitDecompose(params, c1);
+    const auto d0 = hybrid::SignedDigitDecompose(params, c0);
+    const auto d1 = hybrid::SignedDigitDecompose(params, c1);
     const size_t K = d0.size();  // L * ell
 
     // Build outputs at the RLWE's active level, not the full context chain.
@@ -193,7 +193,7 @@ Ciphertext<DCRTPoly> bvrns::EvalExternalProduct(const CryptoContext<DCRTPoly> &c
     return result;
 }
 
-std::vector<Ciphertext<DCRTPoly>> bvrns::EvalInternalProduct(const CryptoContext<DCRTPoly> &cc, const std::vector<Ciphertext<DCRTPoly>> &lhs, const std::vector<Ciphertext<DCRTPoly>> &rhs)
+std::vector<Ciphertext<DCRTPoly>> hybrid::EvalInternalProduct(const CryptoContext<DCRTPoly> &cc, const std::vector<Ciphertext<DCRTPoly>> &lhs, const std::vector<Ciphertext<DCRTPoly>> &rhs)
 {
     // DEBUG_TIMER("Internal Product");
 
@@ -202,7 +202,7 @@ std::vector<Ciphertext<DCRTPoly>> bvrns::EvalInternalProduct(const CryptoContext
     return result;
 }
 
-DecryptResult bvrns::Decrypt(const CryptoContext<DCRTPoly>& cc, const PrivateKey<DCRTPoly> &privateKey, const std::vector<Ciphertext<DCRTPoly>> &ciphertext, Plaintext *plaintext)
+DecryptResult hybrid::Decrypt(const CryptoContext<DCRTPoly>& cc, const PrivateKey<DCRTPoly> &privateKey, const std::vector<Ciphertext<DCRTPoly>> &ciphertext, Plaintext *plaintext)
 {
     const auto idx = ciphertext.size()/2 - 1;
     return cc->Decrypt(privateKey, ciphertext[idx], plaintext);

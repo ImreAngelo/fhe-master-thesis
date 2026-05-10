@@ -21,7 +21,7 @@ DCRTPoly EvalInnerProduct(
     return result;
 }
 
-TEST(decryptedOMPOSE_B, main) {
+TEST(DECOMPOSE, main) {
     const std::vector<int64_t> value{-2};
 
     const auto params = params::Small<CryptoContextBGVRNS>();
@@ -55,62 +55,55 @@ TEST(decryptedOMPOSE_B, main) {
     }
 }
 
+// TODO: Refactor setup
+#define SETUP(val) const std::vector<int64_t> value{val}; \
+const auto params = params::Small<CryptoContextBGVRNS>(); \
+auto cc = GenCryptoContext(params); \
+cc->Enable(PKE); \
+cc->Enable(LEVELEDSHE); \
+const auto keys = cc->KeyGen(); \
+const Plaintext pt = cc->MakeCoefPackedPlaintext(value); \
+DCRTPoly m = pt->GetElement<DCRTPoly>();
+
+
+/* External Product */
 TEST(RGSW, ExternalProduct) {
-    const std::vector<int64_t> value{3};
+    SETUP(3);
 
-    const auto params = params::Small<CryptoContextBGVRNS>(2);
-    const auto cc = GenCryptoContext(params);
+    const auto mult = cc->MakeCoefPackedPlaintext({2});
+    const auto rlwe = cc->Encrypt(keys.publicKey, mult);
     
-    cc->Enable(PKE);
-    cc->Enable(LEVELEDSHE);
+    const auto rgsw = Encrypt(cc, keys.publicKey, pt);
+    const auto rExt = EvalExternalProduct(cc, rlwe, rgsw);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, rExt, &decrypted);
+    decrypted->SetLength(value.size());
     
-    const auto keys = cc->KeyGen();
-    
-    const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
-    DCRTPoly m = pt->GetElement<DCRTPoly>();
-    
-    /* External Product */
-    {
-        const auto mult = cc->MakeCoefPackedPlaintext({2});
-        const auto rlwe = cc->Encrypt(keys.publicKey, mult);
-        
-        const auto rgsw = context::Encrypt(cc, keys.publicKey, pt);
-        const auto rExt = context::EvalExternalProduct(cc, rlwe, rgsw);
+    DEBUG_PRINT("External Product: " << decrypted);
 
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, rExt, &decrypted);
-        decrypted->SetLength(value.size());
-        
-        DEBUG_PRINT("External Product: " << decrypted);
+    const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
+    ASSERT_EQ(decrypted, expected);
+}
 
-        const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
-        ASSERT_EQ(decrypted, expected);
-    }
+/* Internal Product */
+TEST(RGSW, InternalProduct) {
+    SETUP(3);
 
-    /* Internal Product */
-    {
-        const auto mult = cc->MakeCoefPackedPlaintext({2});
-        const auto a = context::Encrypt(cc, keys.publicKey, pt);
-        const auto b = context::Encrypt(cc, keys.publicKey, mult);
-        const auto rInt = context::EvalInternalProduct(cc, a, b);
+    const auto mult = cc->MakeCoefPackedPlaintext({2});
+    const auto a = Encrypt(cc, keys.publicKey, pt);
+    const auto b = Encrypt(cc, keys.publicKey, mult);
+    const auto rInt = EvalInternalProduct(cc, a, b);
 
-        // DEBUG_PRINT("Internal Product: ");
-        // for(const auto& row : rInt) {
-        //     Plaintext decrypted;
-        //     cc->Decrypt(keys.secretKey, row, &decrypted);
-        //     decrypted->SetLength(value.size());
-        //     DEBUG_PRINT(decrypted);
-        // }
+    const auto one = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({1}));
+    const auto res = EvalExternalProduct(cc, one, rInt);
 
-        const auto one = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({1}));
-        const auto res = context::EvalExternalProduct(cc, one, rInt);
+    Plaintext decrypted;
+    Decrypt(cc, keys.secretKey, rInt, &decrypted);
+    decrypted->SetLength(value.size());
 
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, res, &decrypted);
-        decrypted->SetLength(value.size());
-        DEBUG_PRINT(decrypted);
+    DEBUG_PRINT("Internal Product: " << decrypted);
 
-        // const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
-        // ASSERT_EQ(decrypted, expected);
-    }
+    const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
+    ASSERT_EQ(decrypted, expected);
 }

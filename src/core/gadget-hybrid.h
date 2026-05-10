@@ -7,7 +7,7 @@
  */
 
 /// @brief BV-RNS gadget decomposition in EVALUATION format
-namespace bvrns {
+namespace hybrid {
     using namespace lbcrypto;
 
     /// @brief Stays in evaluation format, but cannot use centered representation so it is much faster but also much noisier! 

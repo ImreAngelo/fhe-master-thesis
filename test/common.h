@@ -38,7 +38,7 @@ namespace params {
         lbcrypto::CCParams<T> params;
         params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(1 << 8);
-        params.SetRingDim(1 << 2);
+        params.SetRingDim(1 << 11);
 
         // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
         params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);

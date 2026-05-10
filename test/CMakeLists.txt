@@ -70,6 +70,7 @@ register_test(test-depth            SOURCE src/depth)
 
 register_test(test-base             SOURCE src/base)
 register_test(test-bv-rns           SOURCE src/bv-rns)
+register_test(test-hybrid           SOURCE src/hybrid-rns)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)
