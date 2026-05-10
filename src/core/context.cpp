@@ -76,13 +76,13 @@ namespace Context
         std::vector<Ciphertext<DCRTPoly>> rgsw;
         rgsw.reserve(2*mg.size());
 
-        auto Z = this->Encrypt(publicKey, zero);
+        // auto Z = this->Encrypt(publicKey, zero);
         
         for(size_t col = 0; col < 2; col++) {
             for(const auto& mgi : mg) {
                 // Using fresh encryptions is slower (1.63ms vs 0.517ms)
-                // auto z = this->Encrypt(publicKey, zero);
-                auto z = Z->Clone();
+                auto z = this->Encrypt(publicKey, zero);
+                // auto z = Z->Clone();
                 z->GetElements()[col] += mgi;
                 rgsw.push_back(std::move(z));
             }
@@ -187,25 +187,34 @@ namespace Context
             // u_i = a_i · (Q/q_i)^{-1} mod q_i   (values in [0, q_i))
             auto unit = aCoef.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
 
-            // Per-coefficient running remainder for signed base-GADGET_BASE recoding.
-            // Digits live in [-B/2, B/2); each iteration peels one digit and propagates the borrow.
-            std::vector<uint64_t> rem(N);
-            for (size_t k = 0; k < N; k++)
-                rem[k] = unit[k].ConvertToInt<uint64_t>();
+            // Per-coefficient signed running remainder for base-GADGET_BASE recoding.
+            // Center u_i to [-q_i/2, q_i/2) so that ell signed digits suffice; each iteration
+            // peels one digit in [-B/2, B/2) and propagates the borrow into the next.
+            std::vector<int64_t> rem(N);
+            const int64_t qiSigned = static_cast<int64_t>(qiVal);
+            for (size_t k = 0; k < N; k++) {
+                const uint64_t u = unit[k].ConvertToInt<uint64_t>();
+                rem[k] = (u >= qiVal / 2) ? static_cast<int64_t>(u) - qiSigned
+                                          : static_cast<int64_t>(u);
+            }
 
             for (size_t j = 0; j < ell; j++) {
                 NativePoly digitPoly(unit);   // copies params (modulus = q_i)
                 for (size_t k = 0; k < N; k++) {
-                    uint64_t c = rem[k];
-                    uint64_t udigit = c % GADGET_BASE;
+                    const int64_t c     = rem[k];
+                    // Power-of-two base: low GADGET_LOG bits of two's-complement c == c mod B.
+                    const uint64_t udigit = static_cast<uint64_t>(c) & (GADGET_BASE - 1);
+                    int64_t newRem        = c >> GADGET_LOG;   // arithmetic shift = floor(c / B)
+                    uint64_t stored;
                     if (udigit >= GADGET_BASE / 2) {
-                        // signed digit = udigit - B  (negative); store as q_i - (B - udigit) mod q_i
-                        rem[k]       = c / GADGET_BASE + 1;
-                        digitPoly[k] = NativeInteger(qiVal - (GADGET_BASE - udigit));
+                        // Signed digit = udigit - B (negative); store as q_i - (B - udigit) mod q_i.
+                        stored = qiVal - (GADGET_BASE - udigit);
+                        newRem += 1;
                     } else {
-                        rem[k]       = c / GADGET_BASE;
-                        digitPoly[k] = NativeInteger(udigit);
+                        stored = udigit;
                     }
+                    rem[k]       = newRem;
+                    digitPoly[k] = NativeInteger(stored);
                 }
 
                 // Embed consistently: same small polynomial in every active tower.
