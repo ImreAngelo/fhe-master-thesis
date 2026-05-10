@@ -18,6 +18,9 @@ namespace bvrns {
         const auto& Q = params->GetElementParams()->GetModulus();
         const auto& q = params->GetElementParams()->GetParams();
         const auto& towers = input.GetAllElements();
+
+        // TODO: Set format
+        if(input.GetFormat() != Format::EVALUATION) { DEBUG_PRINT("Plaintext was incorrect format!"); }
         
         // Output
         std::vector<DCRTPoly> g;
@@ -100,7 +103,6 @@ TEST(DECOMPOSE_B, main) {
 
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
-    m.SetFormat(Format::EVALUATION);
 
     // Get gadget decomposition vector
     const auto ccRNS = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
