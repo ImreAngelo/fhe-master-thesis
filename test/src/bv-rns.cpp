@@ -1,4 +1,5 @@
 #include "openfhe.h"
+#include "utils/timer.h"
 
 using namespace lbcrypto;
 
@@ -12,9 +13,11 @@ namespace bvrns {
         const std::shared_ptr<CryptoParametersRNS> params, 
         const DCRTPoly& input
     ) {
-        const auto& towers = input.GetAllElements();
+        DEBUG_TIMER("NTT Digit Decomposition");
+
+        const auto& Q = params->GetElementParams()->GetModulus();
         const auto& q = params->GetElementParams()->GetParams();
-        auto Q = params->GetElementParams()->GetModulus();
+        const auto& towers = input.GetAllElements();
         
         // Output
         std::vector<DCRTPoly> g;
@@ -41,51 +44,40 @@ namespace bvrns {
         const std::shared_ptr<CryptoParametersRNS> params, 
         const DCRTPoly& input
     ) {
-        const auto& q = params->GetElementParams()->GetParams();
-        const size_t num_towers = q.size();
-        auto Q = params->GetElementParams()->GetModulus();
+        DEBUG_TIMER("Coefficient Digit Decomposition");
 
-        // Ensure we work with coefficients to check magnitudes
+        const auto& Q = params->GetElementParams()->GetModulus();
+        const auto& q = params->GetElementParams()->GetParams();
+
+        // Using centered [-q/2, q/2) representation cannot be done in EVALUATION format
         DCRTPoly input_coeff = input;
         input_coeff.SetFormat(Format::COEFFICIENT);
 
-        std::vector<DCRTPoly> g;
-        g.reserve(num_towers);
+        std::vector<DCRTPoly> g(q.size(), DCRTPoly(input.GetParams(), Format::COEFFICIENT, true));
 
-        for(uint32_t i = 0; i < num_towers; i++) {
-            const auto qi = q[i]->GetModulus();
-            const auto qi_half = qi >> 1;
+        for (uint32_t i = 0; i < q.size(); i++) {
+            const auto qi_int = q[i]->GetModulus().ConvertToInt<NativeInteger::SignedNativeInt>();
+            const auto qi_half = qi_int >> 1;
+            const auto pre = (Q / BigInteger(q[i]->GetModulus())).ModInverse(q[i]->GetModulus()).ConvertToInt();
             
-            // TODO: Cache in context class
-            NativeInteger pre = (Q / BigInteger(qi)).ModInverse(qi).ConvertToInt();
-            NativePoly digit = input_coeff.GetElementAtIndex(i).Times(pre);
+            const auto& limb = input_coeff.GetElementAtIndex(i);
+            auto& row = g[i].GetAllElements();
 
-            DCRTPoly row(input.GetParams(), Format::COEFFICIENT, true);
+            for (uint32_t k = 0; k < limb.GetLength(); k++) {
+                auto t = limb[k].ModMul(pre, q[i]->GetModulus()).ConvertToInt<NativeInteger::SignedNativeInt>();
+                auto d = (t < qi_half) ? t : t - qi_int;
 
-            // 4. Center and Project into all limbs
-            for(uint32_t k = 0; k < digit.GetLength(); k++) {
-                NativeInteger v = digit[k]; // Value mod qi
-
-                for(uint32_t j = 0; j < num_towers; j++) {
-                    const auto qj = q[j]->GetModulus();
+                // Project signed value d into all towers j
+                for (uint32_t j = 0; j < q.size(); j++) {
+                    const auto qj_int = q[j]->GetModulus().ConvertToInt<NativeInteger::SignedNativeInt>();
+                    auto res = d % qj_int;
+                    if (res < 0) res += qj_int;
                     
-                    if (v > qi_half) {
-                        // It's "negative": conceptual value is (v - qi)
-                        // Compute: (v - qi) mod qj
-                        // Using: (v % qj + (qj - (qi % qj))) % qj
-                        NativeInteger v_mod_qj = v.Mod(qj);
-                        NativeInteger qi_mod_qj = qi.Mod(qj);
-                        row.GetElementAtIndex(j)[k] = v_mod_qj.ModAdd(qj.ModSub(qi_mod_qj, qj), qj);
-                    } else {
-                        // It's "positive": conceptual value is v
-                        row.GetElementAtIndex(j)[k] = v.Mod(qj);
-                    }
+                    row[j][k] = lbcrypto::NativeInteger(static_cast<uint64_t>(res));
                 }
             }
 
-            // 5. Convert to Evaluation (NTT) for the external product
-            row.SetFormat(Format::EVALUATION);
-            g.push_back(std::move(row));
+            g[i].SetFormat(Format::EVALUATION);
         }
 
         return g;
@@ -96,7 +88,7 @@ namespace bvrns {
 
 
 TEST(DECOMPOSE_B, main) {
-    const std::vector<int64_t> value{3};
+    const std::vector<int64_t> value{-2};
 
     const auto params = params::Small<CryptoContextBGVRNS>();
     const auto cc = GenCryptoContext(params);
@@ -108,10 +100,22 @@ TEST(DECOMPOSE_B, main) {
 
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
+    m.SetFormat(Format::EVALUATION);
 
     // Get gadget decomposition vector
     const auto ccRNS = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
-    const auto mg = bvrns::SignedDigitDecompose(ccRNS, m);
+
+    /* NTT Format */ 
+    {
+        const auto mg = bvrns::UnsignedDigitDecompose(ccRNS, m);
+        // for(const auto& l : mg) DEBUG_PRINT(l);
+    }
+
+    /* Coefficient */
+    {
+        const auto mg = bvrns::SignedDigitDecompose(ccRNS, m);
+        // for(const auto& l : mg) DEBUG_PRINT(l);
+    }
 
     // Get inverse gadget vector
     // const auto md = 
