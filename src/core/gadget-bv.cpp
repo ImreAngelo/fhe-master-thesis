@@ -25,11 +25,15 @@ std::vector<DCRTPoly> bvrns::UnsignedDigitDecompose(const std::shared_ptr<Crypto
         const auto pre = (Q / BigInteger(qi)).ModInverse(qi); // TODO: Cache in context class
         
         const auto digit = input.GetElementAtIndex(i).Times(pre);
-        
-        // Multiply by base
+
+        // Project digit into all towers
         auto& row = g.emplace_back(input.GetParams(), Format::EVALUATION, true);
+        auto& limbs = row.GetAllElements();
         for(uint32_t j{0}; j < towers.size(); j++) {
-            row.SetElementAtIndex(j, digit);
+            const auto qj = q[j]->GetModulus();
+            for(uint32_t col{0}; col < digit.GetLength(); col++) {
+                limbs[j][col] = digit[col].Mod(qj);
+            }
         }
     }
 
