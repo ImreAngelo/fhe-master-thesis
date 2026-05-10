@@ -81,7 +81,7 @@ inline void RunTest(const std::vector<int64_t>& value, const std::vector<int64_t
     CCParams<CryptoContextBGVRNS> params;
     params.SetRingDim(1 << 11);
     params.SetPlaintextModulus(128);
-    params.SetMultiplicativeDepth(2);
+    params.SetMultiplicativeDepth(1);
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
     
     const auto cc = Context::GenExtendedCryptoContext(params);
