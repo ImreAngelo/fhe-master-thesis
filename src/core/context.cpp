@@ -95,8 +95,6 @@ namespace Context
     /// @brief Returns the external product between the rlwe and rgsw
     RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw) const
     {
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-
         auto c0 = rlwe->GetElements()[0];
         auto c1 = rlwe->GetElements()[1];
         c0.SetFormat(Format::EVALUATION);
@@ -106,8 +104,10 @@ namespace Context
         const auto d1 = Decompose(c1);
         const size_t K = d0.size();  // L * ell
 
-        DCRTPoly out0(params->GetElementParams(), Format::EVALUATION, true);
-        DCRTPoly out1(params->GetElementParams(), Format::EVALUATION, true);
+        // Build outputs at the RLWE's active level, not the full context chain.
+        const auto& activeParams = c0.GetParams();
+        DCRTPoly out0(activeParams, Format::EVALUATION, true);
+        DCRTPoly out1(activeParams, Format::EVALUATION, true);
         for (size_t i = 0; i < K; i++) {
             const auto& m0 = rgsw[i]->GetElements();
             const auto& m1 = rgsw[K + i]->GetElements();
@@ -162,11 +162,19 @@ namespace Context
     ///
     /// Returns L·ell DCRTPolys in EVALUATION format.
     std::vector<DCRTPoly> ExtendedCryptoContextImpl::Decompose(const DCRTPoly& a) const {
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
-        const auto& q = params->GetElementParams()->GetParams();
-        const size_t L   = q.size();
-        const size_t ell = GadgetDigits();
-        const size_t N   = this->GetRingDimension();
+        // Derive L and params from the polynomial itself so that leveled ciphertexts
+        // that have dropped towers don't cause out-of-bounds GetElementAtIndex calls.
+        const auto& activeParams = a.GetParams();
+        const auto& q = activeParams->GetParams();
+        const size_t L = q.size();
+        const size_t N = this->GetRingDimension();
+
+        // Compute ell from the active towers' max modulus, not the full context chain.
+        uint64_t maxQi = 0;
+        for (const auto& qp : q)
+            maxQi = std::max(maxQi, qp->GetModulus().ConvertToInt<uint64_t>());
+        size_t ell = 0;
+        for (uint64_t v = maxQi; v > 0; v >>= GADGET_LOG) ++ell;
 
         DCRTPoly aCoef(a);
         aCoef.SetFormat(Format::COEFFICIENT);
@@ -188,8 +196,8 @@ namespace Context
                     digitPoly[k]   = NativeInteger(digit);
                 }
 
-                // Embed consistently: same small polynomial in every tower.
-                DCRTPoly di(params->GetElementParams(), Format::COEFFICIENT, true);
+                // Embed consistently: same small polynomial in every active tower.
+                DCRTPoly di(activeParams, Format::COEFFICIENT, true);
                 for (size_t t = 0; t < L; t++) {
                     if (t == i) {
                         di.SetElementAtIndex(t, digitPoly);
