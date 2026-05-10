@@ -53,6 +53,7 @@ std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoPa
 
     std::vector<DCRTPoly> g(q.size(), DCRTPoly(input.GetParams(), Format::COEFFICIENT, true));
 
+    // TODO: Use fast base extension?
     for (uint32_t i = 0; i < q.size(); i++) {
         const auto qi_int = q[i]->GetModulus().ConvertToInt<NativeInteger::SignedNativeInt>();
         const auto qi_half = qi_int >> 1; // TODO: Precalculate/cache "pre" in context
@@ -81,7 +82,7 @@ std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoPa
     return g;
 }
 
-std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &b)
+std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     DEBUG_TIMER("Projection");
 
@@ -94,22 +95,17 @@ std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersR
 
     for (uint32_t j = 0; j < num_towers; j++) {
         const auto& qj = q[j]->GetModulus();
-        const auto pre = Q / BigInteger(qj);
-
-        DCRTPoly component = b;
-        component.SetFormat(Format::EVALUATION); 
+        // TODO: Cache in context
+        const NativeInteger pre = (Q / BigInteger(qj)).Mod(qj).ConvertToInt();
         
-        auto& limbs = component.GetAllElements();
+        DCRTPoly component(input.GetParams(), Format::EVALUATION, true);
+        
+        // Only limb j will be non-zero
+        const auto& current_limb = input.GetElementAtIndex(j);
+        auto& limbs = component.GetAllElements(); 
 
-        for (uint32_t k = 0; k < num_towers; k++) {
-            const auto& qk = q[k]->GetModulus();
-            BigInteger factor_big = pre.Mod(qk);
-            NativeInteger factor = factor_big.ConvertToInt();
-            
-            // Apply the factor to every NTT coefficient in the limb
-            for (uint32_t col = 0; col < limbs[k].GetLength(); col++) {
-                limbs[k][col] = limbs[k][col].ModMul(factor, qk);
-            }
+        for (uint32_t col = 0; col < current_limb.GetLength(); col++) {
+            limbs[j][col] = current_limb[col].ModMul(pre, qj);
         }
 
         P.push_back(std::move(component));
