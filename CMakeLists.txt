@@ -78,6 +78,7 @@ include_directories(src)
 add_library(core_lib STATIC
     src/core/context.cpp
     src/core/gadget-bv.cpp
+    src/core/gadget-hybrid.cpp
 )
 
 # Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /

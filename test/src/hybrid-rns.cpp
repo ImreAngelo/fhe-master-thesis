@@ -26,6 +26,8 @@ TEST(HYBRID, main) {
 
     const auto params = params::Small<CryptoContextBGVRNS>();
     const auto cc = GenCryptoContext(params);
+
+    DEBUG_PRINT("Moduli: " << cc->GetModulus());
     
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);

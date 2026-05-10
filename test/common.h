@@ -44,6 +44,9 @@ namespace params {
         params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
         params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
+        // Hybrid should be default
+        params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
+
         return params;
     }
 }
