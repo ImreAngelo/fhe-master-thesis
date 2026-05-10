@@ -75,7 +75,7 @@ include_directories(src)
 # add_executable(server src/server/main.cpp)
 
 # ── Core library ─────────────────────────────────────────────────────────────
-add_library(core_lib STATIC src/core/context.cpp)
+add_library(core_lib STATIC src/core)
 
 # Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
 # DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
