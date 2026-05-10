@@ -58,7 +58,7 @@ TEST(decryptedOMPOSE_B, main) {
 TEST(RGSW, ExternalProduct) {
     const std::vector<int64_t> value{3};
 
-    const auto params = params::Small<CryptoContextBGVRNS>();
+    const auto params = params::Small<CryptoContextBGVRNS>(2);
     const auto cc = GenCryptoContext(params);
     
     cc->Enable(PKE);
@@ -71,15 +71,46 @@ TEST(RGSW, ExternalProduct) {
     
     /* External Product */
     {
+        const auto mult = cc->MakeCoefPackedPlaintext({2});
+        const auto rlwe = cc->Encrypt(keys.publicKey, mult);
+        
         const auto rgsw = context::Encrypt(cc, keys.publicKey, pt);
-        const auto rlwe = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({2}));
         const auto rExt = context::EvalExternalProduct(cc, rlwe, rgsw);
 
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, rExt, &decrypted);
         decrypted->SetLength(value.size());
         
+        DEBUG_PRINT("External Product: " << decrypted);
+
         const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
         ASSERT_EQ(decrypted, expected);
+    }
+
+    /* Internal Product */
+    {
+        const auto mult = cc->MakeCoefPackedPlaintext({2});
+        const auto a = context::Encrypt(cc, keys.publicKey, pt);
+        const auto b = context::Encrypt(cc, keys.publicKey, mult);
+        const auto rInt = context::EvalInternalProduct(cc, a, b);
+
+        // DEBUG_PRINT("Internal Product: ");
+        // for(const auto& row : rInt) {
+        //     Plaintext decrypted;
+        //     cc->Decrypt(keys.secretKey, row, &decrypted);
+        //     decrypted->SetLength(value.size());
+        //     DEBUG_PRINT(decrypted);
+        // }
+
+        const auto one = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({1}));
+        const auto res = context::EvalExternalProduct(cc, one, rInt);
+
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, res, &decrypted);
+        decrypted->SetLength(value.size());
+        DEBUG_PRINT(decrypted);
+
+        // const auto expected = cc->MakeCoefPackedPlaintext({2*value[0]});
+        // ASSERT_EQ(decrypted, expected);
     }
 }

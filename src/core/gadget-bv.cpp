@@ -193,6 +193,14 @@ Ciphertext<DCRTPoly> context::EvalExternalProduct(const CryptoContext<DCRTPoly> 
     return result;
 }
 
+std::vector<Ciphertext<DCRTPoly>> context::EvalInternalProduct(const CryptoContext<DCRTPoly> &cc, const std::vector<Ciphertext<DCRTPoly>> &lhs, const std::vector<Ciphertext<DCRTPoly>> &rhs)
+{
+    DEBUG_TIMER("Internal Product");
+    
+    std::vector<Ciphertext<DCRTPoly>> result = lhs;
+    for(auto& rlwe : result) rlwe = EvalExternalProduct(cc, rlwe, rhs);
+    return result;
+}
 
 /**
  * POTENTIAL OPTIMIZATIONS

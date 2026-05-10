@@ -39,4 +39,12 @@ namespace context {
         const std::vector<Ciphertext<DCRTPoly>>& rgsw
     );
 
+    /// @brief Homomorphically evaluate the internal product 
+    ///        RGSW(a) x RGSW(b) = RGSW(a * b) 
+    std::vector<Ciphertext<DCRTPoly>> EvalInternalProduct(
+        const CryptoContext<DCRTPoly>& cc,
+        const std::vector<Ciphertext<DCRTPoly>>& lhs,
+        const std::vector<Ciphertext<DCRTPoly>>& rhs
+    );
+
 } // namespace context
