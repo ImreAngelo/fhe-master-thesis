@@ -192,3 +192,19 @@ Ciphertext<DCRTPoly> context::EvalExternalProduct(const CryptoContext<DCRTPoly> 
 
     return result;
 }
+
+
+/**
+ * POTENTIAL OPTIMIZATIONS
+ *  - Move to context class and pre-compute tables
+ *  - Optimize external product DCRT access
+ *      - Directly access the limbs instead of using the += operator
+ *  - OpenMP multithreading
+ *  - Hybrid NTT/Coefficient decomposition 
+ *      - (UnsignedDigitDecompose can stay in eval mode for most of the operations, just not centering)
+ *  - Investigate noise of using the same zero-ciphertexts vs fresh encryptions each iteration
+ *      - Or pre-calc and cache (and reuse) the zero-encryptions
+ *  - Use HPS optimization/fast base extension in decomposition 
+ *  - 128-bit lazy reduction
+ *  - Enable AVX512 instruction set
+ */
