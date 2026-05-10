@@ -183,16 +183,29 @@ namespace Context
 
         for (size_t i = 0; i < L; i++) {
             const auto qi = q[i]->GetModulus();
+            const uint64_t qiVal = qi.ConvertToInt<uint64_t>();
             // u_i = a_i · (Q/q_i)^{-1} mod q_i   (values in [0, q_i))
             auto unit = aCoef.GetElementAtIndex(i).Times(m_gadgetDecompVectorScalars[i]).Mod(qi);
 
+            // Per-coefficient running remainder for signed base-GADGET_BASE recoding.
+            // Digits live in [-B/2, B/2); each iteration peels one digit and propagates the borrow.
+            std::vector<uint64_t> rem(N);
+            for (size_t k = 0; k < N; k++)
+                rem[k] = unit[k].ConvertToInt<uint64_t>();
+
             for (size_t j = 0; j < ell; j++) {
-                // Extract j-th base-GADGET_BASE digit: coefficient k → (unit[k] >> (GADGET_LOG·j)) & (GADGET_BASE-1)
                 NativePoly digitPoly(unit);   // copies params (modulus = q_i)
                 for (size_t k = 0; k < N; k++) {
-                    uint64_t c     = unit[k].ConvertToInt<uint64_t>();
-                    uint64_t digit = (c >> (GADGET_LOG * j)) & (GADGET_BASE - 1);
-                    digitPoly[k]   = NativeInteger(digit);
+                    uint64_t c = rem[k];
+                    uint64_t udigit = c % GADGET_BASE;
+                    if (udigit >= GADGET_BASE / 2) {
+                        // signed digit = udigit - B  (negative); store as q_i - (B - udigit) mod q_i
+                        rem[k]       = c / GADGET_BASE + 1;
+                        digitPoly[k] = NativeInteger(qiVal - (GADGET_BASE - udigit));
+                    } else {
+                        rem[k]       = c / GADGET_BASE;
+                        digitPoly[k] = NativeInteger(udigit);
+                    }
                 }
 
                 // Embed consistently: same small polynomial in every active tower.
