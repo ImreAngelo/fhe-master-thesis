@@ -86,6 +86,7 @@ TEST(Depth, d1) { RunDepthTest(1); }
 TEST(Depth, d2) { RunDepthTest(2); }
 TEST(Depth, d3) { RunDepthTest(3); }
 TEST(Depth, d4) { RunDepthTest(4); }
+TEST(Depth, d5) { RunDepthTest(5); }
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
