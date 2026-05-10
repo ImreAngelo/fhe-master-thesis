@@ -113,3 +113,82 @@ std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersR
     
     return P;
 }
+
+std::vector<Ciphertext<DCRTPoly>> context::Encrypt(const CryptoContext<DCRTPoly> &cc, const PublicKey<DCRTPoly> &publicKey, const Plaintext &plaintext)
+{
+    DEBUG_TIMER("Encrypt RGSW");
+
+    const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
+    const auto& l = params->GetElementParams()->GetParams().size();
+    const auto zero = (plaintext->GetEncodingType() == PlaintextEncodings::COEF_PACKED_ENCODING)
+        ? cc->MakeCoefPackedPlaintext({0})
+        : cc->MakePackedPlaintext({0});
+        
+    // TODO: Check noise Signed/Power here and performance /w pre-computed D-tables.
+    const auto mg = bvrns::PowerOfBase(params, plaintext->GetElement<DCRTPoly>());
+
+    // TODO: Check noise vs fresh zero-encryptions
+    // std::vector<Ciphertext<DCRTPoly>> rows(2*l, cc->Encrypt(publicKey, zero));
+    std::vector<Ciphertext<DCRTPoly>> rows;
+    rows.reserve(2*l);
+
+    for(size_t col = 0; col < 2; col++) {
+        for(const auto& mgi : mg) {
+            auto z = cc->Encrypt(publicKey, zero);
+            z->GetElements()[col] += mgi;
+            rows.push_back(std::move(z));
+        }
+    }
+    
+    return rows;
+}
+
+Ciphertext<DCRTPoly> context::EvalExternalProduct(const CryptoContext<DCRTPoly> &cc, const Ciphertext<DCRTPoly> &rlwe, const std::vector<Ciphertext<DCRTPoly>> &rgsw)
+{
+    DEBUG_TIMER("External Product");
+
+    const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
+    // const auto& l = rgsw.size();
+
+    // const auto c = rlwe->GetElements();
+    // const auto p0 = bvrns::PowerOfBase(params, c[0]);
+    // const auto p1 = bvrns::PowerOfBase(params, c[1]);
+
+    // auto result = rlwe->Clone();
+
+    // for(size_t i = 0; i < l; i++) {
+    //     auto& m0 = rgsw[i]->GetElements();
+    //     auto& m1 = rgsw[i+l]->GetElements();
+    //     // ...
+    // }
+
+    // return rlwe;
+
+    auto c0 = rlwe->GetElements()[0];
+    auto c1 = rlwe->GetElements()[1];
+    c0.SetFormat(Format::EVALUATION);
+    c1.SetFormat(Format::EVALUATION);
+
+    const auto d0 = bvrns::SignedDigitDecompose(params, c0);
+    const auto d1 = bvrns::SignedDigitDecompose(params, c1);
+    const size_t K = d0.size();  // L * ell
+
+    // Build outputs at the RLWE's active level, not the full context chain.
+    const auto& activeParams = c0.GetParams();
+    DCRTPoly out0(activeParams, Format::EVALUATION, true);
+    DCRTPoly out1(activeParams, Format::EVALUATION, true);
+    for (size_t i = 0; i < K; i++) {
+        const auto& m0 = rgsw[i]->GetElements();
+        const auto& m1 = rgsw[K + i]->GetElements();
+        out0 += d0[i] * m0[0];
+        out1 += d0[i] * m0[1];
+        out0 += d1[i] * m1[0];
+        out1 += d1[i] * m1[1];
+    }
+
+    auto result = rlwe->Clone();
+    result->GetElements()[0] = std::move(out0);
+    result->GetElements()[1] = std::move(out1);
+
+    return result;
+}

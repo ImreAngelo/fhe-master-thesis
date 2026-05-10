@@ -1,10 +1,11 @@
 #include "openfhe.h"
 
-
-
 /**
- * @brief BV-RNS gadget decomposition in EVALUATION format
+ * @file gadget-bv.h
+ * @todo move to context
  */
+
+/// @brief BV-RNS gadget decomposition in EVALUATION format
 namespace bvrns {
     using namespace lbcrypto;
 
@@ -18,3 +19,24 @@ namespace bvrns {
     std::vector<DCRTPoly> PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly& b);
 
 } // namespace bvrns
+
+/// @brief TODO: Move to its own context class
+namespace context {
+    using namespace lbcrypto;
+
+    /// @brief Encrypt a plaintext into an RGSW ciphertext 
+    std::vector<Ciphertext<DCRTPoly>> Encrypt(
+        const CryptoContext<DCRTPoly>& cc,
+        const PublicKey<DCRTPoly>& publicKey,
+        const Plaintext& plaintext
+    );
+
+    /// @brief Homomorphically evaluate the external product 
+    ///        RGSW(a) x RLWE(b) = RLWE(a * b) 
+    Ciphertext<DCRTPoly> EvalExternalProduct(
+        const CryptoContext<DCRTPoly>& cc,
+        const Ciphertext<DCRTPoly>& rlwe,
+        const std::vector<Ciphertext<DCRTPoly>>& rgsw
+    );
+
+} // namespace context
