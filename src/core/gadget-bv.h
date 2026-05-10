@@ -8,14 +8,13 @@
 namespace bvrns {
     using namespace lbcrypto;
 
-    namespace ntt {
-        /// @brief Stays in evaluation format, but cannot use centered representation so it is much faster but also much noisier! 
-        std::vector<DCRTPoly> UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly& input);
-    }
+    /// @brief Stays in evaluation format, but cannot use centered representation so it is much faster but also much noisier! 
+    std::vector<DCRTPoly> UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly& input);
 
     /// @brief Slower COEFFICIENT format, but less noise with centered representation
     std::vector<DCRTPoly> SignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly& input);
 
-    /// @brief Gadget-dual of SignedDigitDecompose
+    /// @brief Gadget-dual of (un)signed digit decomposition
+    std::vector<DCRTPoly> PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly& b);
 
 } // namespace bvrns

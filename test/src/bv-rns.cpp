@@ -22,21 +22,20 @@ TEST(DECOMPOSE_B, main) {
 
     /* NTT Format */ 
     {
-        const auto mg = ntt::UnsignedDigitDecompose(ccRNS, m);
-        // for(const auto& l : mg) DEBUG_PRINT(l);
+        DEBUG_PRINT("");
+        const auto mg = UnsignedDigitDecompose(ccRNS, m);
+        const auto mp = PowerOfBase(ccRNS, m);
+        for(const auto& l : mg) { DEBUG_PRINT(l); } DEBUG_PRINT("");
+        for(const auto& l : mp) { DEBUG_PRINT(l); }
     }
 
+    
     /* Coefficient */
     {
+        DEBUG_PRINT("");
         const auto mg = SignedDigitDecompose(ccRNS, m);
-        // for(const auto& l : mg) DEBUG_PRINT(l);
-    }
-
-    // Get inverse gadget vector
-    // const auto md = 
-
-    // Check inner product = m*m
-    {
-
+        const auto mp = PowerOfBase(ccRNS, m);
+        for(const auto& l : mg) { DEBUG_PRINT(l); } DEBUG_PRINT("");
+        for(const auto& l : mp) { DEBUG_PRINT(l); }
     }
 }

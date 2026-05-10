@@ -5,7 +5,7 @@
 
 using namespace lbcrypto;
 
-std::vector<DCRTPoly> bvrns::ntt::UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
+std::vector<DCRTPoly> bvrns::UnsignedDigitDecompose(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     DEBUG_TIMER("NTT Digit Decomposition");
 
@@ -75,4 +75,41 @@ std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoPa
     }
 
     return g;
+}
+
+std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &b)
+{
+    DEBUG_TIMER("Projection");
+
+    const auto& Q = params->GetElementParams()->GetModulus();
+    const auto& q = params->GetElementParams()->GetParams();
+    const uint32_t num_towers = q.size();
+
+    std::vector<DCRTPoly> P;
+    P.reserve(num_towers);
+
+    for (uint32_t j = 0; j < num_towers; j++) {
+        const auto& qj = q[j]->GetModulus();
+        const auto pre = Q / BigInteger(qj);
+
+        DCRTPoly component = b;
+        component.SetFormat(Format::EVALUATION); 
+        
+        auto& limbs = component.GetAllElements();
+
+        for (uint32_t k = 0; k < num_towers; k++) {
+            const auto& qk = q[k]->GetModulus();
+            BigInteger factor_big = pre.Mod(qk);
+            NativeInteger factor = factor_big.ConvertToInt();
+            
+            // Apply the factor to every NTT coefficient in the limb
+            for (uint32_t col = 0; col < limbs[k].GetLength(); col++) {
+                limbs[k][col] = limbs[k][col].ModMul(factor, qk);
+            }
+        }
+
+        P.push_back(std::move(component));
+    }
+    
+    return P;
 }
