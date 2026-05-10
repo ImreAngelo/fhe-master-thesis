@@ -11,23 +11,19 @@
 using namespace lbcrypto;
 
 namespace {
-
-// TODO: Unified set of params cross-project
-constexpr uint64_t PT_MODULUS   = 8;        // 8 for small params case, else 65537 for slotwise packed plaintext
-constexpr uint32_t RING_DIM_LOG = 11;       // 11 = 2048, 14 = 16384
-
+    
 class RGSW : public benchmark::Fixture {
-public:
+    public:
     void SetUp(const benchmark::State&) override {
         if (cc) return;
-        
+            
+        // TODO: Unified set of params cross-project
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(2);
-        params.SetPlaintextModulus(PT_MODULUS);
-        params.SetRingDim(1 << RING_DIM_LOG);
+        params.SetMultiplicativeDepth(1);
+        params.SetPlaintextModulus(1 << 8);
+        params.SetRingDim(1 << 11);
         params.SetScalingTechnique(FIXEDMANUAL);
         params.SetSecurityLevel(SecurityLevel::HEStd_NotSet); // Required for small params
-        // params.SetNumLargeDigits(2);
 
         cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);

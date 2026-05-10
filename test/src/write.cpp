@@ -86,7 +86,7 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 }
 
 // Main tests
-TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(params::Small<CryptoContextBGVRNS>()); }
+TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(params::Small<CryptoContextBGVRNS>(4)); }
 // TEST(ServerWrite, N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
 // TEST(ServerWrite, N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
 // TEST(ServerWrite, N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }

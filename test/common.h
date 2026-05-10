@@ -18,9 +18,9 @@ namespace params {
     /// @brief Create parameters shared by all tests
     /// @todo More complex construction, and store common parameter sets
     template<typename T>
-    inline lbcrypto::CCParams<T> Create() {
+    inline lbcrypto::CCParams<T> Create(const uint32_t depth = 1) {
         lbcrypto::CCParams<T> params;
-        params.SetMultiplicativeDepth(1);
+        params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
         params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
         
@@ -34,9 +34,9 @@ namespace params {
     }
 
     template<typename T>
-    inline lbcrypto::CCParams<T> Small() {
+    inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
         lbcrypto::CCParams<T> params;
-        params.SetMultiplicativeDepth(1);
+        params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
 

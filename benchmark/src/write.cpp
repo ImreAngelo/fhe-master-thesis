@@ -11,11 +11,11 @@ using namespace lbcrypto;
 class ServerWrite : public benchmark::Fixture {
 public:
     void SetUp(const benchmark::State&) override {
-        params.SetMultiplicativeDepth(5);
-        params.SetPlaintextModulus(256);
-        params.SetRingDim(2048);
-        params.SetScalingTechnique(FIXEDMANUAL);
-        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+        params.SetMultiplicativeDepth(4);
+        params.SetPlaintextModulus(1 << 8);
+        params.SetRingDim(1 << 11);
+        params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+        params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
     }
 
     CCParams<CryptoContextBGVRNS> params;
@@ -25,8 +25,6 @@ public:
     for (auto _ : s) { server::TestServerWrite<DCRTPoly, K, D, L>(params); } \
 }
 
-// TODO: Only benchmark with K = D = 3?
-MAKE_BENCHMARK(mvp, 1, 1, 1)
 MAKE_BENCHMARK(N2, 3, 3, 1)
 // MAKE_BENCHMARK(N4, 3, 3, 2, CreateParams(3))
 // MAKE_BENCHMARK(N8, 3, 3, 3, CreateParams(3))
