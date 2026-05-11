@@ -86,11 +86,9 @@ namespace hybrid {
     }
 
     /// @brief Base extension/lift Q -> QP
-    DCRTPoly Decompose(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input)
+    DCRTPoly Decompose(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input, const HybridTables& tables)
     {
         DEBUG_TIMER("Decompose");
-
-        const auto tables = InitHybridTables(cc);
 
         // Coefficient mode required?
         DCRTPoly result(tables.paramsQP, Format::COEFFICIENT, true);
@@ -136,6 +134,7 @@ namespace hybrid {
         return result;
     }
 
+    /// @brief Thin wrapper around OpenFHE's ApproxModDown 
     DCRTPoly ApproxModDown(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input) {
         DEBUG_TIMER("ApproxModDown");
 
@@ -165,8 +164,10 @@ TEST(HYBRID, main) {
     DCRTPoly m = pt->GetElement<DCRTPoly>();
     
     {
+        const auto tables = hybrid::InitHybridTables(cc);
+
         const DCRTPoly pm = hybrid::Power(cc, m);
-        const DCRTPoly dm = hybrid::Decompose(cc, m);
+        const DCRTPoly dm = hybrid::Decompose(cc, m, tables);
 
         const DCRTPoly mult = pm * dm;
 
