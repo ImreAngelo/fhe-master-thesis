@@ -1,6 +1,6 @@
 #define TEST_INTERNAL_FUNCTIONS
 
-#include "core/context.h"
+#include "core/include/context.h"
 
 #include <cstdint>
 #include <iostream>
@@ -17,7 +17,7 @@ TEST(Depth, ChainedInternalProduct) {
 
     const auto keys = cc->KeyGen();
 
-    constexpr int64_t t = 8;
+    const int64_t t = params.GetPlaintextModulus();
 
     // RGSW(3): the fixed multiplier applied each round.
     const auto pt3   = cc->MakeCoefPackedPlaintext({3});

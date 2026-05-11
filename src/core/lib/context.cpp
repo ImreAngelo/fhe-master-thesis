@@ -1,4 +1,5 @@
 #include "../include/context.h"
+#include "../../utils/logging.h"
 
 using namespace Context;
 
@@ -15,6 +16,8 @@ ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCR
 
     uint32_t numQ = Q_limbs.size();
     uint32_t numP = P_limbs.size();
+
+    DEBUG_PRINT("Created ExtendedCryptoContext with #Q = " << numQ << ", #P " << numP);
 
     m_qHatModP.resize(numQ, std::vector<NativeInteger>(numP));
     m_qInv.resize(numQ);
@@ -62,7 +65,7 @@ DCRTPoly ExtendedCryptoContextImpl::Power(const DCRTPoly& input) const
 DCRTPoly ExtendedCryptoContextImpl::Decompose(const DCRTPoly& input) const 
 {
     const auto QP = m_params->GetParamsQP();
-
+    
     // Coefficient mode required?
     DCRTPoly result(QP, Format::COEFFICIENT, true);
     DCRTPoly inputCoeff = input;
@@ -75,8 +78,7 @@ DCRTPoly ExtendedCryptoContextImpl::Decompose(const DCRTPoly& input) const
     uint32_t numP = m_params->GetParamsP()->GetParams().size();
     uint32_t n = m_params->GetElementParams()->GetRingDimension();
 
-    // Copy Q-towers (O(L*N)) and pre-scale by qInv
-    // (saves cache-accesses)
+    // Copy Q-towers (O(L*N)) and pre-scale by qInv (saves cache-accesses)
     std::vector<NativePoly> v(numQ);
     for(uint32_t i = 0; i < numQ; i++) {
         res_limbs[i] = in_limbs[i];
@@ -108,6 +110,7 @@ DCRTPoly ExtendedCryptoContextImpl::Decompose(const DCRTPoly& input) const
 };
 
 // Approximate mod down QP -> Q
+// NOTE: Might need exact mod down for BGV
 DCRTPoly ExtendedCryptoContextImpl::ApproxModDown(const DCRTPoly& input) const {
     return input.ApproxModDown(m_params->GetElementParams(), m_params->GetParamsP(), m_params->GetPInvModq(),
         m_params->GetPInvModqPrecon(), m_params->GetPHatInvModp(),
@@ -172,7 +175,6 @@ Ciphertext<DCRTPoly> ExtendedCryptoContextImpl::EvalExternalProduct(const Cipher
 // 
 std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct(const std::vector<Ciphertext<DCRTPoly>> &lhs, const std::vector<Ciphertext<DCRTPoly>> &rhs) const
 {
-    // TODO: Have more than 1 auxillary base p_0
     if (lhs.size() != 2 || rhs.size() != 2) {
         OPENFHE_THROW("Hybrid internal product expects 2x2 RGSW structure");
     }
@@ -181,16 +183,19 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct
     result.reserve(2);
 
     for (size_t row = 0; row < 2; row++) {
-        // Treat each RGSW row as an RLWE ciphertext in Q domain
-        // and multiply by rhs RGSW, but KEEP output in QP
         auto c = lhs[row]->GetElements();
 
-        c[0].SetFormat(Format::EVALUATION);
-        c[1].SetFormat(Format::EVALUATION);
+        // FIX: Modulus switch down from QP to Q FIRST!
+        // This drops the factor of P that 'lhs' currently encrypts.
+        DCRTPoly c0_Q = ApproxModDown(c[0]);
+        DCRTPoly c1_Q = ApproxModDown(c[1]);
+
+        c0_Q.SetFormat(Format::EVALUATION);
+        c1_Q.SetFormat(Format::EVALUATION);
 
         // Gadget decomposition Q -> QP
-        DCRTPoly d0 = Decompose(c[0]);
-        DCRTPoly d1 = Decompose(c[1]);
+        DCRTPoly d0 = Decompose(c0_Q);
+        DCRTPoly d1 = Decompose(c1_Q);
 
         // Output row in QP
         DCRTPoly out0(m_params->GetParamsQP(), Format::EVALUATION, true);
@@ -212,3 +217,5 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct
 
     return result;
 }
+
+// TODO: Refactor!

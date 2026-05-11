@@ -3,6 +3,7 @@
 #include "schemerns/rns-cryptoparameters.h"
 
 #include "utils/timer.h"
+#include "context.h"
 
 namespace Context
 {
@@ -59,11 +60,11 @@ namespace Context
         }
     }
 
-    ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base)
+    BVExtendedCryptoContextImpl::BVExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base)
     : CryptoContextImpl<DCRTPoly>(base), m_gadgetVectorScalars(BV::GadgetScalars(base)), m_gadgetDecompVectorScalars(BV::InverseGadgetScalars(base)) {}
 
     /// @brief Return RGSW ciphertext
-    RGSW ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
+    RGSW BVExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const
     {
         // Mirror the input encoding: Encrypt() stamps the plaintext's encoding type onto
         // the ciphertext, so every RGSW row must use the same encoding the caller expects
@@ -92,7 +93,7 @@ namespace Context
     }
 
     /// @brief Returns the external product between the rlwe and rgsw
-    RLWE ExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw) const
+    RLWE BVExtendedCryptoContextImpl::EvalExternalProduct(const RLWE &rlwe, const RGSW &rgsw) const
     {
         auto c0 = rlwe->GetElements()[0];
         auto c1 = rlwe->GetElements()[1];
@@ -123,7 +124,7 @@ namespace Context
         return result;
     }
 
-    RGSW ExtendedCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const
+    RGSW BVExtendedCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const
     {
         RGSW result = lhs;
         for(auto& rlwe : result) {
@@ -132,7 +133,7 @@ namespace Context
         return result;
     }
 
-    // DecryptResult ExtendedCryptoContextImpl::Decrypt(const RGSW &ciphertext, const PrivateKey<DCRTPoly> &privateKey, Plaintext *plaintext) const
+    // DecryptResult BVExtendedCryptoContextImpl::Decrypt(const RGSW &ciphertext, const PrivateKey<DCRTPoly> &privateKey, Plaintext *plaintext) const
     // {
     //     const auto rlwe = ciphertext[ciphertext.size()/2];
     //     return CryptoContextImpl<DCRTPoly>::Decrypt(rlwe, privateKey, &plaintext);
@@ -140,7 +141,7 @@ namespace Context
 
     /// @brief Number of base-GADGET_BASE digits needed to cover the largest RNS prime.
     /// Digits per tower: ell = ceil(log_GADGET_BASE(max_qi)).
-    size_t ExtendedCryptoContextImpl::GadgetDigits() const {
+    size_t BVExtendedCryptoContextImpl::GadgetDigits() const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto& q = params->GetElementParams()->GetParams();
         uint64_t maxQi = 0;
@@ -160,7 +161,7 @@ namespace Context
     /// GADGET_BASE/2 · ||e|| instead of q_i/2 · ||e||.
     ///
     /// Returns L·ell DCRTPolys in EVALUATION format.
-    std::vector<DCRTPoly> ExtendedCryptoContextImpl::Decompose(const DCRTPoly& a) const {
+    std::vector<DCRTPoly> BVExtendedCryptoContextImpl::Decompose(const DCRTPoly& a) const {
         // Derive L and params from the polynomial itself so that leveled ciphertexts
         // that have dropped towers don't cause out-of-bounds GetElementAtIndex calls.
         const auto& activeParams = a.GetParams();
@@ -237,7 +238,7 @@ namespace Context
     }
 
     /// @brief P_Q(b)_{i,j} = [b*(Q/q_i)*GADGET_BASE^j]_{q_i}. Returns L*ell elements; only tower i non-zero.
-    std::vector<DCRTPoly> ExtendedCryptoContextImpl::GadgetMul(const DCRTPoly& b) const {
+    std::vector<DCRTPoly> BVExtendedCryptoContextImpl::GadgetMul(const DCRTPoly& b) const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto& q = params->GetElementParams()->GetParams();
         const size_t L   = q.size();
@@ -266,7 +267,7 @@ namespace Context
     }
 
     /// @brief Gadget vector g_{i,j} = [(Q/q_i)*GADGET_BASE^j]_Q. Returns L*ell elements; only tower i non-zero.
-    std::vector<DCRTPoly> ExtendedCryptoContextImpl::GadgetVector() const {
+    std::vector<DCRTPoly> BVExtendedCryptoContextImpl::GadgetVector() const {
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(this->GetCryptoParameters());
         const auto& q = params->GetElementParams()->GetParams();
         const size_t L   = q.size();
@@ -299,7 +300,7 @@ namespace Context
     //--------------//
 
     /// @todo Check if still works
-    std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::ExpandRLWEHoisted(
+    std::vector<Ciphertext<DCRTPoly>> BVExtendedCryptoContextImpl::ExpandRLWEHoisted(
         const Ciphertext<DCRTPoly>& ciphertext,
         const PublicKey<DCRTPoly>& publicKey,
         const uint32_t len
@@ -326,7 +327,7 @@ namespace Context
 //     // Mirrors the call at keyswitch-hybrid.cpp:389-398.
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     DCRTPoly ExtendedCryptoContextImpl<T>::ApproxModDownToQ(
+//     DCRTPoly BVExtendedCryptoContextImpl<T>::ApproxModDownToQ(
 //         const DCRTPoly& xQP,
 //         const std::shared_ptr<typename DCRTPoly::Params>& paramsQl
 //     ) const {
@@ -354,7 +355,7 @@ namespace Context
 //     // EvalKey, so mod-reduced x against full-Q Y just works.
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     Ciphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalExternalProduct(
+//     Ciphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalExternalProduct(
 //         const Ciphertext<DCRTPoly>& x,
 //         const RGSWCiphertext<DCRTPoly>& Y
 //     ) {
@@ -403,7 +404,7 @@ namespace Context
 //     //   bot: sOld ↦ m       (result row encrypts m * P * g_j)
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EncryptRGSW(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EncryptRGSW(
 //         const PrivateKey<DCRTPoly>& secretKey,
 //         const Plaintext& plaintext
 //     ) {
@@ -532,7 +533,7 @@ namespace Context
 //     // decryption b + a*s mod t.
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     Plaintext ExtendedCryptoContextImpl<T>::DecryptRGSWRow(
+//     Plaintext BVExtendedCryptoContextImpl<T>::DecryptRGSWRow(
 //         const PrivateKey<DCRTPoly>& secretKey,
 //         const DCRTPoly& a,
 //         const DCRTPoly& b
@@ -577,7 +578,7 @@ namespace Context
 //     // and lowers the depth budget needed by the composed Internal+External.
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalInternalProduct(
 //         const RGSWCiphertext<DCRTPoly>& A,
 //         const RGSWCiphertext<DCRTPoly>& B
 //     ) {
@@ -671,7 +672,7 @@ namespace Context
 //     // contributes 0 to the dot product).
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalInternalProduct_Hybrid(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalInternalProduct_Hybrid(
 //         const RGSWCiphertext<DCRTPoly>& A,
 //         const RGSWCiphertext<DCRTPoly>& B
 //     ) {
@@ -801,7 +802,7 @@ namespace Context
 //     }
 
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalAddRGSW(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalAddRGSW(
 //         const RGSWCiphertext<DCRTPoly>& A,
 //         const RGSWCiphertext<DCRTPoly>& B
 //     ) {
@@ -809,7 +810,7 @@ namespace Context
 //     }
 
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalSubRGSW(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalSubRGSW(
 //         const RGSWCiphertext<DCRTPoly>& A,
 //         const RGSWCiphertext<DCRTPoly>& B
 //     ) {
@@ -826,7 +827,7 @@ namespace Context
 //     // RGSW gadget structure: row j now encrypts (m · p) · P · g_j.
 //     // ----------------------------------------------------------------------
 //     template <typename T>
-//     RGSWCiphertext<DCRTPoly> ExtendedCryptoContextImpl<T>::EvalMultPlain(
+//     RGSWCiphertext<DCRTPoly> BVExtendedCryptoContextImpl<T>::EvalMultPlain(
 //         const Plaintext& p,
 //         const RGSWCiphertext<DCRTPoly>& A
 //     ) {

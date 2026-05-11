@@ -148,21 +148,6 @@ Ciphertext<DCRTPoly> bvrns::EvalExternalProduct(const CryptoContext<DCRTPoly> &c
     // DEBUG_TIMER("External Product");
 
     const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
-    // const auto& l = rgsw.size();
-
-    // const auto c = rlwe->GetElements();
-    // const auto p0 = bvrns::PowerOfBase(params, c[0]);
-    // const auto p1 = bvrns::PowerOfBase(params, c[1]);
-
-    // auto result = rlwe->Clone();
-
-    // for(size_t i = 0; i < l; i++) {
-    //     auto& m0 = rgsw[i]->GetElements();
-    //     auto& m1 = rgsw[i+l]->GetElements();
-    //     // ...
-    // }
-
-    // return rlwe;
 
     auto c0 = rlwe->GetElements()[0];
     auto c1 = rlwe->GetElements()[1];

@@ -51,6 +51,9 @@ namespace Context
         /// @brief Decompose QP -> Q
         DCRTPoly Decompose(const DCRTPoly&) const;
 
+        // /// @brief Hybrid decomposition with more than 1 digit
+        // std::vector<DCRTPoly> HybridDecompose(const DCRTPoly&, uint32_t alpha) const;
+
     // PUBLIC_FOR_TEST:
         /**
          * @brief Hoisted RLWE expansion (Algorithm 3 of eprint 2019/736).

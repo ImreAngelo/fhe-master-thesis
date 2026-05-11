@@ -6,7 +6,7 @@
 
 #include <benchmark/benchmark.h>
 #include "openfhe.h"
-#include "core/context.h"
+#include "core/include/context.h"
 
 using namespace lbcrypto;
 
@@ -19,11 +19,20 @@ class RGSW : public benchmark::Fixture {
             
         // TODO: Unified set of params cross-project
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(1);
+        params.SetMultiplicativeDepth(3);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
         params.SetScalingTechnique(FIXEDMANUAL);
-        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet); // Required for small params
+        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+
+        // Large params (about ~ 8x slower internal products)
+        // params.SetMultiplicativeDepth(1);
+        // params.SetPlaintextModulus(65537);
+        // params.SetRingDim(1 << 14);
+        // params.SetScalingTechnique(FIXEDMANUAL);
+        
+        // Tuneable parameter
+        // params.SetNumLargeDigits(2);
 
         cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);
