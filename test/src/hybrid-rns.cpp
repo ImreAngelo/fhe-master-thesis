@@ -4,6 +4,57 @@ using namespace lbcrypto;
 
 // TODO: Move to context
 namespace hybrid {
+    struct HybridTables {
+        std::shared_ptr<typename DCRTPoly::Params> paramsQP;
+        std::shared_ptr<typename DCRTPoly::Params> paramsQ;
+        std::shared_ptr<typename DCRTPoly::Params> paramsP;
+        
+        // Decompose-tabeller (Q -> P)
+        std::vector<NativeInteger> qInv;              // [(Q/qi)^-1] mod qi
+        std::vector<std::vector<NativeInteger>> qHatModP; // [(Q/qi)] mod pj
+        
+        // ScaleDown-tabeller (QP -> Q)
+        std::vector<NativeInteger> pInvModq;          // [P^-1] mod qi
+    };
+
+
+    /// @todo Store in context 
+    HybridTables InitHybridTables(const CryptoContext<DCRTPoly>& cc) {
+        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
+        
+        HybridTables tables;
+        tables.paramsQP = params->GetParamsQP();
+        tables.paramsQ  = params->GetElementParams();
+        tables.paramsP  = params->GetParamsP();
+
+        const auto& Q_limbs = tables.paramsQ->GetParams();
+        const auto& P_limbs = tables.paramsP->GetParams();
+        const auto Q_mod = tables.paramsQ->GetModulus();
+        const auto P_mod = tables.paramsP->GetModulus();
+
+        uint32_t numQ = Q_limbs.size();
+        uint32_t numP = P_limbs.size();
+
+        tables.qInv.resize(numQ);
+        tables.qHatModP.resize(numQ, std::vector<NativeInteger>(numP));
+        tables.pInvModq.resize(numQ);
+
+        for (uint32_t i = 0; i < numQ; i++) {
+            const auto& qi = Q_limbs[i]->GetModulus();
+            BigInteger qHat = Q_mod / BigInteger(qi);
+            
+            tables.qInv[i] = qHat.ModInverse(qi).ConvertToInt();
+            tables.pInvModq[i] = P_mod.ModInverse(qi).ConvertToInt();
+
+            for (uint32_t j = 0; j < numP; j++) {
+                const auto& pj = P_limbs[j]->GetModulus();
+                tables.qHatModP[i][j] = qHat.Mod(pj).ConvertToInt();
+            }
+        }
+        return tables;
+    }
+
+
     /// @brief Scales the input m by P,
     /// embedding the message into a larger space: Q -> QP
     DCRTPoly Power(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input) 
@@ -35,46 +86,48 @@ namespace hybrid {
     }
 
     /// @brief Base extension/lift Q -> QP
-    /// @todo Use FastBaseExtension instead of exact
     DCRTPoly Decompose(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input)
     {
         DEBUG_TIMER("Decompose");
 
-        const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
-        const auto QP = params->GetParamsQP();
-        const auto& Q_params = params->GetElementParams()->GetParams();
-        const auto& P_params = params->GetParamsP()->GetParams();
-        const auto Q_mod = params->GetElementParams()->GetModulus();
+        const auto tables = InitHybridTables(cc);
 
+        // Coefficient mode required?
+        DCRTPoly result(tables.paramsQP, Format::COEFFICIENT, true);
         DCRTPoly inputCoeff = input;
         inputCoeff.SetFormat(Format::COEFFICIENT);
 
-        DCRTPoly result(QP, Format::COEFFICIENT, true);
-        auto& res_limbs = result.GetAllElements();
         const auto& in_limbs = inputCoeff.GetAllElements();
+        auto& res_limbs = result.GetAllElements();
+        
+        uint32_t numQ = in_limbs.size();
+        uint32_t numP = tables.paramsP->GetParams().size();
+        uint32_t n = tables.paramsQ->GetRingDimension();
 
-        for(uint32_t i = 0; i < in_limbs.size(); i++) {
+        // Copy Q-towers (O(L*N)) and pre-scale by qInv
+        // (saves cache-accesses)
+        std::vector<NativePoly> v(numQ);
+        for(uint32_t i = 0; i < numQ; i++) {
             res_limbs[i] = in_limbs[i];
+            v[i] = in_limbs[i].Times(tables.qInv[i]);
         }
 
-        std::vector<NativePoly> v(in_limbs.size());
-        for(uint32_t i = 0; i < in_limbs.size(); i++) {
-            const auto& qi = Q_params[i]->GetModulus();
-            NativeInteger inv = (Q_mod / BigInteger(qi)).ModInverse(qi).ConvertToInt();
-            v[i] = in_limbs[i].Times(inv);
-        }
+        // Fast Base Extension (Q -> QP)
+        // TODO: Re-enable multi-threading
+        #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(numP))
+        for(uint32_t j = 0; j < numP; j++) {
+            uint32_t target_idx = numQ + j;
+            const auto& pj = tables.paramsP->GetParams()[j]->GetModulus();
+            auto& target_poly = res_limbs[target_idx];
 
-        for(uint32_t j = 0; j < P_params.size(); j++) {
-            const auto& pj = P_params[j]->GetModulus();
-            uint32_t target_idx = in_limbs.size() + j;
+            for(uint32_t i = 0; i < numQ; i++) {
+                const auto& qHat = tables.qHatModP[i][j];
+                const auto& source_poly = v[i];
 
-            for(uint32_t i = 0; i < in_limbs.size(); i++) {
-                const auto& qi = Q_params[i]->GetModulus();
-                NativeInteger q_hat_i_mod_pj = (Q_mod / BigInteger(qi)).Mod(pj).ConvertToInt();
-
-                for(uint32_t col = 0; col < res_limbs[target_idx].GetLength(); col++) {
-                    NativeInteger term = v[i][col].ModMul(q_hat_i_mod_pj, pj);
-                    res_limbs[target_idx][col] = res_limbs[target_idx][col].ModAdd(term, pj);
+                for(uint32_t col = 0; col < n; col++) {
+                    // Fused Multiply-Add: res = (res + source * qHat) mod pj
+                    NativeInteger term = source_poly[col].ModMul(qHat, pj);
+                    target_poly[col] = target_poly[col].ModAdd(term, pj);
                 }
             }
         }
@@ -95,24 +148,6 @@ namespace hybrid {
                 params->GetModqBarrettMu(), params->GettInvModp(),
                 params->GettInvModpPrecon(), t, params->GettModqPrecon());
     }
-}
-
-DCRTPoly EvalInnerProduct(
-    const std::vector<DCRTPoly>& D, 
-    const std::vector<DCRTPoly>& P
-) {
-    // TODO: Ensure we are in EVALUATION format
-    if (D.size() != P.size() || D.size() == 0) {
-        throw std::runtime_error("Vector dimensions must match and be non-zero");
-    }
-
-    DCRTPoly result = D[0] * P[0];
-
-    for (size_t i = 1; i < D.size(); i++) {
-        result += (D[i] * P[i]);
-    }
-
-    return result;
 }
 
 TEST(HYBRID, main) {
