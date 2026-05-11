@@ -84,6 +84,8 @@ namespace hybrid {
     }
 
     DCRTPoly ApproxModDown(const CryptoContext<DCRTPoly>& cc, const DCRTPoly& input) {
+        DEBUG_TIMER("ApproxModDown");
+
         const auto params = std::dynamic_pointer_cast<CryptoParametersRNS>(cc->GetCryptoParameters());
         const auto paramsQ = params->GetElementParams();
         const auto t = params->GetPlaintextModulus();
