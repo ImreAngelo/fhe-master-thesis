@@ -24,7 +24,7 @@ namespace Context
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>&);
 
         /// @todo Make wrapper cc->Encrypt(sk, pt, RLWE or RGSW);
-        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&) const;
+        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PrivateKey<DCRTPoly>&, const Plaintext&) const;
         
         /// @brief External product
         Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;

@@ -17,7 +17,7 @@ ExtendedCryptoContextImpl::ExtendedCryptoContextImpl(const CryptoContextImpl<DCR
     uint32_t numQ = Q_limbs.size();
     uint32_t numP = P_limbs.size();
 
-    DEBUG_PRINT("Created ExtendedCryptoContext with #Q = " << numQ << ", #P " << numP);
+    DEBUG_PRINT("Created ExtendedCryptoContext with #Q = " << numQ << ", #P = " << numP);
 
     m_qHatModP.resize(numQ, std::vector<NativeInteger>(numP));
     m_qInv.resize(numQ);
@@ -120,30 +120,111 @@ DCRTPoly ExtendedCryptoContextImpl::ApproxModDown(const DCRTPoly& input) const {
 };
 
 // TODO: Include noise
-std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& m) const 
+std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PrivateKey<DCRTPoly>& sk, const Plaintext& pt) const
 {
     const auto paramsQP = m_params->GetParamsQP();
+    const auto t = m_params->GetPlaintextModulus();
+    
+    // 1. Properly lift the Secret Key from Q to QP 
+    // Bypass CRT: Extract just the first limb of Q. Because 's' is bounded by {-1, 0, 1}, 
+    // this limb contains the exact small integer values we need.
+    DCRTPoly s_Q = sk->GetPrivateElement();
+    s_Q.SetFormat(Format::COEFFICIENT);
+    
+    NativePoly s_first = s_Q.GetElementAtIndex(0);
+    NativeInteger q0 = s_Q.GetParams()->GetParams()[0]->GetModulus();
+    uint64_t q0_int = q0.ConvertToInt();
+    uint64_t q0_half = q0_int >> 1;
+    uint32_t ringDim = s_first.GetLength();
 
-    // Scale by P
-    DCRTPoly mP = Power(m->GetElement<DCRTPoly>());
+    std::vector<NativePoly> s_limbs;
+    for (size_t j = 0; j < paramsQP->GetParams().size(); j++) {
+        auto limbParams = paramsQP->GetParams()[j];
+        NativeInteger pj = limbParams->GetModulus();
+        uint64_t pj_int = pj.ConvertToInt();
+        NativePoly limb(limbParams, Format::COEFFICIENT, true);
+        
+        for (size_t i = 0; i < ringDim; i++) {
+            uint64_t val_int = s_first[i].ConvertToInt();
+            if (val_int > q0_half) {
+                // Number is negative. Diff gives us the absolute value (e.g., 1 for -1)
+                uint64_t diff = q0_int - val_int;
+                // Safely map it to the new limb modulus (pj - 1)
+                limb[i] = NativeInteger(pj_int - diff);
+            } else {
+                // Number is positive
+                limb[i] = NativeInteger(val_int);
+            }
+        }
+        s_limbs.push_back(std::move(limb));
+    }
+    
+    DCRTPoly s_QP(s_limbs);
+    s_QP.SetFormat(Format::EVALUATION);
+
+    // 2. Setup Generators for a (Uniform) and e (Gaussian)
+    const auto& dgg = m_params->GetDiscreteGaussianGenerator();
+    DCRTPoly::DugType dug; 
 
     std::vector<Ciphertext<DCRTPoly>> rgsw;
-    for(size_t i = 0; i < 2; i++) {
-        // TODO: This contains no noise!!! (not secure in production)
-        DCRTPoly c0(paramsQP, Format::EVALUATION, true);
-        DCRTPoly c1(paramsQP, Format::EVALUATION, true);
+    rgsw.reserve(2);
+
+    for (size_t row = 0; row < 2; row++) {
+        DCRTPoly a(dug, paramsQP, Format::EVALUATION);
+        DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
         
-        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>();
-        ct->SetElements({c0, c1});
-        rgsw.push_back(ct);
+        // c1 = a, c0 = -(a*s + t*e) mod QP
+        DCRTPoly c1 = a;
+        DCRTPoly c0 = a * s_QP;
+        
+        e = e * t; 
+        c0 += e;
+        c0 = c0.Negate(); 
+
+        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(sk);
+        ct->SetElements({std::move(c0), std::move(c1)});
+        rgsw.push_back(std::move(ct));
     }
 
-    // Z + mG = Z + P(m) in hybrid
-    rgsw[0]->GetElements()[0] += mP;
-    rgsw[1]->GetElements()[1] += mP;
+    // 3. Add m * P to the diagonal
+    BigInteger P_mod = m_params->GetParamsP()->GetModulus();
+    
+    DCRTPoly m_Q = pt->GetElement<DCRTPoly>();
+    m_Q.SetFormat(Format::COEFFICIENT);
+    
+    // Bypass CRT for the message as well
+    NativePoly m_first = m_Q.GetElementAtIndex(0);
+
+    std::vector<NativePoly> m_limbs;
+    for (size_t j = 0; j < paramsQP->GetParams().size(); j++) {
+        auto limbParams = paramsQP->GetParams()[j];
+        NativeInteger pj = limbParams->GetModulus();
+        NativePoly limb(limbParams, Format::COEFFICIENT, true);
+        
+        // Compute P_mod % pj
+        BigInteger pj_BI(pj.ConvertToInt());
+        NativeInteger P_mod_pj(P_mod.Mod(pj_BI).ConvertToInt());
+        
+        for (size_t i = 0; i < ringDim; i++) {
+            NativeInteger val = m_first[i]; // Plaintext message is safely within [0, t-1]
+            limb[i] = val.ModMul(P_mod_pj, pj);
+        }
+        m_limbs.push_back(std::move(limb));
+    }
+
+    DCRTPoly mP(m_limbs);
+    mP.SetFormat(Format::EVALUATION);
+
+    // Safely retrieve, modify, and set the elements to avoid const reference errors
+    std::vector<DCRTPoly> row0 = rgsw[0]->GetElements();
+    std::vector<DCRTPoly> row1 = rgsw[1]->GetElements();
+    row0[0] += mP;
+    row1[1] += mP;
+    rgsw[0]->SetElements(std::move(row0));
+    rgsw[1]->SetElements(std::move(row1));
 
     return rgsw;
-};
+}
 
 //
 Ciphertext<DCRTPoly> ExtendedCryptoContextImpl::EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const 

@@ -4,7 +4,7 @@
 TEST(HYBRID, rgsw) {
     using namespace lbcrypto;
 
-    const std::vector<int64_t> value{3};
+    const std::vector<int64_t> value{1};
 
     const auto ps = params::Small<CryptoContextBGVRNS>();
     const auto cc = Context::GenExtendedCryptoContext(ps);
@@ -33,7 +33,7 @@ TEST(HYBRID, rgsw) {
     {
         DEBUG_PRINT("\n[EXTERNAL PRODUCT]");
 
-        const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
+        const auto rgsw = cc->EncryptRGSW(keys.secretKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
         const auto ext = cc->EvalExternalProduct(rlwe, rgsw);
 
@@ -51,7 +51,7 @@ TEST(HYBRID, rgsw) {
     {
         DEBUG_PRINT("\n[INTERNAL PRODUCT]");
 
-        const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
+        const auto rgsw = cc->EncryptRGSW(keys.secretKey, pt);
         const auto prod = cc->EvalInternalProduct(rgsw, rgsw);
         
         // TODO: Create decryption helper for RGSW
