@@ -58,4 +58,18 @@
 [       OK ] RGSW.max (451 ms)
 
 
-# Textbook construction
+# BV-RNS Gadget
+Benchmark                            Time             CPU   Iterations
+----------------------------------------------------------------------
+RGSW/Encrypt_mean                0.700 ms        0.688 ms           10
+RGSW/Encrypt_median              0.704 ms        0.681 ms           10
+RGSW/Encrypt_stddev              0.017 ms        0.018 ms           10
+RGSW/Encrypt_cv                   2.48 %          2.56 %            10
+RGSW/ExternalProduct_mean        0.884 ms        0.879 ms           10
+RGSW/ExternalProduct_median      0.888 ms        0.875 ms           10
+RGSW/ExternalProduct_stddev      0.031 ms        0.013 ms           10
+RGSW/ExternalProduct_cv           3.48 %          1.51 %            10
+RGSW/InternalProduct_mean         5.24 ms         5.27 ms           10
+RGSW/InternalProduct_median       5.27 ms         5.25 ms           10
+RGSW/InternalProduct_stddev      0.123 ms        0.047 ms           10
+RGSW/InternalProduct_cv           2.34 %          0.90 %            10

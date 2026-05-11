@@ -22,9 +22,14 @@ namespace Context
      *
      * Uses BV-RNS gadgets, one for each RNS prime.
      */
-    class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
+    // Base for the second-level digit decomposition within each RNS tower.
+    // Noise per external product scales as omega/2 instead of q_i/2.
+    static constexpr uint64_t GADGET_LOG  = 5;
+    static constexpr uint64_t GADGET_BASE = 1u << GADGET_LOG;
+
+    class BVExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
     public:
-        explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
+        explicit BVExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>& base);
 
         RGSW EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
         Ciphertext<DCRTPoly> EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const;
@@ -38,6 +43,9 @@ namespace Context
         const std::vector<NativeInteger> m_gadgetDecompVectorScalars;
 
     PUBLIC_FOR_TEST:
+        // Number of base-GADGET_BASE digits needed to cover the largest RNS prime.
+        size_t GadgetDigits() const;
+
         std::vector<DCRTPoly> Decompose(const DCRTPoly& a) const;
         std::vector<DCRTPoly> GadgetMul(const DCRTPoly& b) const;
         std::vector<DCRTPoly> GadgetVector() const;
@@ -63,7 +71,7 @@ namespace Context
     /// @brief Templated alias kept for call-site compatibility; the impl is DCRTPoly-only, so the parameter is ignored.
     /// @todo Remove poly template from everywhere
     template <typename T = DCRTPoly>
-    using ExtendedCryptoContext = std::shared_ptr<ExtendedCryptoContextImpl>;
+    using ExtendedCryptoContext = std::shared_ptr<BVExtendedCryptoContextImpl>;
 
     template <typename T>
     struct ContextRegistrar : protected CryptoContextFactory<T> {
@@ -73,7 +81,7 @@ namespace Context
     };
 
     inline ExtendedCryptoContext<DCRTPoly> GenExtendedCryptoContext(const CCParams<CryptoContextBGVRNS>& params) {
-        auto ext = std::make_shared<ExtendedCryptoContextImpl>(*GenCryptoContext(params));
+        auto ext = std::make_shared<BVExtendedCryptoContextImpl>(*GenCryptoContext(params));
         ContextRegistrar<DCRTPoly>::Register(ext);
         return ext;
     }

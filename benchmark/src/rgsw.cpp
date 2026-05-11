@@ -6,35 +6,37 @@
 
 #include <benchmark/benchmark.h>
 #include "openfhe.h"
-#include "core/context.h"
+#include "core/include/context.h"
 
 using namespace lbcrypto;
 
 namespace {
-
-constexpr uint32_t DEPTH        = 3;
-constexpr uint64_t PT_MODULUS   = 65537;    // 8 for small params case
-constexpr uint32_t RING_DIM_LOG = 14;       // 11 = 2048, 14 = 16384
-
+    
 class RGSW : public benchmark::Fixture {
-public:
+    public:
     void SetUp(const benchmark::State&) override {
         if (cc) return;
-        
+            
+        // TODO: Unified set of params cross-project
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(1);
-        params.SetPlaintextModulus(PT_MODULUS);
-        params.SetRingDim(1 << RING_DIM_LOG);
+        params.SetMultiplicativeDepth(3);
+        params.SetPlaintextModulus(1 << 8);
+        params.SetRingDim(1 << 11);
         params.SetScalingTechnique(FIXEDMANUAL);
-        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet); // Required for small params
+        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+
+        // Large params (about ~ 8x slower internal products)
+        // params.SetMultiplicativeDepth(1);
+        // params.SetPlaintextModulus(65537);
+        // params.SetRingDim(1 << 14);
+        // params.SetScalingTechnique(FIXEDMANUAL);
+        
+        // Tuneable parameter
         // params.SetNumLargeDigits(2);
 
         cc = Context::GenExtendedCryptoContext(params);
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
-
-        // const size_t log_q = cc->GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB();
-        // ell = log_q / B_LOG + 1;
 
         keys = cc->KeyGen();
         
@@ -66,6 +68,6 @@ public:
 
 MAKE_BENCHMARK(Encrypt, cc->EncryptRGSW(keys.publicKey, pt_msg))
 MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct(rlwe_ct, rgsw_ct))
-// MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct))
+MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct))
 
 BENCHMARK_MAIN();
