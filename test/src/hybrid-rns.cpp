@@ -240,7 +240,6 @@ namespace hybrid {
         const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw
     ) {
         // DEBUG_TIMER("External Product");
-
         
         auto c = rlwe->GetElements();
         DEBUG_PRINT("C size: " << c.size());
@@ -271,6 +270,33 @@ namespace hybrid {
         return result;
     }
 
+    /// @brief External product without mod down QP -> Q
+    /// @todo Stay in QP basis for as long as possible!
+    // std::pair<DCRTPoly,DCRTPoly> EvalExternalProductQP(
+    //     const CryptoContext<DCRTPoly>& cc,
+    //     const HybridTables& tables,
+    //     const Ciphertext<DCRTPoly>& rlwe,
+    //     const std::vector<Ciphertext<DCRTPoly>>& rgsw
+    // ) {
+    //     auto c = rlwe->GetElements();
+
+    //     c[0].SetFormat(Format::EVALUATION);
+    //     c[1].SetFormat(Format::EVALUATION);
+
+    //     auto d0 = Decompose(cc, c[0], tables);
+    //     auto d1 = Decompose(cc, c[1], tables);
+
+    //     DCRTPoly out0(tables.paramsQP, Format::EVALUATION, true);
+    //     DCRTPoly out1(tables.paramsQP, Format::EVALUATION, true);
+
+    //     out0 += d0 * rgsw[0]->GetElements()[0];
+    //     out1 += d0 * rgsw[0]->GetElements()[1];
+    //     out0 += d1 * rgsw[1]->GetElements()[0];
+    //     out1 += d1 * rgsw[1]->GetElements()[1];
+
+    //     return {out0, out1};
+    // }
+
     /// @brief Internal product
     std::vector<Ciphertext<DCRTPoly>> EvalInternalProduct(
         const CryptoContext<DCRTPoly> &cc, const HybridTables& tables,
@@ -278,30 +304,42 @@ namespace hybrid {
     ) {
         DEBUG_TIMER("Internal Product");
 
-        // TODO: Keep in QP domain until decrypt
-        if (lhs.empty() || rhs.empty()) {
-            DEBUG_PRINT("LHS or RHS is empty!");
-            return {};
+        // TODO: Have more than 1 auxillary base p_0
+        if (lhs.size() != 2 || rhs.size() != 2) {
+            OPENFHE_THROW("Hybrid internal product expects 2x2 RGSW structure");
         }
 
         std::vector<Ciphertext<DCRTPoly>> result;
-        
-        for (size_t i = 0; i < lhs.size(); i++) {
-            // 1. Utfør det eksterne produktet
-            // OBS: Dette returnerer en chiffertekst i base Q
-            auto resQ = EvalExternalProduct(cc, tables, lhs[i], rhs);
-            DEBUG_PRINT("[" << i << "] ResQ");
+        result.reserve(2);
 
-            // 2. Hvis dette skal være en del av en ny RGSW, må vi løfte den til QP igjen
-            auto c0_QP = Decompose(cc, resQ->GetElements()[0], tables);
-            DEBUG_PRINT("Decompose c0");
-            auto c1_QP = Decompose(cc, resQ->GetElements()[1], tables);
-            DEBUG_PRINT("Decompose c1");
+        for (size_t row = 0; row < 2; row++) {
+            // Treat each RGSW row as an RLWE ciphertext in Q domain
+            // and multiply by rhs RGSW, but KEEP output in QP
+            auto c = lhs[row]->GetElements();
 
-            auto ctQP = resQ->Clone();
-            ctQP->SetElements({std::move(c0_QP), std::move(c1_QP)});
-            
-            result.push_back(std::move(ctQP));
+            c[0].SetFormat(Format::EVALUATION);
+            c[1].SetFormat(Format::EVALUATION);
+
+            // Gadget decomposition Q -> QP
+            DCRTPoly d0 = Decompose(cc, c[0], tables);
+            DCRTPoly d1 = Decompose(cc, c[1], tables);
+
+            // Output row in QP
+            DCRTPoly out0(tables.paramsQP, Format::EVALUATION, true);
+            DCRTPoly out1(tables.paramsQP, Format::EVALUATION, true);
+
+            // Standard external product
+            out0 += d0 * rhs[0]->GetElements()[0];
+            out1 += d0 * rhs[0]->GetElements()[1];
+
+            out0 += d1 * rhs[1]->GetElements()[0];
+            out1 += d1 * rhs[1]->GetElements()[1];
+
+            // Build new RGSW row directly in QP
+            auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(cc);
+            ct->SetElements({std::move(out0), std::move(out1)});
+
+            result.push_back(std::move(ct));
         }
 
         return result;
@@ -311,7 +349,7 @@ namespace hybrid {
 TEST(HYBRID, main) {
     const std::vector<int64_t> value{2};
 
-    const auto ps = params::Small<CryptoContextBGVRNS>();
+    const auto ps = params::Small<CryptoContextBGVRNS>(4);
     const auto cc = GenCryptoContext(ps);
     
     cc->Enable(PKE);
@@ -322,34 +360,34 @@ TEST(HYBRID, main) {
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     const auto tables = hybrid::InitHybridTables(cc); // TODO: Move to context
 
-    // // Gadget Property
-    // {
-    //     const DCRTPoly m = pt->GetElement<DCRTPoly>();
+    // Gadget Property
+    {
+        const DCRTPoly m = pt->GetElement<DCRTPoly>();
 
-    //     const DCRTPoly pm = hybrid::Power(cc, m);
-    //     const DCRTPoly dm = hybrid::Decompose(cc, m, tables);
+        const DCRTPoly pm = hybrid::Power(cc, m);
+        const DCRTPoly dm = hybrid::Decompose(cc, m, tables);
 
-    //     const DCRTPoly mult = pm * dm;
+        const DCRTPoly mult = pm * dm;
 
-    //     const auto mm = hybrid::ApproxModDown(cc, mult);
-    //     ASSERT_EQ(mm, m * m);
-    // }
+        const auto mm = hybrid::ApproxModDown(cc, mult);
+        ASSERT_EQ(mm, m * m);
+    }
 
-    // // External Product
-    // {
-    //     const auto rgsw = hybrid::Encrypt(cc, tables, keys.publicKey, pt);
-    //     const auto rlwe = cc->Encrypt(keys.publicKey, pt);
-    //     const auto ext = hybrid::EvalExternalProduct(cc, tables, rlwe, rgsw);
+    // External Product
+    {
+        const auto rgsw = hybrid::Encrypt(cc, tables, keys.publicKey, pt);
+        const auto rlwe = cc->Encrypt(keys.publicKey, pt);
+        const auto ext = hybrid::EvalExternalProduct(cc, tables, rlwe, rgsw);
 
-    //     Plaintext decrypted;
-    //     cc->Decrypt(keys.secretKey, ext, &decrypted);
-    //     decrypted->SetLength(value.size());
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, ext, &decrypted);
+        decrypted->SetLength(value.size());
 
-    //     DEBUG_PRINT("External Product: " << decrypted);
+        DEBUG_PRINT("External Product: " << decrypted);
 
-    //     const auto expected = cc->MakeCoefPackedPlaintext({value[0] * value[0]});
-    //     ASSERT_EQ(decrypted, expected);
-    // }
+        const auto expected = cc->MakeCoefPackedPlaintext({value[0] * value[0]});
+        ASSERT_EQ(decrypted, expected);
+    }
 
     // Internal Product
     {
