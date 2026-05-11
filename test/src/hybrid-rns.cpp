@@ -242,20 +242,15 @@ namespace hybrid {
         // DEBUG_TIMER("External Product");
         
         auto c = rlwe->GetElements();
-        DEBUG_PRINT("C size: " << c.size());
 
         c[0].SetFormat(Format::EVALUATION);
         c[1].SetFormat(Format::EVALUATION);
 
-        DEBUG_PRINT("Format set");
-
-        const auto d0 = Decompose(cc, c[0], tables); DEBUG_PRINT("Decomposed 0");
-        const auto d1 = Decompose(cc, c[1], tables); DEBUG_PRINT("Decomposed 1");
+        const auto d0 = Decompose(cc, c[0], tables);
+        const auto d1 = Decompose(cc, c[1], tables);
 
         DCRTPoly out0(tables.paramsQP, Format::EVALUATION, true);
         DCRTPoly out1(tables.paramsQP, Format::EVALUATION, true);
-        
-        DEBUG_PRINT("QP polys created");
 
         // Rad 0 (multipliseres med d0)
         out0 += (d0 * rgsw[0]->GetElements()[0]);
@@ -375,6 +370,8 @@ TEST(HYBRID, main) {
 
     // External Product
     {
+        DEBUG_PRINT("\n[EXTERNAL PRODUCT]");
+
         const auto rgsw = hybrid::Encrypt(cc, tables, keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
         const auto ext = hybrid::EvalExternalProduct(cc, tables, rlwe, rgsw);
@@ -391,7 +388,7 @@ TEST(HYBRID, main) {
 
     // Internal Product
     {
-        DEBUG_PRINT("\n\n\n[INTERNAL PRODUCT]");
+        DEBUG_PRINT("\n[INTERNAL PRODUCT]");
 
         const auto rgsw = hybrid::Encrypt(cc, tables, keys.publicKey, pt);
         const auto prod = hybrid::EvalInternalProduct(cc, tables, rgsw, rgsw);
