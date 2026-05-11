@@ -1,7 +1,7 @@
 #pragma once
 
 #include "openfhe.h"
-#include "core/context.h"
+#include "core/include/context.h"
 #include "utils/timer.h"
 #include "utils/logging.h"
 

@@ -76,10 +76,10 @@ include_directories(src)
 
 # ── Core library ─────────────────────────────────────────────────────────────
 add_library(core_lib STATIC
-    src/core/context.cpp
-    src/core/gadget-bv.cpp
-    src/core/gadget-hybrid.cpp
+    src/core/lib/context.cpp
 )
+    # src/core/lib/context-bv.cpp
+    # src/core/lib/gadget-bv.cpp
 
 # Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
 # DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,

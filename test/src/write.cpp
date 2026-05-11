@@ -1,5 +1,5 @@
 #include "openfhe.h"
-#include "core/context.h"
+#include "core/include/context.h"
 #include "server/write.h"
 #include "utils/logging.h"
 
