@@ -73,3 +73,4 @@ make bench
 - [ ] Verify depth requirements
 - [ ] Make code multi-threaded where possible
 - [ ] Test multi-threaded performance
+- [/] Hybrid keyswitching gadget
