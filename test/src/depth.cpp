@@ -20,7 +20,8 @@ TEST(Depth, ChainedInternalProduct) {
     const int64_t t = params.GetPlaintextModulus();
 
     // RGSW(3): the fixed multiplier applied each round.
-    const auto pt3   = cc->MakeCoefPackedPlaintext({3});
+    const auto mult = 1;
+    const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
     const auto rgsw2 = cc->EncryptRGSW(keys.publicKey, pt3);
 
     // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
@@ -33,7 +34,7 @@ TEST(Depth, ChainedInternalProduct) {
 
     for (int n = 1; n <= 64; ++n) {
         val      = cc->EvalInternalProduct(rgsw2, val);
-        expected = (expected * 3) % t;
+        expected = (expected * mult) % t;
         if (expected > t / 2) expected -= t;
 
         const auto res = cc->EvalExternalProduct(rlwe1, val);

@@ -100,8 +100,8 @@ namespace server {
     // --------- //
 
     namespace debug {
-        template <typename Poly = DCRTPoly, typename T, size_t K, uint64_t N>
-        void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<Poly>& cc, const std::array<std::array<T, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
+        template <size_t K, uint64_t N>
+        void PrintMatrix(const std::string& label, const Context::ExtendedCryptoContext<DCRTPoly>& cc, const std::array<std::array<server::RGSWCiphertext<DCRTPoly>, K>, N>& mat, const PrivateKey<DCRTPoly>& secretKey) {
             DEBUG_PRINT_SAMELINE(label << ": ");
         #if defined(DEBUG_LOGGING)
             for (uint64_t i = 0; i < N; i++) {

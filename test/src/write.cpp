@@ -17,7 +17,7 @@ using namespace Context;
  * @tparam D Number of choices (default = A1, A2, A3)
  * @tparam L Bit-length of the address — N = 2^L users (and bins)
  */
-template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
+template <size_t K = 3, uint32_t D = 3, uint32_t L = 1>
 void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 {
     auto cc = Context::GenExtendedCryptoContext(params);
@@ -33,8 +33,8 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
     const auto rgsw_one  = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
     const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
 
-    std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
-    std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
+    std::array<std::array<server::RGSWCiphertext<DCRTPoly>, K>, N> L_mat;
+    std::array<std::array<server::RGSWCiphertext<DCRTPoly>, K>, N> I_mat;
     for (uint64_t i = 0; i < N; i++) {
         for (size_t k = 0; k < K; k++) {
             L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
@@ -53,10 +53,10 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
         const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
 
         // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
-        const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, r);
+        const auto z = client::PlaceAtN<DCRTPoly,D,L>(cc, keys.publicKey, r);
 
         // Loop 2
-        const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
+        const auto hasWritten = server::Write<DCRTPoly,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
         // Output results
         auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
@@ -86,7 +86,7 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 }
 
 // Main tests
-TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(params::Small<CryptoContextBGVRNS>(4)); }
+TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(params::Small<CryptoContextBGVRNS>()); }
 // TEST(ServerWrite, N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
 // TEST(ServerWrite, N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
 // TEST(ServerWrite, N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }
