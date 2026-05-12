@@ -32,10 +32,12 @@ namespace server {
         const RGSWCiphertext<T>& A,
         const RGSWCiphertext<T>& B
     ) {
+        DEBUG_PRINT("Adding RGSW");
         RGSWCiphertext<T> result(A.size());
         for (size_t i = 0; i < A.size(); i++) {
             result[i] = cc->EvalAdd(A[i], B[i]);
         }
+        DEBUG_PRINT("Added RGSW");
         return result;
     }
 
@@ -46,10 +48,12 @@ namespace server {
         const RGSWCiphertext<T>& A,
         const RGSWCiphertext<T>& B
     ) {
+        DEBUG_PRINT("Subtracting RGSW");
         RGSWCiphertext<T> result(A.size());
         for (size_t i = 0; i < A.size(); i++) {
             result[i] = cc->EvalSub(A[i], B[i]);
         }
+        DEBUG_PRINT("Subtracted RGSW");
         return result;
     }
 
@@ -60,11 +64,12 @@ namespace server {
         const Plaintext& p,
         const RGSWCiphertext<T>& A
     ) {
-        RGSWCiphertext<T> result(A.size());
-        for (size_t i = 0; i < A.size(); i++) {
-            result[i] = cc->EvalMult(p, A[i]);
-        }
-        return result;
+        // RGSWCiphertext<T> result(A.size());
+        // for (size_t i = 0; i < A.size(); i++) {
+        //     result[i] = cc->EvalMult(p, A[i]);
+        // }
+        // return result;
+        return cc->EvalMultRGSW(A, p);
     }
 
     // Decrypt RGSW
@@ -75,8 +80,11 @@ namespace server {
         const RGSWCiphertext<T>& rgsw,
         const size_t len = 1
     ) {
+        const auto one = cc->Encrypt(secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rlwe = cc->EvalExternalProduct(one, rgsw);
+
         Plaintext res;
-        cc->Decrypt(secretKey, rgsw[rgsw.size()/2], &res);
+        cc->Decrypt(secretKey, rlwe, &res);
         res->SetLength(len);
         return res->GetCoefPackedValue();
     }

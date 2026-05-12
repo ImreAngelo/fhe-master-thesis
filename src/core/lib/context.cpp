@@ -133,7 +133,9 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const P
         DCRTPoly c0(paramsQP, Format::EVALUATION, true);
         DCRTPoly c1(paramsQP, Format::EVALUATION, true);
         
-        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>();
+        // Keep correct CryptoContext without having a ciphertext to clone
+        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(publicKey);
+        ct->SetEncodingType(m->GetEncodingType());
         ct->SetElements({c0, c1});
         rgsw.push_back(ct);
     }
@@ -209,10 +211,111 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct
         out1 += d1 * rhs[1]->GetElements()[1];
 
         // Build new RGSW row directly in QP
-        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>();
+        auto ct = lhs[row]->Clone();
         ct->SetElements({std::move(out0), std::move(out1)});
 
         result.push_back(std::move(ct));
+    }
+
+    return result;
+}
+
+/*
+std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalAddRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const 
+{
+    if (lhs.size() != 2 || rhs.size() != 2) {
+        OPENFHE_THROW("EvalAddRGSW expects 2x2 RGSW structure");
+    }
+
+    std::vector<Ciphertext<DCRTPoly>> result;
+    result.reserve(2);
+
+    for (size_t row = 0; row < 2; row++) {
+        // Clone exactly copies the correct embedded CryptoContext pointer
+        auto out = lhs[row]->Clone(); 
+
+        auto cL = lhs[row]->GetElements();
+        auto cR = rhs[row]->GetElements();
+
+        // Direct polynomial addition
+        out->SetElements({cL[0] + cR[0], cL[1] + cR[1]});
+        result.push_back(std::move(out));
+    }
+
+    return result;
+}
+
+std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalSubRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const 
+{
+    if (lhs.size() != 2 || rhs.size() != 2) {
+        OPENFHE_THROW("EvalSubRGSW expects 2x2 RGSW structure");
+    }
+
+    std::vector<Ciphertext<DCRTPoly>> result;
+    result.reserve(2);
+
+    for (size_t row = 0; row < 2; row++) {
+        // Clone exactly copies the correct embedded CryptoContext pointer
+        auto out = lhs[row]->Clone(); 
+
+        auto cL = lhs[row]->GetElements();
+        auto cR = rhs[row]->GetElements();
+
+        // Direct polynomial subtraction
+        out->SetElements({cL[0] - cR[0], cL[1] - cR[1]});
+        result.push_back(std::move(out));
+    }
+
+    return result;
+}
+*/
+
+std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalMultRGSW(const std::vector<Ciphertext<DCRTPoly>>& rgsw, const Plaintext& pt) const 
+{
+    if (rgsw.size() != 2) {
+        OPENFHE_THROW("EvalMultRGSW expects 2x2 RGSW structure");
+    }
+
+    const auto paramsQP = m_params->GetParamsQP();
+    
+    // 1. Extract plaintext polynomial in Q
+    DCRTPoly p_Q = pt->GetElement<DCRTPoly>();
+    p_Q.SetFormat(Format::COEFFICIENT);
+    
+    // 2. Fast bypass to lift to QP 
+    // Because plaintext values are strictly bounded by t (which is much smaller than q0),
+    // they are purely positive integers. We can safely copy them directly.
+    NativePoly p_first = p_Q.GetElementAtIndex(0);
+    uint32_t ringDim = p_first.GetLength();
+
+    std::vector<NativePoly> p_limbs;
+    for (size_t j = 0; j < paramsQP->GetParams().size(); j++) {
+        auto limbParams = paramsQP->GetParams()[j];
+        NativePoly limb(limbParams, Format::COEFFICIENT, true);
+        
+        for (size_t i = 0; i < ringDim; i++) {
+            limb[i] = p_first[i]; 
+        }
+        p_limbs.push_back(std::move(limb));
+    }
+
+    DCRTPoly p_QP(p_limbs);
+    
+    // Switch plaintext to EVALUATION format for element-wise multiplication
+    p_QP.SetFormat(Format::EVALUATION);
+
+    // 3. Multiply every element of the RGSW matrix by the plaintext polynomial
+    std::vector<Ciphertext<DCRTPoly>> result;
+    result.reserve(2);
+
+    for (size_t row = 0; row < 2; row++) {
+        // Clone preserves the CryptoContext pointer and Encoding Type
+        auto out = rgsw[row]->Clone(); 
+        auto c = rgsw[row]->GetElements();
+
+        // Direct polynomial multiplication
+        out->SetElements({c[0] * p_QP, c[1] * p_QP});
+        result.push_back(std::move(out));
     }
 
     return result;

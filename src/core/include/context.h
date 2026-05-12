@@ -32,6 +32,10 @@ namespace Context
         /// @brief Internal product
         std::vector<Ciphertext<DCRTPoly>> EvalInternalProduct(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
         
+        std::vector<Ciphertext<DCRTPoly>> EvalAddRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
+        std::vector<Ciphertext<DCRTPoly>> EvalSubRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
+        std::vector<Ciphertext<DCRTPoly>> EvalMultRGSW(const std::vector<Ciphertext<DCRTPoly>>& rgsw, const Plaintext& pt) const;
+
     protected:
         // TODO: Make const
         std::shared_ptr<CryptoParametersRNS> m_params;

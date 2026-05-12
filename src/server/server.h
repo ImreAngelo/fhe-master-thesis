@@ -1,6 +1,6 @@
 #pragma once
 #include "openfhe.h"
-#include "core/context.h"
+#include "core/include/context.h"
 // TODO: Fix terrible include structure
 #include "server/write.h"
 #include "utils/logging.h"
