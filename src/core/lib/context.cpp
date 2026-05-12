@@ -220,7 +220,6 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct
     return result;
 }
 
-/*
 std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalAddRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const 
 {
     if (lhs.size() != 2 || rhs.size() != 2) {
@@ -268,7 +267,6 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalSubRGSW(const s
 
     return result;
 }
-*/
 
 std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalMultRGSW(const std::vector<Ciphertext<DCRTPoly>>& rgsw, const Plaintext& pt) const 
 {

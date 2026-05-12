@@ -21,56 +21,9 @@ namespace server {
     template <typename T = DCRTPoly>
     using RGSWCiphertext = std::vector<RLWECiphertext<T>>;
 
-    //-----------------//
-    // implementations //
-    //-----------------//
-
-    // RGSW addition
-    template <typename T = DCRTPoly>
-    inline RGSWCiphertext<T> EvalAddRGSW(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const RGSWCiphertext<T>& A,
-        const RGSWCiphertext<T>& B
-    ) {
-        DEBUG_PRINT("Adding RGSW");
-        RGSWCiphertext<T> result(A.size());
-        for (size_t i = 0; i < A.size(); i++) {
-            result[i] = cc->EvalAdd(A[i], B[i]);
-        }
-        DEBUG_PRINT("Added RGSW");
-        return result;
-    }
-
-    // RGSW subtraction
-    template <typename T = DCRTPoly>
-    inline RGSWCiphertext<T> EvalSubRGSW(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const RGSWCiphertext<T>& A,
-        const RGSWCiphertext<T>& B
-    ) {
-        DEBUG_PRINT("Subtracting RGSW");
-        RGSWCiphertext<T> result(A.size());
-        for (size_t i = 0; i < A.size(); i++) {
-            result[i] = cc->EvalSub(A[i], B[i]);
-        }
-        DEBUG_PRINT("Subtracted RGSW");
-        return result;
-    }
-
-    // RGSW x Plaintext multiplication
-    template <typename T = DCRTPoly>
-    inline RGSWCiphertext<T> EvalMultPlain(
-        const Context::ExtendedCryptoContext<T>& cc,
-        const Plaintext& p,
-        const RGSWCiphertext<T>& A
-    ) {
-        // RGSWCiphertext<T> result(A.size());
-        // for (size_t i = 0; i < A.size(); i++) {
-        //     result[i] = cc->EvalMult(p, A[i]);
-        // }
-        // return result;
-        return cc->EvalMultRGSW(A, p);
-    }
+    //---------//
+    // Helpers //
+    //---------//
 
     // Decrypt RGSW
     template <typename T = DCRTPoly>
@@ -102,7 +55,7 @@ namespace server {
         res->SetLength(len);
         return res->GetCoefPackedValue();
     }
-    
+
     // --------- //
     // Debugging //
     // --------- //
@@ -179,24 +132,24 @@ namespace server {
                         auto zI  = cc->EvalInternalProduct(z[d][i], I_mat[i][k]);
                         DEBUG_PRINT("Available and asking? " << Decrypt(cc, secretKey, zI));
 
-                        auto sub = EvalSubRGSW(cc, one, hasWritten);
+                        auto sub = cc->EvalSubRGSW(one, hasWritten);
                         DEBUG_PRINT("Can write? " << Decrypt(cc, secretKey, sub));
 
                         auto h   = cc->EvalInternalProduct(zI, sub);
                         DEBUG_PRINT("Will write? " << Decrypt(cc, secretKey, h));
     
-                        auto val = EvalMultPlain(cc, Vr, h);
+                        auto val = cc->EvalMultRGSW(h, Vr);
                         DEBUG_PRINT("Value to write: " << Decrypt(cc, secretKey, val));
 
                         debug::PrintRow("L_mat[" + std::to_string(i) + "] before", cc, L_mat[i], secretKey);
-                        L_mat[i][k] = EvalAddRGSW(cc, L_mat[i][k], val);
+                        L_mat[i][k] = cc->EvalAddRGSW(L_mat[i][k], val);
                         debug::PrintRow("L_mat[" + std::to_string(i) + "] after", cc, L_mat[i], secretKey);
 
-                        I_mat[i][k] = EvalSubRGSW(cc, I_mat[i][k], h);
+                        I_mat[i][k] = cc->EvalSubRGSW(I_mat[i][k], h);
                         DEBUG_PRINT("I_mat[" << i << "][" << k << "]: " << Decrypt(cc, secretKey, I_mat[i][k]));
 
                         DEBUG_PRINT("hasWritten before add: " << Decrypt(cc, secretKey, hasWritten));
-                        hasWritten = EvalAddRGSW(cc, hasWritten, h);
+                        hasWritten = cc->EvalAddRGSW(hasWritten, h);
                         DEBUG_PRINT("hasWritten: " << Decrypt(cc, secretKey, hasWritten));
 
                         debug::PrintMatrix("L", cc, L_mat, secretKey); DEBUG_PRINT("");
