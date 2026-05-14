@@ -95,30 +95,29 @@ private:
         return msb / logB + 1;
     }
 
-    /// @brief Generate the factors (Q/qi)B^i
-    static std::vector<BigInteger> generatePowerTable(const CryptoContext<DCRTPoly>& cc, const usint ell) {
+    /// @brief Generate the factors (Q/qi)B^i, pre-reduced mod q_i
+    static std::vector<NativeInteger> generatePowerTable(const CryptoContext<DCRTPoly>& cc, const usint ell) {
         const auto& Q = cc->GetElementParams()->GetModulus();
         const auto& q = cc->GetElementParams()->GetParams();
-        const auto B = BigInteger(1 << computeLogB(cc, ell));
+        const auto B = BigInteger(uint64_t(1) << computeLogB(cc, ell));
 
         DEBUG_PRINT("B: " << B);
-        
-        // Prepare B^i
-        std::vector<BigInteger> powersOfB(ell, 1);
+
+        std::vector<BigInteger> powersOfB(ell, BigInteger(1));
         for(usint i = 1; i < ell; i++) {
             powersOfB[i] = powersOfB[i - 1] * B;
         }
 
-        // Prepare Q/q_i * B^i 
-        std::vector<BigInteger> table(q.size() * ell);
-        
+        std::vector<NativeInteger> table(q.size() * ell);
+
         #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(q.size()))
         for(usint i = 0; i < q.size(); i++) {
-            const auto qi = q[i]->GetModulus();
-            const auto qHat = Q / BigInteger(qi);
+            const auto qi    = q[i]->GetModulus();
+            const auto qiBig = BigInteger(qi);
+            const auto qHat  = Q / qiBig;
 
             for(usint j = 0; j < ell; j++) {
-                table[i * ell + j] = qHat * powersOfB[j];
+                table[i * ell + j] = NativeInteger((qHat * powersOfB[j]).Mod(qiBig));
             }
         }
 
@@ -142,8 +141,8 @@ protected:
     const usint m_ell; 
     const usint m_logB;
 
-    /// @brief (Q/qi) B^i
-    const std::vector<BigInteger> m_QhatB;
+    /// @brief (Q/qi) B^i mod q_i
+    const std::vector<NativeInteger> m_QhatB;
 
     /// @brief (Q/qi)^{-1} * B^i mod q_i
     const std::vector<BigInteger> m_decompB;
@@ -263,14 +262,14 @@ TEST(DECOMPOSE, main) {
     const std::vector<int64_t> value{val};
 
     auto params = params::Small<CryptoContextBGVRNS>();
-    params.SetRingDim(16); // For printing
+    // params.SetRingDim(16); // For printing
 
     auto cc = GenCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = BVContext(cc, 2);
+    const auto bv = BVContext(cc, 8);
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
 
@@ -322,5 +321,43 @@ TEST(DECOMPOSE, main) {
         decrypted->SetLength(1);
 
         DEBUG_PRINT(decrypted);
+    }
+
+    /* Depth */ {
+        const int64_t t = params.GetPlaintextModulus();
+
+        // RGSW(3): the fixed multiplier applied each round.
+        const auto mult = 1;
+        const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
+        const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
+
+        // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
+        const auto pt1   = cc->MakeCoefPackedPlaintext({1});
+        const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
+        auto val         = bv.Encrypt(keys.publicKey, pt1);
+
+        // 2^n mod t, kept centered in (-t/2, t/2].
+        int64_t expected = 1;
+
+        for (int n = 1; n <= 64; ++n) {
+            val      = bv.EvalInternalProduct(rgsw2, val);
+            expected = (expected * mult) % t;
+            if (expected > t / 2) expected -= t;
+
+            const auto res = bv.EvalExternalProduct(rlwe1, val);
+            Plaintext decrypted;
+            cc->Decrypt(keys.secretKey, res, &decrypted);
+            
+            decrypted->SetLength(4);
+            std::cout << n << ":\t" << decrypted << std::endl;
+
+            const auto& coef = decrypted->GetCoefPackedValue();
+            const int64_t got = coef.empty() ? 0 : coef[0];
+
+            if (got != expected) {
+                std::cout << "Chained internal products valid up to depth " << (n - 1) << std::endl;
+                return;
+            }
+        }
     }
 }
