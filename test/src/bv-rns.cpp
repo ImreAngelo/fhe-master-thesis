@@ -179,7 +179,7 @@ public:
     /// @todo Major refactor needed!
     std::vector<DCRTPoly> Decompose(const DCRTPoly& input) const {
         const auto& params = std::dynamic_pointer_cast<CryptoParametersRNS>(m_params->GetCryptoParameters());
-        const auto& factors = params->GetQlHatInvModq(1);
+        const auto& factors = params->GetQlHatInvModq(params->GetMultiplicativeDepth());
         const auto& q = m_params->GetElementParams()->GetParams();
         const auto qSize = q.size();
         
@@ -261,7 +261,7 @@ TEST(DECOMPOSE, main) {
     constexpr int64_t val = 1;
     const std::vector<int64_t> value{val};
 
-    auto params = params::Small<CryptoContextBGVRNS>();
+    auto params = params::Small<CryptoContextBGVRNS>(3);
     // params.SetRingDim(16); // For printing
 
     auto cc = GenCryptoContext(params);
@@ -269,7 +269,7 @@ TEST(DECOMPOSE, main) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = BVContext(cc, 8);
+    const auto bv = BVContext(cc, 4); // at level 1:  2 -> 1, 4 -> 2, 8 -> 3
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
 
