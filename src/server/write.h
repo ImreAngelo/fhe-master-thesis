@@ -114,8 +114,8 @@ namespace server {
         const PrivateKey<T>& secretKey, // for debugging
         const uint32_t iteration = 1
     ) {
-        const auto one  = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        auto hasWritten = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto one  = cc->EncryptRGSW(secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto hasWritten = cc->EncryptRGSW(secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         {
             DEBUG_TIMER("Server Write");
@@ -179,12 +179,12 @@ namespace client {
     template <typename T = DCRTPoly, uint32_t D = 3, uint32_t L = 1>
     inline std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> PlaceAtN(
         const Context::ExtendedCryptoContext<T>& cc,
-        const PublicKey<T>& publicKey,
+        const PrivateKey<T>& secretKey,
         const size_t index
     ) {
         std::array<std::array<server::RGSWCiphertext<T>, (uint64_t(1) << L)>, D> z;
-        auto one  = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-        auto zero = cc->EncryptRGSW(publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        auto one  = cc->EncryptRGSW(secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        auto zero = cc->EncryptRGSW(secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
 
         for (uint32_t d = 0; d < D; d++)
             for (uint64_t slot = 0; slot < (uint64_t(1) << L); slot++)

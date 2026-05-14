@@ -31,16 +31,16 @@ namespace server {
 
         constexpr uint64_t N = (uint64_t(1) << L);
 
-        const auto rgsw_zero = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
-        const auto rgsw_one  = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rgsw_zero = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto rgsw_one  = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
         const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
 
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
         for (uint64_t i = 0; i < N; i++) {
             for (size_t k = 0; k < K; k++) {
-                L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
-                I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+                L_mat[i][k] = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
+                I_mat[i][k] = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
             }
         }
 
@@ -48,7 +48,7 @@ namespace server {
             const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
 
             // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
-            const auto z = client::PlaceAtN<T,D,L>(cc, keys.publicKey, r);
+            const auto z = client::PlaceAtN<T,D,L>(cc, keys.secretKey, r);
 
             // Loop 2
             const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);

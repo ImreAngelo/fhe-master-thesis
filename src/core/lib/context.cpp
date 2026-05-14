@@ -86,7 +86,7 @@ DCRTPoly ExtendedCryptoContextImpl::Decompose(const DCRTPoly& input) const
     }
     
     // Fast Base Extension (Q -> QP)
-    // TODO: Re-enable multi-threading
+    // TODO: Re-enable multi-threading in project
     #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(numP))
     for(uint32_t j = 0; j < numP; j++) {
         uint32_t target_idx = numQ + j;
@@ -119,25 +119,59 @@ DCRTPoly ExtendedCryptoContextImpl::ApproxModDown(const DCRTPoly& input) const {
         m_params->GettInvModpPrecon(), m_params->GetPlaintextModulus(), m_params->GettModqPrecon());
 };
 
-// TODO: Include noise
-std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PublicKey<DCRTPoly>& publicKey, const Plaintext& m) const 
+std::vector<DCRTPoly> ExtendedCryptoContextImpl::EncryptZeroQP(const PrivateKey<DCRTPoly>& secretKey) const
 {
     const auto paramsQP = m_params->GetParamsQP();
+    const auto& paramsQP_vec = paramsQP->GetParams();
+    const auto ns = m_params->GetNoiseScale();
 
+    // Lift secret key s from Q to QP. s has small (e.g. ternary) coefficients,
+    // so we copy the Q-towers verbatim and obtain the P-towers via SwitchModulus
+    // on the (small-valued) coefficient form of the first Q-tower.
+    const DCRTPoly& sQ = secretKey->GetPrivateElement();
+    const uint32_t sizeQ  = sQ.GetParams()->GetParams().size();
+    const uint32_t sizeQP = paramsQP_vec.size();
+
+    DCRTPoly s(paramsQP, Format::EVALUATION, true);
+    for (uint32_t i = 0; i < sizeQ; ++i) {
+        s.SetElementAtIndex(i, sQ.GetElementAtIndex(i));
+    }
+    auto s0 = sQ.GetElementAtIndex(0);
+    s0.SetFormat(Format::COEFFICIENT);
+    for (uint32_t i = sizeQ; i < sizeQP; ++i) {
+        auto tmp = s0;
+        tmp.SwitchModulus(paramsQP_vec[i]->GetModulus(), paramsQP_vec[i]->GetRootOfUnity(), 0, 0);
+        tmp.SetFormat(Format::EVALUATION);
+        s.SetElementAtIndex(i, std::move(tmp));
+    }
+
+    // Fresh uniform `a` and Gaussian `e` directly in QP
+    typename DCRTPoly::DugType dug;
+    const auto& dgg = m_params->GetDiscreteGaussianGenerator();
+    DEBUG_PRINT("Standard deviation: " << dgg.GetStd());
+    DCRTPoly a(dug, paramsQP, Format::EVALUATION);
+    DCRTPoly e(dgg, paramsQP, Format::EVALUATION);
+
+    // BGV-style zero encryption: c0 = a*s + ns*e, c1 = -a  =>  c0 + c1*s = ns*e
+    DCRTPoly c0 = a * s + e * NativeInteger(ns);
+    DCRTPoly c1 = a.Negate();
+
+    return {std::move(c0), std::move(c1)};
+}
+
+std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const PrivateKey<DCRTPoly>& secretKey, const Plaintext& m) const
+{
     // Scale by P
     DCRTPoly mP = Power(m->GetElement<DCRTPoly>());
 
     std::vector<Ciphertext<DCRTPoly>> rgsw;
+    rgsw.reserve(2);
     for(size_t i = 0; i < 2; i++) {
-        // TODO: This contains no noise!!! (not secure in production)
-        DCRTPoly c0(paramsQP, Format::EVALUATION, true);
-        DCRTPoly c1(paramsQP, Format::EVALUATION, true);
-        
-        // Keep correct CryptoContext without having a ciphertext to clone
-        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(publicKey);
+        auto z = EncryptZeroQP(secretKey);
+        auto ct = std::make_shared<CiphertextImpl<DCRTPoly>>(secretKey);
         ct->SetEncodingType(m->GetEncodingType());
-        ct->SetElements({c0, c1});
-        rgsw.push_back(ct);
+        ct->SetElements({std::move(z[0]), std::move(z[1])});
+        rgsw.push_back(std::move(ct));
     }
 
     // Z + mG = Z + P(m) in hybrid
@@ -183,34 +217,27 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EvalInternalProduct
     for (size_t row = 0; row < 2; row++) {
         auto c = lhs[row]->GetElements();
 
-        // FIX: Modulus switch down from QP to Q FIRST!
-        // This drops the factor of P that 'lhs' currently encrypts.
+        // Mod-down lhs row from QP to Q (drops the gadget P factor),
+        // turning the row into a plain RLWE ciphertext in Q.
         DCRTPoly c0_Q = ApproxModDown(c[0]);
         DCRTPoly c1_Q = ApproxModDown(c[1]);
-
         c0_Q.SetFormat(Format::EVALUATION);
         c1_Q.SetFormat(Format::EVALUATION);
 
-        // Gadget decomposition Q -> QP
-        DCRTPoly d0 = Decompose(c0_Q);
-        DCRTPoly d1 = Decompose(c1_Q);
+        auto rlwe = lhs[row]->Clone();
+        rlwe->SetElements({std::move(c0_Q), std::move(c1_Q)});
 
-        // Output row in QP
-        DCRTPoly out0(m_params->GetParamsQP(), Format::EVALUATION, true);
-        DCRTPoly out1(m_params->GetParamsQP(), Format::EVALUATION, true);
+        // Each row is just an external product against the rhs RGSW; reuse it
+        // so noise reduction (the trailing ApproxModDown) happens once per row.
+        auto ext = EvalExternalProduct(rlwe, rhs);
 
-        // Standard external product
-        out0 += d0 * rhs[0]->GetElements()[0];
-        out1 += d0 * rhs[0]->GetElements()[1];
+        // Re-power Q -> QP so the result is a valid RGSW row for chaining.
+        auto& e = ext->GetElements();
+        e[0].SetFormat(Format::EVALUATION);
+        e[1].SetFormat(Format::EVALUATION);
+        ext->SetElements({Power(e[0]), Power(e[1])});
 
-        out0 += d1 * rhs[1]->GetElements()[0];
-        out1 += d1 * rhs[1]->GetElements()[1];
-
-        // Build new RGSW row directly in QP
-        auto ct = lhs[row]->Clone();
-        ct->SetElements({std::move(out0), std::move(out1)});
-
-        result.push_back(std::move(ct));
+        result.push_back(std::move(ext));
     }
 
     return result;

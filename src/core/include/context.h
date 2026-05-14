@@ -24,7 +24,11 @@ namespace Context
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>&);
 
         /// @todo Make wrapper cc->Encrypt(sk, pt, RLWE or RGSW);
-        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&) const;
+        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PrivateKey<DCRTPoly>&, const Plaintext&) const;
+
+        /// @brief RLWE encryption of 0 in QP using the (lifted) secret key.
+        /// Returns the pair (c0, c1) with c0 + c1*s = ns*e (mod QP), e small Gaussian.
+        std::vector<DCRTPoly> EncryptZeroQP(const PrivateKey<DCRTPoly>&) const;
         
         /// @brief External product
         Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;

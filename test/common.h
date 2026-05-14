@@ -25,14 +25,18 @@ namespace params {
         params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
         params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(lbcrypto::FIXEDMANUAL));
 
+        params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
         params.SetNumLargeDigits(1);
+        
+        // Debugging
+        params.SetStandardDeviation(.0f);
 
         return params;
     }
 
-    template<typename T>
-    inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
-        lbcrypto::CCParams<T> params;
+    template<typename T = lbcrypto::CryptoContextBGVRNS>
+    inline lbcrypto::CCParams<T> Small(const uint32_t depth = 2) {
+        lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> params;
         params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
@@ -43,7 +47,10 @@ namespace params {
 
         // Hybrid should be default
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
-        // params.SetNumLargeDigits(2); // Force P = Q
+        params.SetNumLargeDigits(1); // Force P = Q
+
+        // Debugging
+        params.SetStandardDeviation(.0f);
 
         return params;
     }
