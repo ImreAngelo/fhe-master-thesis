@@ -66,7 +66,7 @@ DCRTPoly ExtendedCryptoContextImpl::Decompose(const DCRTPoly& input) const
 {
     const auto QP = m_params->GetParamsQP();
     
-    // Coefficient mode required?
+    // Coefficient mode required
     DCRTPoly result(QP, Format::COEFFICIENT, true);
     DCRTPoly inputCoeff = input;
     inputCoeff.SetFormat(Format::COEFFICIENT);
@@ -151,10 +151,6 @@ std::vector<Ciphertext<DCRTPoly>> ExtendedCryptoContextImpl::EncryptRGSW(const P
 Ciphertext<DCRTPoly> ExtendedCryptoContextImpl::EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const 
 {
     auto c = rlwe->GetElements();
-
-    c[0].SetFormat(Format::EVALUATION);
-    c[1].SetFormat(Format::EVALUATION);
-
     const auto d0 = Decompose(c[0]);
     const auto d1 = Decompose(c[1]);
 

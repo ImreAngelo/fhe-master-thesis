@@ -82,6 +82,27 @@ std::vector<DCRTPoly> bvrns::SignedDigitDecompose(const std::shared_ptr<CryptoPa
     return g;
 }
 
+    // const NativeInteger::SignedNativeInt qi = q[i]->GetModulus().ConvertToInt();
+    // const auto qiHalf = (qi >> 1);
+    // const auto factor = factors[i].ConvertToInt();
+
+    // const auto& tower = m.GetElementAtIndex(i);
+    // auto& row = d[i].GetAllElements();
+    
+    // for(uint32_t k = 0; k < tower.GetLength(); k++) {
+    //     const NativeInteger::SignedNativeInt t = tower[k].ModMul(factor, qi).ConvertToInt();
+    //     const auto dig = (t < qiHalf) ? t : t - qi;
+
+    //     // Project signed value d into all towers j
+    //     for(uint32_t j = 0; j < m_ell; j++) {
+    //         const NativeInteger::SignedNativeInt qj = q[j]->GetModulus().ConvertToInt();
+    //         const auto res = dig % qj;
+    //         row[j][k] = NativeInteger((res < 0) ? res + qj : res);
+    //     }
+    // }
+
+    // d[i].SetFormat(Format::EVALUATION);
+
 std::vector<DCRTPoly> bvrns::PowerOfBase(const std::shared_ptr<CryptoParametersRNS> params, const DCRTPoly &input)
 {
     // DEBUG_TIMER("Projection");

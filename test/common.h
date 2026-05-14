@@ -43,7 +43,7 @@ namespace params {
 
         // Hybrid should be default
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
-        params.SetNumLargeDigits(1); // Force P = Q
+        // params.SetNumLargeDigits(2); // Force P = Q
 
         return params;
     }
