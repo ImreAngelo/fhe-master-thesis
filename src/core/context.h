@@ -14,9 +14,14 @@
 namespace Core
 {
 
-    using namespace lbcrypto;
-    using RGSW = std::vector<Ciphertext<DCRTPoly>>;
+using namespace lbcrypto;
+using RGSW = std::vector<Ciphertext<DCRTPoly>>;
 
+/**
+ * @brief RGSW-capable crypto context.
+ * 
+ * Uses BV/HPS double-layered decomposition.
+ */
 class HPSContext {
 public:
     explicit HPSContext(const CryptoContext<DCRTPoly>& cc, const uint32_t ell = 1) 
@@ -24,13 +29,31 @@ public:
     {};
 
 public:
-    /// @todo Convert for loop to multi-threaded in range [0..2*len)
-    /// @todo Multi-layer decomposition; decompose each tower into ell digits
+    /**
+     * @brief Encrypt an RGSW ciphertext
+     * 
+     * @param publicKey 
+     * @param plaintext 
+     * @return std::vector<Ciphertext<DCRTPoly>> 
+     */
     std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
 
-    /// @todo Refactor
+    /**
+     * @brief Evaluate the external product
+     * 
+     * @param rlwe 
+     * @param rgsw 
+     * @return Ciphertext<DCRTPoly> 
+     */
     Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;
 
+    /**
+     * @brief Evaluate the internal product
+     * 
+     * @param lhs 
+     * @param rhs 
+     * @return RGSW 
+     */
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const;
 
 protected:

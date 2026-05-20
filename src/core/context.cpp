@@ -4,11 +4,8 @@
 using namespace Core;
 
 /**
- * @brief Encrypt an RGSW ciphertext
- * 
- * @param publicKey 
- * @param plaintext 
- * @return std::vector<Ciphertext<DCRTPoly>> 
+ * @todo Convert for loop to multi-threaded in range [0..2*len)
+ * @todo Multi-layer decomposition; decompose each tower into ell digits
  */
 std::vector<Ciphertext<DCRTPoly>> HPSContext::Encrypt(const PublicKey<DCRTPoly> &publicKey, const Plaintext &plaintext) const
 {
@@ -33,6 +30,9 @@ std::vector<Ciphertext<DCRTPoly>> HPSContext::Encrypt(const PublicKey<DCRTPoly> 
     return rows;
 }
 
+/**
+ * @todo Refactor
+ */
 Ciphertext<DCRTPoly> HPSContext::EvalExternalProduct(const Ciphertext<DCRTPoly> &rlwe, const std::vector<Ciphertext<DCRTPoly>> &rgsw) const
 {
     const auto params = m_params->GetElementParams();
@@ -79,6 +79,9 @@ Ciphertext<DCRTPoly> HPSContext::EvalExternalProduct(const Ciphertext<DCRTPoly> 
     return result;
 }
 
+/**
+ * @todo nothing. 
+ */
 RGSW HPSContext::EvalInternalProduct(const RGSW &lhs, const RGSW &rhs) const
 {
     RGSW result = lhs;
