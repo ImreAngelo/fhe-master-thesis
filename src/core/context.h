@@ -10,9 +10,67 @@
 #define PUBLIC_FOR_TEST protected
 #endif
 
-namespace Context
+
+namespace Core
 {
+
     using namespace lbcrypto;
+    using RGSW = std::vector<Ciphertext<DCRTPoly>>;
+
+class HPSContext {
+public:
+    explicit HPSContext(const CryptoContext<DCRTPoly>& cc, const uint32_t ell = 1) 
+        : m_params(cc), m_ell(ell)
+    {};
+
+public:
+    /// @todo Convert for loop to multi-threaded in range [0..2*len)
+    /// @todo Multi-layer decomposition; decompose each tower into ell digits
+    std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
+
+    /// @todo Refactor
+    Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;
+
+    RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const;
+
+protected:
+    const CryptoContext<DCRTPoly>& m_params;
+    const uint32_t m_ell;
+
+// HELPER FUNCTIONS
+private:
+    static inline bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
+        return plaintext->GetEncodingType() == PlaintextEncodings::COEF_PACKED_ENCODING;
+    }
+    
+// TEST FUNCTIONS
+PUBLIC_FOR_TEST:
+    DCRTPoly GadgetMultiply(const DCRTPoly& lhs, const DCRTPoly& rhs) const {
+        const auto len = m_params->GetElementParams()->GetParams().size();
+
+        DCRTPoly sum = DCRTPoly(m_params->GetElementParams(), Format::EVALUATION, true);
+        for(size_t i = 0; i < len; i++) {
+            sum.SetElementAtIndex(i, lhs.GetElementAtIndex(i).Times(rhs.GetElementAtIndex(i)));
+        }
+
+        return sum;
+    }
+
+    /// @todo Assert eval mode
+    std::vector<DCRTPoly> Decompose(const DCRTPoly& input) const {
+        const auto& q = m_params->GetElementParams()->GetParams();
+
+        DCRTPoly zero(input.GetParams(), Format::EVALUATION, true);
+        std::vector<DCRTPoly> d(q.size(), zero);
+
+        for (size_t i = 0; i < q.size(); i++) {
+            d[i].SetElementAtIndex(i, input.GetElementAtIndex(i));
+        }
+
+        return d;
+    }
+};
+
 
     /**
      * @brief Crypto Context with RGSW operations: encrypt, external and internal products
@@ -22,57 +80,6 @@ namespace Context
     class ExtendedCryptoContextImpl : public CryptoContextImpl<DCRTPoly> {
     public:
         explicit ExtendedCryptoContextImpl(const CryptoContextImpl<DCRTPoly>&);
-
-        /// @todo Make wrapper cc->Encrypt(sk, pt, RLWE or RGSW);
-        std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PrivateKey<DCRTPoly>&, const Plaintext&) const;
-
-        /// @brief RLWE encryption of 0 in QP using the (lifted) secret key.
-        /// Returns the pair (c0, c1) with c0 + c1*s = ns*e (mod QP), e small Gaussian.
-        std::vector<DCRTPoly> EncryptZeroQP(const PrivateKey<DCRTPoly>&) const;
-
-        /// @brief RLWE encryption of 0 in Q. (c0, c1) with c0 + c1*s = ns*e (mod Q).
-        std::vector<DCRTPoly> EncryptZeroQ(const PrivateKey<DCRTPoly>&) const;
-        
-        /// @brief External product
-        Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;
-        
-        /// @brief Internal product
-        std::vector<Ciphertext<DCRTPoly>> EvalInternalProduct(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
-        
-        std::vector<Ciphertext<DCRTPoly>> EvalAddRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
-        std::vector<Ciphertext<DCRTPoly>> EvalSubRGSW(const std::vector<Ciphertext<DCRTPoly>>& lhs, const std::vector<Ciphertext<DCRTPoly>>& rhs) const;
-        std::vector<Ciphertext<DCRTPoly>> EvalMultRGSW(const std::vector<Ciphertext<DCRTPoly>>& rgsw, const Plaintext& pt) const;
-
-    protected:
-        // TODO: Make const
-        std::shared_ptr<CryptoParametersRNS> m_params;
-        std::vector<std::vector<NativeInteger>> m_qHatModP;
-        std::vector<NativeInteger> m_qInv;
-        std::vector<NativeInteger> pInvModq;
-
-        static void GenerateTables();
-
-    PUBLIC_FOR_TEST:
-        /// @brief Thin wrapper around OpenFHE's ApproxModDown (QP -> Q)
-        DCRTPoly ApproxModDown(const DCRTPoly&) const;
-        DCRTPoly ExactModDown(const DCRTPoly&) const;
-
-        /// @brief Scale Q -> QP
-        DCRTPoly Power(const DCRTPoly&) const;
-        
-        /// @brief Decompose QP -> Q
-        DCRTPoly Decompose(const DCRTPoly&) const;
-
-        /// @brief Mask m to RNS limb i (m mod q_i in limb i, 0 elsewhere) == m * g_i,
-        /// where g_i is the RNS-CRT gadget component for limb i.
-        DCRTPoly MaskToLimb(const DCRTPoly&, uint32_t i) const;
-
-        /// @brief RNS digit decomposition g^{-1}(x): L digits, digit_i == [x]_{q_i}
-        /// lifted to a full Q-element. Satisfies sum_i digit_i * (m * g_i) == x * m.
-        std::vector<DCRTPoly> DigitDecompose(const DCRTPoly&) const;
-
-        // /// @brief Hybrid decomposition with more than 1 digit
-        // std::vector<DCRTPoly> HybridDecompose(const DCRTPoly&, uint32_t alpha) const;
 
     // PUBLIC_FOR_TEST:
         /**
