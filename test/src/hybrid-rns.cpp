@@ -1,5 +1,5 @@
 #define TEST_INTERNAL_FUNCTIONS
-#include "core/include/context.h"
+#include "core/context.h"
 
 TEST(HYBRID, rgsw) {
     using namespace lbcrypto;
