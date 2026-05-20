@@ -11,6 +11,7 @@ public:
     {};
 
 public:
+    /// @todo Convert for loop to multi-threaded in range [0..2*len)
     std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const {
         const auto msg = plaintext->GetElement<DCRTPoly>();
         const auto len = m_params->GetElementParams()->GetParams().size();
@@ -26,10 +27,7 @@ public:
         for(size_t col = 0; col < 2; col++) {
             for(size_t i = 0; i < len; i++) {
                 auto z = m_params->Encrypt(publicKey, zero);
-                auto& poly = z->GetElements()[col];
-                auto tower = poly.GetElementAtIndex(i);
-                tower += msg.GetElementAtIndex(i);
-                poly.SetElementAtIndex(i, std::move(tower));
+                z->GetElements()[col].GetAllElements()[i] += msg.GetElementAtIndex(i);
                 rows.push_back(std::move(z));
             }
         }
