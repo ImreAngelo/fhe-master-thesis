@@ -2,7 +2,7 @@
 
 using namespace lbcrypto;
 
-// using RGSWCiphertext = std::vector<Ciphertext<DCRTPoly>>;
+using RGSW = std::vector<Ciphertext<DCRTPoly>>;
 
 class HPSContext {
 public:
@@ -81,7 +81,11 @@ public:
         return result;
     }
 
-
+    RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
+        RGSW result = lhs;
+        for(auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
+        return result;
+    }
 
 protected:
     const CryptoContext<DCRTPoly>& m_params;
@@ -126,7 +130,7 @@ TEST(BV, HPS) {
     constexpr int64_t val = 1;
     const std::vector<int64_t> value{val};
 
-    auto params = params::Small<CryptoContextBGVRNS>();
+    auto params = params::Small<CryptoContextBGVRNS>(2);
     params.SetRingDim(16); // For printing
 
     auto cc = GenCryptoContext(params);
@@ -149,86 +153,68 @@ TEST(BV, HPS) {
         const auto rgsw = bv.Encrypt(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
 
-        // Right after cc->Encrypt(keys.publicKey, pt) in the test:
-        const auto& rlweParams = rlwe->GetElements()[0].GetParams()->GetParams();
-        const auto& ccParams   = cc->GetCryptoParameters()->GetElementParams()->GetParams();
-        std::cout << "rlwe towers: " << rlweParams.size()
-                << "  cc towers: " << ccParams.size() << "\n";
-        for (size_t i = 0; i < std::min(rlweParams.size(), ccParams.size()); ++i) {
-            std::cout << "  i=" << i
-                    << "  rlwe q_i=" << rlweParams[i]->GetModulus()
-                    << "  cc q_i="   << ccParams[i]->GetModulus()
-                    << (rlweParams[i]->GetModulus() == ccParams[i]->GetModulus() ? "" : "  *MISMATCH*")
-                    << "\n";
-        }
-
-
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);
-
-        DEBUG_PRINT("Size 2:          " << rlwe->GetElements()[0].GetParams()->GetParams().size());
 
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, result, &decrypted);
         decrypted->SetLength(1);
-
-        DEBUG_PRINT(decrypted);
         
         const auto expected = cc->MakeCoefPackedPlaintext({val * val});
         ASSERT_EQ(decrypted, expected);
     }
 
-    // /* Internal Product */ {
-    //     DEBUG_TIMER("Internal Product");
+    /* Internal Product */ {
+        DEBUG_TIMER("Internal Product");
 
-    //     const auto rgsw = bv.Encrypt(keys.publicKey, pt);
-    //     const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
+        const auto rgsw = bv.Encrypt(keys.publicKey, pt);
+        const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
 
-    //     const auto one = cc->MakeCoefPackedPlaintext({1});
-    //     const auto identity = cc->Encrypt(keys.publicKey, one);
-    //     const auto result = bv.EvalExternalProduct(identity, prod);
+        const auto one = cc->MakeCoefPackedPlaintext({1});
+        const auto identity = cc->Encrypt(keys.publicKey, one);
+        const auto result = bv.EvalExternalProduct(identity, prod);
 
-    //     Plaintext decrypted;
-    //     cc->Decrypt(keys.secretKey, result, &decrypted);
-    //     decrypted->SetLength(1);
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, result, &decrypted);
+        decrypted->SetLength(1);
+        
+        ASSERT_EQ(decrypted, one);
+    }
 
-    //     DEBUG_PRINT(decrypted);
-    // }
+    /* Depth */ {
+        const int64_t t = params.GetPlaintextModulus();
 
-    // /* Depth */ {
-    //     const int64_t t = params.GetPlaintextModulus();
+        // RGSW(3): the fixed multiplier applied each round.
+        const auto mult = 1;
+        const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
+        const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
 
-    //     // RGSW(3): the fixed multiplier applied each round.
-    //     const auto mult = 1;
-    //     const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-    //     const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
+        // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
+        const auto pt1   = cc->MakeCoefPackedPlaintext({1});
+        const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
+        auto val         = bv.Encrypt(keys.publicKey, pt1);
 
-    //     // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
-    //     const auto pt1   = cc->MakeCoefPackedPlaintext({1});
-    //     const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
-    //     auto val         = bv.Encrypt(keys.publicKey, pt1);
+        // 2^n mod t, kept centered in (-t/2, t/2].
+        int64_t expected = 1;
 
-    //     // 2^n mod t, kept centered in (-t/2, t/2].
-    //     int64_t expected = 1;
+        for (int n = 1; n <= 64; ++n) {
+            val      = bv.EvalInternalProduct(rgsw2, val);
+            expected = (expected * mult) % t;
+            if (expected > t / 2) expected -= t;
 
-    //     for (int n = 1; n <= 64; ++n) {
-    //         val      = bv.EvalInternalProduct(rgsw2, val);
-    //         expected = (expected * mult) % t;
-    //         if (expected > t / 2) expected -= t;
-
-    //         const auto res = bv.EvalExternalProduct(rlwe1, val);
-    //         Plaintext decrypted;
-    //         cc->Decrypt(keys.secretKey, res, &decrypted);
+            const auto res = bv.EvalExternalProduct(rlwe1, val);
+            Plaintext decrypted;
+            cc->Decrypt(keys.secretKey, res, &decrypted);
             
-    //         decrypted->SetLength(4);
-    //         std::cout << n << ":\t" << decrypted << std::endl;
+            // decrypted->SetLength(4);
+            // std::cout << n << ":\t" << decrypted << std::endl;
 
-    //         const auto& coef = decrypted->GetCoefPackedValue();
-    //         const int64_t got = coef.empty() ? 0 : coef[0];
+            const auto& coef = decrypted->GetCoefPackedValue();
+            const int64_t got = coef.empty() ? 0 : coef[0];
 
-    //         if (got != expected) {
-    //             std::cout << "Chained internal products valid up to depth " << (n - 1) << std::endl;
-    //             return;
-    //         }
-    //     }
-    // }
+            if (got != expected) {
+                ASSERT_GT(n, 1) << "Internal product could not be chained!";
+                return;
+            }
+        }
+    }
 }
