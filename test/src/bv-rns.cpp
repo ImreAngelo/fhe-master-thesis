@@ -269,7 +269,7 @@ TEST(DECOMPOSE, main) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = BVContext(cc, 4); // at level 1:  2 -> 1, 4 -> 2, 8 -> 3
+    const auto bv = BVContext(cc, 2); // at level 1:  2 -> 1, 4 -> 2, 8 -> 3
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
 

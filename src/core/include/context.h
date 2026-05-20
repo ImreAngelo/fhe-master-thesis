@@ -29,6 +29,9 @@ namespace Context
         /// @brief RLWE encryption of 0 in QP using the (lifted) secret key.
         /// Returns the pair (c0, c1) with c0 + c1*s = ns*e (mod QP), e small Gaussian.
         std::vector<DCRTPoly> EncryptZeroQP(const PrivateKey<DCRTPoly>&) const;
+
+        /// @brief RLWE encryption of 0 in Q. (c0, c1) with c0 + c1*s = ns*e (mod Q).
+        std::vector<DCRTPoly> EncryptZeroQ(const PrivateKey<DCRTPoly>&) const;
         
         /// @brief External product
         Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;
@@ -52,12 +55,21 @@ namespace Context
     PUBLIC_FOR_TEST:
         /// @brief Thin wrapper around OpenFHE's ApproxModDown (QP -> Q)
         DCRTPoly ApproxModDown(const DCRTPoly&) const;
+        DCRTPoly ExactModDown(const DCRTPoly&) const;
 
         /// @brief Scale Q -> QP
         DCRTPoly Power(const DCRTPoly&) const;
         
         /// @brief Decompose QP -> Q
         DCRTPoly Decompose(const DCRTPoly&) const;
+
+        /// @brief Mask m to RNS limb i (m mod q_i in limb i, 0 elsewhere) == m * g_i,
+        /// where g_i is the RNS-CRT gadget component for limb i.
+        DCRTPoly MaskToLimb(const DCRTPoly&, uint32_t i) const;
+
+        /// @brief RNS digit decomposition g^{-1}(x): L digits, digit_i == [x]_{q_i}
+        /// lifted to a full Q-element. Satisfies sum_i digit_i * (m * g_i) == x * m.
+        std::vector<DCRTPoly> DigitDecompose(const DCRTPoly&) const;
 
         // /// @brief Hybrid decomposition with more than 1 digit
         // std::vector<DCRTPoly> HybridDecompose(const DCRTPoly&, uint32_t alpha) const;

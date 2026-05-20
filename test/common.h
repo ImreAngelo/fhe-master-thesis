@@ -27,6 +27,9 @@ namespace params {
 
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
         params.SetNumLargeDigits(1);
+
+        if(depth > 1)
+            params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
         
         // Debugging
         params.SetStandardDeviation(.0f);
@@ -35,22 +38,23 @@ namespace params {
     }
 
     template<typename T = lbcrypto::CryptoContextBGVRNS>
-    inline lbcrypto::CCParams<T> Small(const uint32_t depth = 2) {
+    inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
         lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> params;
         params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
 
-        // RGSW rows are built by hand; requires FIXEDMANUAL or FIXEDAUTO
-        params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
         params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
-
+        
         // Hybrid should be default
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
-        params.SetNumLargeDigits(1); // Force P = Q
-
+        params.SetNumLargeDigits(1); // Force |P| ~= |Q|
+        
         // Debugging
-        params.SetStandardDeviation(.0f);
+        params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+        // params.SetFirstModSize(60);
+        // params.SetScalingModSize(55);
+        // params.SetStandardDeviation(.0f);
 
         return params;
     }

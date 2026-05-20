@@ -30,7 +30,7 @@ $(OPENFHE_STAMP) $(TCM_STAMP):
 		-DWITH_OPENMP=ON \
 		-DWITH_REDUCED_NOISE=ON \
 		-DWITH_TCM=ON \
-		-DNATIVE_SIZE=64 \
+		-DNATIVE_SIZE=32 \
 		-DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
 	@cmake --build vendors/openfhe-development/build --target tcm -j$(shell nproc)
 	@cmake --build vendors/openfhe-development/build -j$(shell nproc)

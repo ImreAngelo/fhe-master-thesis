@@ -6,7 +6,7 @@ TEST(HYBRID, rgsw) {
 
     const std::vector<int64_t> value{1};
 
-    const auto ps = params::Small<CryptoContextBGVRNS>(1);
+    const auto ps = params::Small<CryptoContextBGVRNS>();
     const auto cc = Context::GenExtendedCryptoContext(ps);
     
     cc->Enable(PKE);
@@ -44,7 +44,7 @@ TEST(HYBRID, rgsw) {
         DEBUG_PRINT("External Product: " << decrypted);
 
         const auto expected = cc->MakeCoefPackedPlaintext({value[0] * value[0]});
-        ASSERT_EQ(decrypted, expected);
+        EXPECT_EQ(decrypted, expected);
     }
 
     // Internal Product
