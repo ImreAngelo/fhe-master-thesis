@@ -2,7 +2,7 @@
 
 using namespace lbcrypto;
 
-using RGSWCiphertext = std::vector<Ciphertext<DCRTPoly>>;
+// using RGSWCiphertext = std::vector<Ciphertext<DCRTPoly>>;
 
 class HPSContext {
 public:
@@ -10,8 +10,55 @@ public:
         : m_params(cc)
     {};
 
-// protected:
 public:
+    std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const {
+        const auto msg = plaintext->GetElement<DCRTPoly>();
+        const auto len = m_params->GetElementParams()->GetParams().size();
+        const auto zero = IsCoefPackedPlaintext(plaintext)
+            ? m_params->MakeCoefPackedPlaintext({0})
+            : m_params->MakePackedPlaintext({0});
+
+
+        std::vector<Ciphertext<DCRTPoly>> rows;
+        rows.reserve(2 * len);
+
+        // Z + mG
+        for(size_t col = 0; col < 2; col++) {
+            for(size_t i = 0; i < len; i++) {
+                auto z = m_params->Encrypt(publicKey, zero);
+                auto& poly = z->GetElements()[col];
+                auto tower = poly.GetElementAtIndex(i);
+                tower += msg.GetElementAtIndex(i);
+                poly.SetElementAtIndex(i, std::move(tower));
+                rows.push_back(std::move(z));
+            }
+        }
+
+        return rows;
+    }
+
+protected:
+    const CryptoContext<DCRTPoly>& m_params;
+
+// HELPER FUNCTIONS
+private:
+    static inline bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
+        return plaintext->GetEncodingType() == PlaintextEncodings::COEF_PACKED_ENCODING;
+    }
+    
+// TEST FUNCTIONS
+public: 
+    DCRTPoly GadgetMultiply(const DCRTPoly& lhs, const DCRTPoly& rhs) const {
+        const auto len = m_params->GetElementParams()->GetParams().size();
+
+        DCRTPoly sum = DCRTPoly(m_params->GetElementParams(), Format::EVALUATION, true);
+        for(size_t i = 0; i < len; i++) {
+            sum.SetElementAtIndex(i, lhs.GetElementAtIndex(i).Times(rhs.GetElementAtIndex(i)));
+        }
+
+        return sum;
+    }
+
     /// @todo Assert eval mode
     std::vector<DCRTPoly> Decompose(const DCRTPoly& input) const {
         const auto& q = m_params->GetElementParams()->GetParams();
@@ -25,9 +72,6 @@ public:
 
         return d;
     }
-
-private:
-    const CryptoContext<DCRTPoly>& m_params;
 };
 
 TEST(BV, HPS) {
@@ -47,37 +91,27 @@ TEST(BV, HPS) {
     DCRTPoly m = pt->GetElement<DCRTPoly>();
 
     /* Gadget Property */ {
-        const auto dm = bv.Decompose(m);
-        const auto pm = bv.Decompose(m);
-
-        ASSERT_EQ(dm.size(), pm.size()) << "Size mismatch between P(m) and D(m)";
-
-        DCRTPoly mm = dm[0] * pm[0];
-
-        for(uint32_t i = 1; i < dm.size(); i++) {
-            mm += dm[i] * pm[i];
-        }
-
-        ASSERT_EQ(mm, m * m);
+        DCRTPoly mm = bv.GadgetMultiply(m, 2*m);
+        ASSERT_EQ(mm, m * (2*m));
     }
 
-    // /* External Product */ {
-    //     DEBUG_TIMER("External Product");
+    /* External Product */ {
+        DEBUG_TIMER("External Product");
 
-    //     const auto rgsw = bv.Encrypt(keys.publicKey, pt);
-    //     const auto rlwe = cc->Encrypt(keys.publicKey, pt);
+        const auto rgsw = bv.Encrypt(keys.publicKey, pt);
+        const auto rlwe = cc->Encrypt(keys.publicKey, pt);
 
-    //     const auto result = bv.EvalExternalProduct(rlwe, rgsw);
+        // const auto result = bv.EvalExternalProduct(rlwe, rgsw);
 
-    //     Plaintext decrypted;
-    //     cc->Decrypt(keys.secretKey, result, &decrypted);
-    //     decrypted->SetLength(1);
+        // Plaintext decrypted;
+        // cc->Decrypt(keys.secretKey, result, &decrypted);
+        // decrypted->SetLength(1);
 
-    //     DEBUG_PRINT(decrypted);
+        // DEBUG_PRINT(decrypted);
         
-    //     const auto expected = cc->MakeCoefPackedPlaintext({val * val});
-    //     ASSERT_EQ(decrypted, expected);
-    // }
+        // const auto expected = cc->MakeCoefPackedPlaintext({val * val});
+        // ASSERT_EQ(decrypted, expected);
+    }
 
     // /* Internal Product */ {
     //     DEBUG_TIMER("Internal Product");
