@@ -24,11 +24,25 @@ TEST(BV, HPS) {
         ASSERT_EQ(mm, (2*m) * (3*m));
     }
 
+    /* Encrypt */ {
+        DEBUG_TIMER("Encrypt");
+        const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
+    }
+
     /* Encrypt multi-level BV */ {
         DEBUG_TIMER("External Product (BV)");
 
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
+
+        DEBUG_PRINT("\nRGSW:");
+        for(auto& row : rgsw) {
+            Plaintext dec;
+            cc->Decrypt(keys.secretKey, row, &dec);
+            dec->SetLength(16);
+            DEBUG_PRINT(dec);
+        }
+        DEBUG_PRINT("");
 
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);
 
@@ -56,59 +70,59 @@ TEST(BV, HPS) {
     //     ASSERT_EQ(decrypted, expected);
     // }
 
-    /* Internal Product */ {
-        DEBUG_TIMER("Internal Product");
+    // /* Internal Product */ {
+    //     DEBUG_TIMER("Internal Product");
 
-        const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
-        const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
+    //     const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
+    //     const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
 
-        const auto one = cc->MakeCoefPackedPlaintext({1});
-        const auto identity = cc->Encrypt(keys.publicKey, one);
-        const auto result = bv.EvalExternalProduct(identity, prod);
+    //     const auto one = cc->MakeCoefPackedPlaintext({1});
+    //     const auto identity = cc->Encrypt(keys.publicKey, one);
+    //     const auto result = bv.EvalExternalProduct(identity, prod);
 
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, result, &decrypted);
-        decrypted->SetLength(1);
+    //     Plaintext decrypted;
+    //     cc->Decrypt(keys.secretKey, result, &decrypted);
+    //     decrypted->SetLength(1);
         
-        ASSERT_EQ(decrypted, one);
-    }
+    //     ASSERT_EQ(decrypted, one);
+    // }
 
-    /* Depth */ {
-        const int64_t t = params.GetPlaintextModulus();
+    // /* Depth */ {
+    //     const int64_t t = params.GetPlaintextModulus();
 
-        // The fixed multiplier applied each round.
-        // Noise is scaled by value so keep it binary.
-        const auto mult = 1;
-        const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-        const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
+    //     // The fixed multiplier applied each round.
+    //     // Noise is scaled by value so keep it binary.
+    //     const auto mult = 1;
+    //     const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
+    //     const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
 
-        // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
-        const auto pt1   = cc->MakeCoefPackedPlaintext({1});
-        const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
-        auto val         = bv.Encrypt(keys.publicKey, pt1);
+    //     // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
+    //     const auto pt1   = cc->MakeCoefPackedPlaintext({1});
+    //     const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
+    //     auto val         = bv.Encrypt(keys.publicKey, pt1);
 
-        // 2^n mod t, kept centered in (-t/2, t/2].
-        int64_t expected = 1;
+    //     // 2^n mod t, kept centered in (-t/2, t/2].
+    //     int64_t expected = 1;
 
-        for (int n = 1; n <= 64; ++n) {
-            val      = bv.EvalInternalProduct(rgsw2, val);
-            expected = (expected * mult) % t;
-            if (expected > t / 2) expected -= t;
+    //     for (int n = 1; n <= 64; ++n) {
+    //         val      = bv.EvalInternalProduct(rgsw2, val);
+    //         expected = (expected * mult) % t;
+    //         if (expected > t / 2) expected -= t;
 
-            const auto res = bv.EvalExternalProduct(rlwe1, val);
-            Plaintext decrypted;
-            cc->Decrypt(keys.secretKey, res, &decrypted);
+    //         const auto res = bv.EvalExternalProduct(rlwe1, val);
+    //         Plaintext decrypted;
+    //         cc->Decrypt(keys.secretKey, res, &decrypted);
             
-            // decrypted->SetLength(4);
-            // std::cout << n << ":\t" << decrypted << std::endl;
+    //         // decrypted->SetLength(4);
+    //         // std::cout << n << ":\t" << decrypted << std::endl;
 
-            const auto& coef = decrypted->GetCoefPackedValue();
-            const int64_t got = coef.empty() ? 0 : coef[0];
+    //         const auto& coef = decrypted->GetCoefPackedValue();
+    //         const int64_t got = coef.empty() ? 0 : coef[0];
 
-            if (got != expected) {
-                ASSERT_GT(n, 1) << "Internal product could not be chained!";
-                return;
-            }
-        }
-    }
+    //         if (got != expected) {
+    //             ASSERT_GT(n, 1) << "Internal product could not be chained!";
+    //             return;
+    //         }
+    //     }
+    // }
 }

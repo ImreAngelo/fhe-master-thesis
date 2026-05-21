@@ -38,10 +38,8 @@ public:
      * 
      * @param publicKey 
      * @param plaintext 
-     * @return std::vector<Ciphertext<DCRTPoly>> 
+     * @return RGSW
      */
-    std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
-
     std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&) const;
 
     /**
@@ -49,7 +47,7 @@ public:
      * 
      * @param rlwe 
      * @param rgsw 
-     * @return Ciphertext<DCRTPoly> 
+     * @return RLWE ciphertext 
      */
     Ciphertext<DCRTPoly> EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const;
 
@@ -66,18 +64,16 @@ protected:
     const CryptoContext<DCRTPoly>& m_params;
     const uint32_t m_ell;
     const BasicInteger m_logB;
+    const std::vector<NativeInteger> m_powers;
 
-    /// @brief Calculations of B^i mod q_j for i < L and j < k (Barrett reduction)
-    const std::vector<NativeInteger> m_powers; // m_powers?
-
-    NativeInteger GetPower(const uint32_t i, const uint32_t tower) const {
-        // assert(i < m_ell); // assert(tower < m_params->GetElementParams()->GetParams().size());
-        return m_powers[i + m_ell * tower];
+    /// @brief Returns calculations of B^i mod q_j
+    NativeInteger GetPower(const uint32_t i, const uint32_t j) const {
+        return m_powers[i + m_ell * j];
     }
 
 protected:
+    /// @brief Returns the input polynomial scaled by B^i as (a, aB, ..., aB^{ell - 1})
     std::vector<DCRTPoly> PowersOfBase(const DCRTPoly& input) const;
-
 
 // HELPER FUNCTIONS
 private:
@@ -87,6 +83,7 @@ private:
 
 // INIT
 private:
+    /// @brief Computers B from ell so that ell digits in base B covers max(q_i) 
     static BasicInteger computeLogB(const CryptoContext<DCRTPoly>& cc, const uint32_t ell) {
         const auto& params = cc->GetCryptoParameters()->GetElementParams()->GetParams();
         uint32_t max_msb = 0;
@@ -132,7 +129,7 @@ private:
         return powers;
     }
 
-// TEST FUNCTIONS
+// TEST FUNCTIONS (TODO: Remove or move to test)
 PUBLIC_FOR_TEST:
     DCRTPoly GadgetMultiply(const DCRTPoly& lhs, const DCRTPoly& rhs) const {
         const auto len = m_params->GetElementParams()->GetParams().size();
