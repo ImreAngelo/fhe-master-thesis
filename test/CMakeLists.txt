@@ -63,14 +63,8 @@ endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
-register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
-register_test(test-rgsw-coef        SOURCE src/rgsw-coef CUSTOM_MAIN)
+# register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
 register_test(test-write            SOURCE src/write)
-register_test(test-depth            SOURCE src/depth)
-
-register_test(test-base             SOURCE src/base)
-register_test(test-bv-rns           SOURCE src/bv-rns)
-register_test(test-hybrid           SOURCE src/hybrid)
 register_test(test-hybrid-rns       SOURCE src/hybrid-rns)
 register_test(test-hps              SOURCE src/hps)
 

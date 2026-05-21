@@ -2,7 +2,9 @@
     "configurations": [
         {
             "name": "Linux",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "compileCommands": [
+                "${workspaceFolder}/build/compile_commands.json"
+            ],
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/vendors/install/include/openfhe",
@@ -11,9 +13,10 @@
                 "${workspaceFolder}/vendors/install/include/openfhe/binfhe"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
+            "compilerPath": "/usr/bin/clang",
             "cppStandard": "c++20",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4

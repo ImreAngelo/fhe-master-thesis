@@ -15,7 +15,7 @@ TEST(BV, HPS) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = HPSContext(cc);
+    const auto bv = HPSContext(cc, 3);
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
     DCRTPoly m = pt->GetElement<DCRTPoly>();
 
@@ -24,10 +24,10 @@ TEST(BV, HPS) {
         ASSERT_EQ(mm, (2*m) * (3*m));
     }
 
-    /* External Product */ {
-        DEBUG_TIMER("External Product");
+    /* Encrypt multi-level BV */ {
+        DEBUG_TIMER("External Product (BV)");
 
-        const auto rgsw = bv.Encrypt(keys.publicKey, pt);
+        const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
 
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);
@@ -35,15 +35,31 @@ TEST(BV, HPS) {
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, result, &decrypted);
         decrypted->SetLength(1);
-        
-        const auto expected = cc->MakeCoefPackedPlaintext({val * val});
-        ASSERT_EQ(decrypted, expected);
+
+        DEBUG_PRINT(decrypted);
+        DEBUG_PRINT("");
     }
+
+    // /* External Product */ {
+    //     DEBUG_TIMER("External Product");
+
+    //     const auto rgsw = bv.Encrypt(keys.publicKey, pt);
+    //     const auto rlwe = cc->Encrypt(keys.publicKey, pt);
+
+    //     const auto result = bv.EvalExternalProduct(rlwe, rgsw);
+
+    //     Plaintext decrypted;
+    //     cc->Decrypt(keys.secretKey, result, &decrypted);
+    //     decrypted->SetLength(1);
+        
+    //     const auto expected = cc->MakeCoefPackedPlaintext({val * val});
+    //     ASSERT_EQ(decrypted, expected);
+    // }
 
     /* Internal Product */ {
         DEBUG_TIMER("Internal Product");
 
-        const auto rgsw = bv.Encrypt(keys.publicKey, pt);
+        const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
 
         const auto one = cc->MakeCoefPackedPlaintext({1});

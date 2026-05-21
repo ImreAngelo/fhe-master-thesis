@@ -25,8 +25,12 @@ using RGSW = std::vector<Ciphertext<DCRTPoly>>;
 class HPSContext {
 public:
     explicit HPSContext(const CryptoContext<DCRTPoly>& cc, const uint32_t ell = 1) 
-        : m_params(cc), m_ell(ell)
-    {};
+        : m_params(cc), m_ell(ell), m_logB(computeLogB(cc, ell)), m_powers(computePowers(cc, m_ell, m_logB))
+    {
+        DEBUG_PRINT("Q:         " << cc->GetElementParams()->GetModulus());
+        DEBUG_PRINT("# moduli:  " << cc->GetElementParams()->GetParams().size());
+        DEBUG_PRINT("LogB:      " << m_logB << "\n");
+    };
 
 public:
     /**
@@ -37,6 +41,8 @@ public:
      * @return std::vector<Ciphertext<DCRTPoly>> 
      */
     std::vector<Ciphertext<DCRTPoly>> Encrypt(const PublicKey<DCRTPoly>& publicKey, const Plaintext& plaintext) const;
+
+    std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&) const;
 
     /**
      * @brief Evaluate the external product
@@ -59,13 +65,73 @@ public:
 protected:
     const CryptoContext<DCRTPoly>& m_params;
     const uint32_t m_ell;
+    const BasicInteger m_logB;
+
+    /// @brief Calculations of B^i mod q_j for i < L and j < k (Barrett reduction)
+    const std::vector<NativeInteger> m_powers; // m_powers?
+
+    NativeInteger GetPower(const uint32_t i, const uint32_t tower) const {
+        // assert(i < m_ell); // assert(tower < m_params->GetElementParams()->GetParams().size());
+        return m_powers[i + m_ell * tower];
+    }
+
+protected:
+    std::vector<DCRTPoly> PowersOfBase(const DCRTPoly& input) const;
+
 
 // HELPER FUNCTIONS
 private:
     static inline bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
         return plaintext->GetEncodingType() == PlaintextEncodings::COEF_PACKED_ENCODING;
     }
+
+// INIT
+private:
+    static BasicInteger computeLogB(const CryptoContext<DCRTPoly>& cc, const uint32_t ell) {
+        const auto& params = cc->GetCryptoParameters()->GetElementParams()->GetParams();
+        uint32_t max_msb = 0;
+        for (const auto& qi : params) {
+            uint32_t msb = qi->GetModulus().GetMSB();
+            if (msb > max_msb) max_msb = msb;
+        }
+        return (max_msb + ell - 1) / ell;
+    }
     
+    /// @note Most of the factors are the same since each q_i is approx. the same size.
+    ///       It might be worth skipping the second dimension (modulo reductions) if space becomes a problem.
+    /// @todo The first element B^0 is always 1, consider removing entirely!
+    /// @todo Remove prints in dev mode
+    static std::vector<NativeInteger> computePowers(const CryptoContext<DCRTPoly>& cc, const uint32_t ell, const BasicInteger logB) {
+        const auto& Q = cc->GetCryptoParameters()->GetElementParams()->GetModulus();
+        const auto& q = cc->GetCryptoParameters()->GetElementParams()->GetParams();
+        const auto k = q.size();
+
+        std::vector<NativeInteger> powers(ell * k);
+
+        NativeInteger B(BasicInteger(1) << logB);
+        NativeInteger cnt = 1;
+
+        std::cout << "\nmoduli "; 
+        for(const auto& qi : q) std::cout << std::setw(14) << qi->GetModulus() << " ";
+        std::cout << std::endl;
+
+        for(size_t i = 0; i < ell; i++) {
+            std::cout << "B^" << i << " = [" << std::setw(14);
+
+            for(size_t j = 0; j < k; j++) {
+                const auto qj = q[j]->GetModulus();
+                powers[i + j*ell] = cnt.Mod(qj);
+                std::cout << std::setw(14) << powers[i + j*ell] << " ";
+            }
+            std::cout << std::setw(1) << "]" << std::endl;
+            
+            cnt = cnt.ModMul(B, Q);
+        }
+
+        std::cout << std::endl;
+        return powers;
+    }
+
 // TEST FUNCTIONS
 PUBLIC_FOR_TEST:
     DCRTPoly GadgetMultiply(const DCRTPoly& lhs, const DCRTPoly& rhs) const {

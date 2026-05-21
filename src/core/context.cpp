@@ -31,51 +31,95 @@ std::vector<Ciphertext<DCRTPoly>> HPSContext::Encrypt(const PublicKey<DCRTPoly> 
 }
 
 /**
- * @todo Refactor
+ * @brief Encrypt using ell and log_b
  */
-Ciphertext<DCRTPoly> HPSContext::EvalExternalProduct(const Ciphertext<DCRTPoly> &rlwe, const std::vector<Ciphertext<DCRTPoly>> &rgsw) const
+std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPoly>& pk, const Plaintext& plaintext) const
 {
-    const auto params = m_params->GetElementParams();
-    const auto& q = params->GetParams();
-    const size_t k = q.size();
+    const auto msg = plaintext->GetElement<DCRTPoly>();
+    const auto zero = IsCoefPackedPlaintext(plaintext)
+        ? m_params->MakeCoefPackedPlaintext({0})
+        : m_params->MakePackedPlaintext({0});
+
+    std::vector<DCRTPoly> digits = PowersOfBase(msg);
+
+    std::vector<Ciphertext<DCRTPoly>> rows;
+    rows.reserve(2 * digits.size());
+
+    for(auto& digit : digits) {
+        digit.SetFormat(Format::COEFFICIENT);
+        DEBUG_PRINT(digit);
+    }
+
+    // // Construct the RGSW matrix rows: diagonals are Enc(digit)
+    // for (size_t col = 0; col < 2; col++) {
+    //     for (const auto& d : digits) {
+    //         auto ct = m_params->Encrypt(pk, zero);
+    //         // The digit is added to the relevant column (0 or 1) in EVALUATION format.
+    //         ct->GetElements()[col] += d;
+    //         rows.push_back(std::move(ct));
+    //     }
+    // }
+
+    throw new std::logic_error("Not implemented");
+    // return rows;
+}
+
+Ciphertext<DCRTPoly> HPSContext::EvalExternalProduct(const Ciphertext<DCRTPoly>& rlwe, const std::vector<Ciphertext<DCRTPoly>>& rgsw) const
+{
+    const auto cryptoParams = m_params->GetElementParams();
+    const auto& q = cryptoParams->GetParams();
+    const uint32_t k = static_cast<uint32_t>(q.size());
+    const uint32_t l = m_ell;
+    const uint32_t b_bits = static_cast<uint32_t>(m_logB);
+    const uint32_t ringDim = cryptoParams->GetRingDimension();
+    const uint64_t mask = (b_bits >= 64) ? ~uint64_t(0) : ((1ULL << b_bits) - 1);
 
     const auto& b = rlwe->GetElements()[0];
     const auto& a = rlwe->GetElements()[1];
 
-    DCRTPoly outB(params, Format::EVALUATION, true);
-    DCRTPoly outA(params, Format::EVALUATION, true);
+    DCRTPoly result_c0(cryptoParams, Format::EVALUATION, true);
+    DCRTPoly result_c1(cryptoParams, Format::EVALUATION, true);
 
-    #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(k))
-    for (size_t i = 0; i < k; ++i) {
-        DCRTPoly Db(params, Format::COEFFICIENT, true);
-        DCRTPoly Da(params, Format::COEFFICIENT, true);
+    for (uint32_t u = 0; u < 2; u++) {
+        const DCRTPoly& current_poly = (u == 0) ? b : a;
 
-        auto bi_coef = b.GetElementAtIndex(i);  bi_coef.SetFormat(Format::COEFFICIENT);
-        auto ai_coef = a.GetElementAtIndex(i);  ai_coef.SetFormat(Format::COEFFICIENT);
+        for (uint32_t i = 0; i < k; i++) {
+            NativePoly limb_coeff = current_poly.GetElementAtIndex(i);
+            limb_coeff.SetFormat(Format::COEFFICIENT);
 
-        for (size_t j = 0; j < k; ++j) {
-            NativePoly tb(q[j], Format::COEFFICIENT, true);
-            NativePoly ta(q[j], Format::COEFFICIENT, true);
-            const auto qj = q[j]->GetModulus();
-            for (size_t c = 0; c < bi_coef.GetLength(); ++c) {
-                tb[c] = bi_coef[c].Mod(qj);
-                ta[c] = ai_coef[c].Mod(qj);
+            for (uint32_t j = 0; j < l; j++) {
+                const uint64_t shift = j * b_bits;
+                std::vector<NativePoly> digit_limbs;
+                digit_limbs.reserve(k);
+
+                for (uint32_t mi = 0; mi < k; mi++) {
+                    NativePoly digit_m(q[mi], Format::COEFFICIENT, true);
+
+                    for (uint32_t x = 0; x < ringDim; x++) {
+                        const uint64_t val = limb_coeff[x].ConvertToInt();
+                        const uint64_t digit = (val >> shift) & mask;
+                        digit_m[x] = digit;
+                    }
+
+                    digit_m.SetFormat(Format::EVALUATION);
+                    digit_limbs.push_back(std::move(digit_m));
+                }
+
+                DCRTPoly digit_DCRT(cryptoParams, Format::EVALUATION, true);
+                for (uint32_t mi = 0; mi < k; mi++) {
+                    digit_DCRT.SetElementAtIndex(mi, std::move(digit_limbs[mi]));
+                }
+
+                const auto& rgsw_ct = rgsw[u * k * l + i * l + j];
+                result_c0 += digit_DCRT * rgsw_ct->GetElements()[0];
+                result_c1 += digit_DCRT * rgsw_ct->GetElements()[1];
             }
-            Db.SetElementAtIndex(j, std::move(tb));
-            Da.SetElementAtIndex(j, std::move(ta));
         }
-        Db.SetFormat(Format::EVALUATION);
-        Da.SetFormat(Format::EVALUATION);
-
-        outB += rgsw[i    ]->GetElements()[0] * Db;
-        outA += rgsw[i    ]->GetElements()[1] * Db;
-        outB += rgsw[i + k]->GetElements()[0] * Da;
-        outA += rgsw[i + k]->GetElements()[1] * Da;
     }
 
     auto result = rlwe->Clone();
-    result->GetElements()[0] = std::move(outB);
-    result->GetElements()[1] = std::move(outA);
+    result->GetElements()[0] = std::move(result_c0);
+    result->GetElements()[1] = std::move(result_c1);
     return result;
 }
 
@@ -86,5 +130,29 @@ RGSW HPSContext::EvalInternalProduct(const RGSW &lhs, const RGSW &rhs) const
 {
     RGSW result = lhs;
     for(auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
+    return result;
+}
+
+/// @brief Returns the input polynomial scaled by B^i as (a, aB, ..., aB^{ell - 1})
+std::vector<DCRTPoly> HPSContext::PowersOfBase(const DCRTPoly &input) const
+{
+    const auto n_towers = m_params->GetElementParams()->GetParams().size();
+
+    std::vector<DCRTPoly> result(m_ell);
+    result[0] = input;
+    
+    #pragma omp parallel for 
+    for(size_t i = 1; i < m_ell; i++) {
+        DCRTPoly scaled(input.GetParams(), input.GetFormat(), true);
+
+        for(size_t j = 0; j < n_towers; j++) {
+            auto factor = GetPower(i, j);
+            auto limb = input.GetElementAtIndex(j).Times(factor);
+            scaled.SetElementAtIndex(j, std::move(limb));
+        }
+
+        result[i] = std::move(scaled);
+    }
+    
     return result;
 }
