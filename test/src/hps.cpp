@@ -50,59 +50,60 @@ TEST(BV, HPS) {
         ASSERT_EQ(decrypted, expected);
     }
 
-    // /* Internal Product */ {
-    //     DEBUG_TIMER("Internal Product");
-
-    //     const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
-    //     const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
-
-    //     const auto one = cc->MakeCoefPackedPlaintext({1});
-    //     const auto identity = cc->Encrypt(keys.publicKey, one);
-    //     const auto result = bv.EvalExternalProduct(identity, prod);
-
-    //     Plaintext decrypted;
-    //     cc->Decrypt(keys.secretKey, result, &decrypted);
-    //     decrypted->SetLength(1);
+    /* Internal Product */ {
+        DEBUG_TIMER("Internal Product");
         
-    //     ASSERT_EQ(decrypted, one);
-    // }
+        const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
+        const auto prod = bv.EvalInternalProduct(rgsw, rgsw);
 
-    // /* Depth */ {
-    //     const int64_t t = params.GetPlaintextModulus();
+        const auto one = cc->MakeCoefPackedPlaintext({1});
+        const auto identity = cc->Encrypt(keys.publicKey, one);
+        const auto result = bv.EvalExternalProduct(identity, prod);
 
-    //     // The fixed multiplier applied each round.
-    //     // Noise is scaled by value so keep it binary.
-    //     const auto mult = 1;
-    //     const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-    //     const auto rgsw2 = bv.Encrypt(keys.publicKey, pt3);
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, result, &decrypted);
+        decrypted->SetLength(1);
+        
+        const auto expected = cc->MakeCoefPackedPlaintext({val * val});
+        ASSERT_EQ(decrypted, expected);
+    }
 
-    //     // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
-    //     const auto pt1   = cc->MakeCoefPackedPlaintext({1});
-    //     const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
-    //     auto val         = bv.Encrypt(keys.publicKey, pt1);
+    /* Depth */ {
+        const int64_t t = params.GetPlaintextModulus();
 
-    //     // 2^n mod t, kept centered in (-t/2, t/2].
-    //     int64_t expected = 1;
+        // The fixed multiplier applied each round.
+        // Noise is scaled by value so keep it binary.
+        const auto mult  = val;
+        const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
+        const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3);
 
-    //     for (int n = 1; n <= 64; ++n) {
-    //         val      = bv.EvalInternalProduct(rgsw2, val);
-    //         expected = (expected * mult) % t;
-    //         if (expected > t / 2) expected -= t;
+        // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
+        const auto pt1   = cc->MakeCoefPackedPlaintext({1});
+        const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
+        auto current = bv.EncryptRGSW(keys.publicKey, pt1);
 
-    //         const auto res = bv.EvalExternalProduct(rlwe1, val);
-    //         Plaintext decrypted;
-    //         cc->Decrypt(keys.secretKey, res, &decrypted);
-            
-    //         // decrypted->SetLength(4);
-    //         // std::cout << n << ":\t" << decrypted << std::endl;
+        // 2^n mod t, kept centered in (-t/2, t/2].
+        int64_t expected = 1;
 
-    //         const auto& coef = decrypted->GetCoefPackedValue();
-    //         const int64_t got = coef.empty() ? 0 : coef[0];
+        for (int n = 1; n <= 64; ++n) {
+            current = bv.EvalInternalProduct(rgsw2, current);
+            expected = (expected * mult) % t;
+            if (expected > t / 2) expected -= t;
 
-    //         if (got != expected) {
-    //             ASSERT_GT(n, 1) << "Internal product could not be chained!";
-    //             return;
-    //         }
-    //     }
-    // }
+            const auto res = bv.EvalExternalProduct(rlwe1, current);
+            Plaintext decrypted;
+            cc->Decrypt(keys.secretKey, res, &decrypted);
+
+            const auto& coef = decrypted->GetCoefPackedValue();
+            const int64_t got = coef.empty() ? 0 : coef[0];
+
+            if (got != expected) {
+                DEBUG_PRINT("Chain length: " << n - 1);
+                ASSERT_GT(n, 1) << "Internal product could not be chained!";
+                return;
+            }
+        }
+
+        DEBUG_PRINT("Chained 64 internal products!");
+    }
 }
