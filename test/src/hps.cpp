@@ -15,7 +15,7 @@ TEST(BV, HPS) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = HPSContext(cc, 1);
+    const auto bv = HPSContext(cc, 6); // Internal chain: 2 -> 1, 4 -> 2, 6+ -> 3
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
 
     /* Encrypt */ {
@@ -43,7 +43,7 @@ TEST(BV, HPS) {
         cc->Decrypt(keys.secretKey, result, &decrypted);
         decrypted->SetLength(1);
 
-        DEBUG_PRINT(decrypted);
+        DEBUG_PRINT("A: " << decrypted);
         DEBUG_PRINT("");
 
         const auto expected = cc->MakeCoefPackedPlaintext({val * val});
@@ -63,6 +63,9 @@ TEST(BV, HPS) {
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, result, &decrypted);
         decrypted->SetLength(1);
+        
+        DEBUG_PRINT("B: " << decrypted);
+        DEBUG_PRINT("");
         
         const auto expected = cc->MakeCoefPackedPlaintext({val * val});
         ASSERT_EQ(decrypted, expected);
