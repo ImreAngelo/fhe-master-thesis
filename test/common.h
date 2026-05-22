@@ -54,7 +54,7 @@ namespace params {
         params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
         // params.SetFirstModSize(60);
         // params.SetScalingModSize(55);
-        // params.SetStandardDeviation(.0f);
+        params.SetStandardDeviation(.0f);
 
         return params;
     }

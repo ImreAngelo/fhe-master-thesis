@@ -75,10 +75,20 @@ protected:
     /// @brief Returns the input polynomial scaled by B^i as (a, aB, ..., aB^{ell - 1})
     std::vector<DCRTPoly> PowersOfBase(const DCRTPoly& input) const;
 
+    /// @brief Returns the inverse of PowersOfBase
+    std::vector<DCRTPoly> Decompose(const DCRTPoly& input) const;
+
 // HELPER FUNCTIONS
 private:
-    static inline bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
+    static bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
         return plaintext->GetEncodingType() == PlaintextEncodings::COEF_PACKED_ENCODING;
+    }
+
+    /// @brief Used when the cloned poly should be const except converting to a different format
+    static DCRTPoly CloneToCoefficient(const DCRTPoly& plaintext) { // const Format format = Format::COEFFICIENT
+        DCRTPoly clone = plaintext.Clone();
+        clone.SetFormat(Format::COEFFICIENT);
+        return clone;
     }
 
 // INIT
@@ -140,20 +150,6 @@ PUBLIC_FOR_TEST:
         }
 
         return sum;
-    }
-
-    /// @todo Assert eval mode
-    std::vector<DCRTPoly> Decompose(const DCRTPoly& input) const {
-        const auto& q = m_params->GetElementParams()->GetParams();
-
-        DCRTPoly zero(input.GetParams(), Format::EVALUATION, true);
-        std::vector<DCRTPoly> d(q.size(), zero);
-
-        for (size_t i = 0; i < q.size(); i++) {
-            d[i].SetElementAtIndex(i, input.GetElementAtIndex(i));
-        }
-
-        return d;
     }
 };
 

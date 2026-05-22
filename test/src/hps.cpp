@@ -7,43 +7,36 @@ TEST(BV, HPS) {
     constexpr int64_t val = 1;
     const std::vector<int64_t> value{val};
 
-    auto params = params::Small<CryptoContextBGVRNS>(2);
-    params.SetRingDim(16); // For printing
+    auto params = params::Small<CryptoContextBGVRNS>();
+    // params.SetRingDim(16); // For printing
 
     auto cc = GenCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = HPSContext(cc, 3);
+    const auto bv = HPSContext(cc, 1);
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
-    DCRTPoly m = pt->GetElement<DCRTPoly>();
-
-    /* Gadget Property */ {
-        DCRTPoly mm = bv.GadgetMultiply(2*m, 3*m);
-        ASSERT_EQ(mm, (2*m) * (3*m));
-    }
 
     /* Encrypt */ {
         DEBUG_TIMER("Encrypt");
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
     }
 
-    /* Encrypt multi-level BV */ {
-        DEBUG_TIMER("External Product (BV)");
-
+    /* External Product */ {
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
-
+        
         DEBUG_PRINT("\nRGSW:");
-        for(auto& row : rgsw) {
+        for(const auto& row : rgsw) {
             Plaintext dec;
             cc->Decrypt(keys.secretKey, row, &dec);
             dec->SetLength(16);
             DEBUG_PRINT(dec);
         }
         DEBUG_PRINT("");
-
+        
+        DEBUG_TIMER("External Product");
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);
 
         Plaintext decrypted;
@@ -52,23 +45,10 @@ TEST(BV, HPS) {
 
         DEBUG_PRINT(decrypted);
         DEBUG_PRINT("");
+
+        const auto expected = cc->MakeCoefPackedPlaintext({val * val});
+        ASSERT_EQ(decrypted, expected);
     }
-
-    // /* External Product */ {
-    //     DEBUG_TIMER("External Product");
-
-    //     const auto rgsw = bv.Encrypt(keys.publicKey, pt);
-    //     const auto rlwe = cc->Encrypt(keys.publicKey, pt);
-
-    //     const auto result = bv.EvalExternalProduct(rlwe, rgsw);
-
-    //     Plaintext decrypted;
-    //     cc->Decrypt(keys.secretKey, result, &decrypted);
-    //     decrypted->SetLength(1);
-        
-    //     const auto expected = cc->MakeCoefPackedPlaintext({val * val});
-    //     ASSERT_EQ(decrypted, expected);
-    // }
 
     // /* Internal Product */ {
     //     DEBUG_TIMER("Internal Product");
