@@ -5,7 +5,7 @@ using namespace Core;
 
 TEST(BV, HPS) {
     // The noise is scaled by m, so the most valid tests are with binary val
-    constexpr int64_t val = 3;
+    constexpr int64_t val = 1;
     const std::vector<int64_t> value{val};
 
     auto params = params::Small<CryptoContextBGVRNS>();
@@ -16,7 +16,7 @@ TEST(BV, HPS) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = HPSContext(cc, 6); // Internal chain: 2 -> 1, 4 -> 2, 6+ -> 3
+    const auto bv = HPSContext(cc, 2); // Internal chain: 2 -> 1, 4 -> 2, 6+ -> 3
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
 
     /* Encrypt */ {

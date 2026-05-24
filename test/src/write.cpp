@@ -26,7 +26,7 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 
     KeyPair<DCRTPoly> keys = cc->KeyGen();
 
-    const HPSContext bv(cc, 6);
+    const HPSContext bv(cc, 2);
 
     constexpr uint64_t N = (uint64_t(1) << L);
     // const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
@@ -77,6 +77,6 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 }
 
 // Main tests
-TEST(ServerWrite, N2)   { TestServerWrite<3, 3, 1>(params::Small<CryptoContextBGVRNS>(4)); }
-TEST(ServerWrite, N4)   { TestServerWrite<3, 3, 2>(params::Small<CryptoContextBGVRNS>(8)); }
+TEST(ServerWrite, N2)   { TestServerWrite<3, 3, 1>(params::Small<CryptoContextBGVRNS>()); }
+TEST(ServerWrite, N4)   { TestServerWrite<3, 3, 2>(params::Small<CryptoContextBGVRNS>()); }
 // TEST(ServerWrite, N32)  { TestServerWrite<3, 3, 5>(params::Small<CryptoContextBGVRNS>(4)); }

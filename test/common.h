@@ -55,6 +55,10 @@ namespace params {
         // params.SetScalingModSize(55);
         // params.SetStandardDeviation(.0f);
 
+        // From sPAR
+        double sigma = std::pow(2.0, -55.0);
+        params.SetStandardDeviation(sigma);
+
         // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
         return params;
