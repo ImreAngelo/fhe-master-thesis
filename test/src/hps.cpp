@@ -19,6 +19,8 @@ TEST(BV, HPS) {
     const auto bv = HPSContext(cc, 2); // Internal chain: 2 -> 1, 4 -> 2, 6+ -> 3
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
 
+    DEBUG_PRINT("Std: " << params.GetStandardDeviation());
+
     /* Encrypt */ {
         DEBUG_TIMER("Encrypt");
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
