@@ -5,8 +5,9 @@
 //   ./bench-rgsw --benchmark_filter=ExternalProduct
 
 #include <benchmark/benchmark.h>
+#include <optional>
 #include "openfhe.h"
-#include "core/include/context.h"
+#include "core/context.h"
 
 using namespace lbcrypto;
 
@@ -19,7 +20,7 @@ class RGSW : public benchmark::Fixture {
             
         // TODO: Unified set of params cross-project
         CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(3);
+        params.SetMultiplicativeDepth(1);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
         params.SetScalingTechnique(FIXEDMANUAL);
@@ -34,21 +35,26 @@ class RGSW : public benchmark::Fixture {
         // Tuneable parameter
         // params.SetNumLargeDigits(2);
 
-        cc = Context::GenExtendedCryptoContext(params);
+        cc = GenCryptoContext(params);
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
 
         keys = cc->KeyGen();
         
+        // TODO: Benchmark packed plaintext
         pt_one   = cc->MakeCoefPackedPlaintext({ 1 });
         pt_msg   = cc->MakeCoefPackedPlaintext({ 2 });
         pt_scale = cc->MakeCoefPackedPlaintext({ 3 });
 
+        constexpr uint32_t ell = 2;
+        hps.emplace(cc, ell);
+
         rlwe_ct = cc->Encrypt(keys.publicKey, pt_one);
-        rgsw_ct = cc->EncryptRGSW(keys.publicKey, pt_msg);
+        rgsw_ct = hps->EncryptRGSW(keys.publicKey, pt_msg);
     }
 
-    Context::ExtendedCryptoContext<DCRTPoly> cc;
+    CryptoContext<DCRTPoly> cc;
+    std::optional<Core::HPSContext> hps;
     std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
     Plaintext                pt_one, pt_msg, pt_scale;
     Ciphertext<DCRTPoly>     rlwe_ct;
@@ -66,8 +72,8 @@ class RGSW : public benchmark::Fixture {
 }
 
 
-MAKE_BENCHMARK(Encrypt, cc->EncryptRGSW(keys.publicKey, pt_msg))
-MAKE_BENCHMARK(ExternalProduct, cc->EvalExternalProduct(rlwe_ct, rgsw_ct))
-MAKE_BENCHMARK(InternalProduct, cc->EvalInternalProduct(rgsw_ct, rgsw_ct))
+MAKE_BENCHMARK(Encrypt, hps->EncryptRGSW(keys.publicKey, pt_msg))
+MAKE_BENCHMARK(ExternalProduct, hps->EvalExternalProduct(rlwe_ct, rgsw_ct))
+MAKE_BENCHMARK(InternalProduct, hps->EvalInternalProduct(rgsw_ct, rgsw_ct))
 
 BENCHMARK_MAIN();

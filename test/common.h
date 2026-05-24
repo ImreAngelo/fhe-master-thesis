@@ -23,7 +23,6 @@ namespace params {
         params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
         params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
-        params.SetScalingTechnique(test_cli::g_scaling_technique.value_or(lbcrypto::FIXEDMANUAL));
 
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
         params.SetNumLargeDigits(1);
@@ -47,14 +46,16 @@ namespace params {
         params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
         
         // Hybrid should be default
-        params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
-        params.SetNumLargeDigits(1); // Force |P| ~= |Q|
+        // params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
+        // params.SetNumLargeDigits(1); // Force |P| ~= |Q|
         
         // Debugging
-        params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+        // params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
         // params.SetFirstModSize(60);
         // params.SetScalingModSize(55);
         // params.SetStandardDeviation(.0f);
+
+        // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
         return params;
     }

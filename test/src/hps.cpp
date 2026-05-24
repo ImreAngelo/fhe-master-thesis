@@ -27,14 +27,14 @@ TEST(BV, HPS) {
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
         
-        DEBUG_PRINT("\nRGSW:");
-        for(const auto& row : rgsw) {
-            Plaintext dec;
-            cc->Decrypt(keys.secretKey, row, &dec);
-            dec->SetLength(16);
-            DEBUG_PRINT(dec);
-        }
-        DEBUG_PRINT("");
+        // DEBUG_PRINT("\nRGSW:");
+        // for(const auto& row : rgsw) {
+        //     Plaintext dec;
+        //     cc->Decrypt(keys.secretKey, row, &dec);
+        //     dec->SetLength(16);
+        //     DEBUG_PRINT(dec);
+        // }
+        // DEBUG_PRINT("");
         
         DEBUG_TIMER("External Product");
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);

@@ -21,11 +21,8 @@ BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
 BENCH_REPETITIONS ?= 10
 
-# OpenFHE's keyswitch uses a nested `#pragma omp parallel for` over a small
-# (sizeQlP ≈ 6–7) inner loop, so at our parameters (depth=3, dnum=2) thread
-# spawn cost dominates and multi-threaded runs are *slower* than single-thread.
-# Lock the env down for reproducible timings; override with BENCH_OMP_THREADS.
-BENCH_OMP_THREADS ?= 1
+# TODO: Investigate multi-threaded performance
+BENCH_OMP_THREADS ?= 4
 
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \

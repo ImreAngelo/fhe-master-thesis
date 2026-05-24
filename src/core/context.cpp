@@ -5,29 +5,37 @@
 using namespace Core;
 
 // Constructs Z + mG using P_Q(m) as described in section 2.3.2 of the thesis 
-std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPoly>& pk, const Plaintext& plaintext) const
+std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPoly>& pk, const Plaintext& plaintext, const bool noiseless) const
 {
     const auto msg = plaintext->GetElement<DCRTPoly>();
     const auto zero = IsCoefPackedPlaintext(plaintext)
         ? m_params->MakeCoefPackedPlaintext({0})
         : m_params->MakePackedPlaintext({0});
-    
+
     std::vector<DCRTPoly> digits = PowersOfBase(msg);
-    
+
     const size_t k = msg.GetNumOfElements();
     const size_t half = k * m_ell;
     const size_t full = 2 * half;
 
     std::vector<Ciphertext<DCRTPoly>> rows(full);
 
-    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(len))
+    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(full))
     for (size_t row = 0; row < full; row++) {
         size_t l = row / half;      // 0 for Upper (c_0), 1 for Lower (c_1)
         size_t rem = row % half;    // The flat index within the current half
         size_t j = rem / m_ell;     // The target tower [0 to k-1]
         size_t i = rem % m_ell;     // The base power   [0 to ell-1]
-        
-        auto ct = m_params->Encrypt(pk, zero);
+
+        Ciphertext<DCRTPoly> ct;
+        if (noiseless) {
+            ct = std::make_shared<CiphertextImpl<DCRTPoly>>(m_params);
+            DCRTPoly c0(m_params->GetElementParams(), Format::EVALUATION, true);
+            DCRTPoly c1(m_params->GetElementParams(), Format::EVALUATION, true);
+            ct->SetElements({std::move(c0), std::move(c1)});
+        } else {
+            ct = m_params->Encrypt(pk, zero);
+        }
         auto elements = ct->GetElements();
         
         auto target_limb = elements[l].GetElementAtIndex(j);
@@ -94,7 +102,7 @@ std::vector<DCRTPoly> HPSContext::PowersOfBase(const DCRTPoly &input) const
     std::vector<DCRTPoly> result(m_ell);
     result[0] = input;
     
-    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(len))
+    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(m_ell))
     for(size_t i = 1; i < m_ell; i++) {
         DCRTPoly scaled(input.GetParams(), input.GetFormat(), true);
 
@@ -122,7 +130,7 @@ std::vector<DCRTPoly> HPSContext::Decompose(const DCRTPoly &input) const
     // The output is k * \ell fully broadcasted DCRTPolys
     std::vector<DCRTPoly> result(k * m_ell, DCRTPoly(coefs.GetParams(), Format::COEFFICIENT, true));
 
-    #pragma omp parallel for
+    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(k))
     for (size_t j = 0; j < k; j++) {
         
         const auto& limb = coefs.GetElementAtIndex(j);
@@ -201,7 +209,7 @@ std::vector<DCRTPoly> HPSContext::Decompose(const DCRTPoly &input) const
 //     std::vector<DCRTPoly> result(m_ell, DCRTPoly(coef.GetParams(), Format::COEFFICIENT, true));
 
 //     // 2. Decompose independently across towers
-//     #pragma omp parallel for
+//     #pragma omp parallel for //
 //     for (size_t j = 0; j < num_towers; j++) {
         
 //         const auto& limb = coef.GetElementAtIndex(j);

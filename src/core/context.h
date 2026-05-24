@@ -27,9 +27,9 @@ public:
     explicit HPSContext(const CryptoContext<DCRTPoly>& cc, const uint32_t ell = 1) 
         : m_params(cc), m_ell(ell), m_logB(computeLogB(cc, ell)), m_powers(computePowers(cc, m_ell, m_logB))
     {
-        DEBUG_PRINT("Q:         " << cc->GetElementParams()->GetModulus());
-        DEBUG_PRINT("# moduli:  " << cc->GetElementParams()->GetParams().size());
-        DEBUG_PRINT("LogB:      " << m_logB << "\n");
+        // DEBUG_PRINT("Q:         " << cc->GetElementParams()->GetModulus());
+        // DEBUG_PRINT("# moduli:  " << cc->GetElementParams()->GetParams().size());
+        // DEBUG_PRINT("LogB:      " << m_logB << "\n");
     };
 
 public:
@@ -40,7 +40,7 @@ public:
      * @param plaintext 
      * @return RGSW
      */
-    std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&) const;
+    std::vector<Ciphertext<DCRTPoly>> EncryptRGSW(const PublicKey<DCRTPoly>&, const Plaintext&, const bool noiseless = false) const;
 
     /**
      * @brief Evaluate the external product
@@ -118,24 +118,30 @@ private:
         NativeInteger B(BasicInteger(1) << logB);
         NativeInteger cnt = 1;
 
-        std::cout << "\nmoduli "; 
-        for(const auto& qi : q) std::cout << std::setw(14) << qi->GetModulus() << " ";
-        std::cout << std::endl;
+        DEBUG_PRINT(
+            "\nmoduli";
+            for(const auto& qi : q) std::cout << std::setw(14) << qi->GetModulus() << " ";
+            std::cout
+        );
 
         for(size_t i = 0; i < ell; i++) {
-            std::cout << "B^" << i << " = [" << std::setw(14);
-
             for(size_t j = 0; j < k; j++) {
                 const auto qj = q[j]->GetModulus();
                 powers[i + j*ell] = cnt.Mod(qj);
-                std::cout << std::setw(14) << powers[i + j*ell] << " ";
             }
-            std::cout << std::setw(1) << "]" << std::endl;
+
+            DEBUG_PRINT(
+                "B^" << i << " = [" << std::setw(14);
+                for(size_t j = 0; j < k; j++) {
+                    std::cout << std::setw(14) << powers[i + j*ell] << " ";
+                }
+                std::cout << std::setw(1) << "]" << std::endl
+            );
             
             cnt = cnt.ModMul(B, Q);
         }
 
-        std::cout << std::endl;
+        // std::cout << std::endl;
         return powers;
     }
 
