@@ -16,7 +16,7 @@ TEST(BV, HPS) {
     cc->Enable(LEVELEDSHE);
     const auto keys = cc->KeyGen();
 
-    const auto bv = HPSContext(cc, 2); // Internal chain: 2 -> 1, 4 -> 2, 6+ -> 3
+    const auto bv = HPSContext(cc, 2);
     const Plaintext pt = cc->MakeCoefPackedPlaintext(value);
 
     DEBUG_PRINT("Std: " << params.GetStandardDeviation());
@@ -73,11 +73,9 @@ TEST(BV, HPS) {
             if (got != expected) {
                 DEBUG_PRINT("External product chain length: " << n - 1);
                 ASSERT_GT(n, 1) << "Internal product could not be chained!";
-                return;
+                break;
             }
         }
-
-        DEBUG_PRINT("Chained 64 internal products!");
     }
 
     /* Internal Product */ {
@@ -106,7 +104,7 @@ TEST(BV, HPS) {
 
         const auto mult  = val;
         const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-        const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3, true);
+        const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3);
 
         // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
         const auto pt1   = cc->MakeCoefPackedPlaintext({1});

@@ -30,8 +30,9 @@ namespace params {
         if(depth > 1)
             params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
         
-        // Debugging
-        // params.SetStandardDeviation(.0f);
+        // From sPAR
+        double sigma = std::pow(2.0, -55.0);
+        params.SetStandardDeviation(sigma);
 
         return params;
     }
