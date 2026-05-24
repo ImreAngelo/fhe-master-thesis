@@ -78,7 +78,7 @@ TEST(BV, HPS) {
         // Noise is scaled by value so keep it binary.
         const auto mult  = val;
         const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-        const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3);
+        const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3, true);
 
         // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
         const auto pt1   = cc->MakeCoefPackedPlaintext({1});

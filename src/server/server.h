@@ -1,6 +1,6 @@
 #pragma once
 #include "openfhe.h"
-#include "core/include/context.h"
+#include "core/context.h"
 // TODO: Fix terrible include structure
 #include "server/write.h"
 #include "utils/logging.h"
@@ -10,7 +10,7 @@
 
 namespace server {
     using namespace lbcrypto;
-    using namespace Context;
+    using namespace Core;
 
     /**
      * @brief Run sPAR Algorithm 2 (per-bin loops) for each user, then verify
@@ -23,24 +23,26 @@ namespace server {
     template <typename T = DCRTPoly, size_t K = 3, uint32_t D = 3, uint32_t L = 1>
     void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
     {
-        auto cc = Context::GenExtendedCryptoContext(params);
+        auto cc = GenCryptoContext(params);
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
 
         KeyPair<DCRTPoly> keys = cc->KeyGen();
 
+        const HPSContext bv(cc, 2);
+
         constexpr uint64_t N = (uint64_t(1) << L);
 
-        const auto rgsw_zero = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
-        const auto rgsw_one  = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
+        const auto rgsw_zero = bv.EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+        const auto rgsw_one  = bv.EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
         const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
 
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> L_mat;
         std::array<std::array<server::RGSWCiphertext<T>, K>, N> I_mat;
         for (uint64_t i = 0; i < N; i++) {
             for (size_t k = 0; k < K; k++) {
-                L_mat[i][k] = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 0 }));
-                I_mat[i][k] = cc->EncryptRGSW(keys.secretKey, cc->MakeCoefPackedPlaintext({ 1 }));
+                L_mat[i][k] = bv.EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
+                I_mat[i][k] = bv.EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
             }
         }
 
@@ -48,13 +50,13 @@ namespace server {
             const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
 
             // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
-            const auto z = client::PlaceAtN<T,D,L>(cc, keys.secretKey, r);
+            const auto z = client::PlaceAtN<T,D,L>(cc, bv, keys.publicKey, r);
 
             // Loop 2
-            const auto hasWritten = server::Write<T,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
+            const auto hasWritten = server::Write<T,K,D,L>(cc, bv, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
 
             // Output results
-            DEBUG_PRINT(server::Decrypt(cc, keys.secretKey, hasWritten));
+            DEBUG_PRINT(server::Decrypt(cc, bv, keys.secretKey, hasWritten));
         }
     }
 } // namespace server

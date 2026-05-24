@@ -29,6 +29,7 @@ std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPo
 
         Ciphertext<DCRTPoly> ct;
         if (noiseless) {
+            // TODO: Only calculate once and copy?
             ct = std::make_shared<CiphertextImpl<DCRTPoly>>(m_params);
             DCRTPoly c0(m_params->GetElementParams(), Format::EVALUATION, true);
             DCRTPoly c1(m_params->GetElementParams(), Format::EVALUATION, true);
@@ -95,7 +96,7 @@ RGSW HPSContext::EvalInternalProduct(const RGSW &lhs, const RGSW &rhs) const
 
 std::vector<DCRTPoly> HPSContext::PowersOfBase(const DCRTPoly &input) const
 {
-    DEBUG_TIMER("Powers of Base B");
+    // DEBUG_TIMER("Powers of Base B");
 
     const auto n_towers = m_params->GetElementParams()->GetParams().size();
 
