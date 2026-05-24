@@ -26,7 +26,7 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
 
     KeyPair<DCRTPoly> keys = cc->KeyGen();
 
-    const HPSContext bv(cc, 2);
+    const HPSContext bv(cc, 6);
 
     constexpr uint64_t N = (uint64_t(1) << L);
     // const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
@@ -73,21 +73,10 @@ void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
         ASSERT_EQ(hw[0], 1);
     }
 
-    // // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.
-    // for (uint64_t i = 0; i < N; i++) {
-    //     for (size_t k = 0; k < K; k++) {
-    //         auto Lcell = server::Decrypt(cc, keys.secretKey, L_mat[i][k]);
-    //         const int64_t expectedL = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
-    //         auto L_val = RECENTER(Lcell[0], t);
-    //         ASSERT_EQ(L_val, expectedL) << "L[" << i << "][" << k << "]";
-
-    //         auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
-    //         auto I_val = RECENTER(Icell[0], t);
-    //         ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
-    //     }
-    // }
+    // // Final state: L_mat[i][0] == i+1, I_mat[i][k] == 0.
 }
 
 // Main tests
-TEST(ServerWrite, N2)   { TestServerWrite<3, 3, 1>(params::Small<CryptoContextBGVRNS>()); }
-// TEST(ServerWrite, N32)  { TestServerWrite<3, 3, 5>(params::Small<CryptoContextBGVRNS>()); }
+TEST(ServerWrite, N2)   { TestServerWrite<3, 3, 1>(params::Small<CryptoContextBGVRNS>(4)); }
+TEST(ServerWrite, N4)   { TestServerWrite<3, 3, 2>(params::Small<CryptoContextBGVRNS>(8)); }
+// TEST(ServerWrite, N32)  { TestServerWrite<3, 3, 5>(params::Small<CryptoContextBGVRNS>(4)); }

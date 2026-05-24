@@ -20,6 +20,13 @@ std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPo
 
     std::vector<Ciphertext<DCRTPoly>> rows(full);
 
+    // For noiseless mode, encrypt zero once so we can clone its metadata
+    // (key tag, encoding type, scaling factor, ...) for every row.
+    Ciphertext<DCRTPoly> noiseless_template;
+    if (noiseless) {
+        noiseless_template = m_params->Encrypt(pk, zero);
+    }
+
     #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(full))
     for (size_t row = 0; row < full; row++) {
         size_t l = row / half;      // 0 for Upper (c_0), 1 for Lower (c_1)
@@ -29,8 +36,7 @@ std::vector<Ciphertext<DCRTPoly>> HPSContext::EncryptRGSW(const PublicKey<DCRTPo
 
         Ciphertext<DCRTPoly> ct;
         if (noiseless) {
-            // TODO: Only calculate once and copy?
-            ct = std::make_shared<CiphertextImpl<DCRTPoly>>(m_params);
+            ct = noiseless_template->CloneEmpty();
             DCRTPoly c0(m_params->GetElementParams(), Format::EVALUATION, true);
             DCRTPoly c1(m_params->GetElementParams(), Format::EVALUATION, true);
             ct->SetElements({std::move(c0), std::move(c1)});

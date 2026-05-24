@@ -60,6 +60,8 @@ public:
      */
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const;
 
+    // Ciphertext<DCRTPoly> EvalCMux(const RGSW& bit, )
+
 protected:
     const CryptoContext<DCRTPoly>& m_params;
     const uint32_t m_ell;

@@ -4,7 +4,8 @@
 using namespace Core;
 
 TEST(BV, HPS) {
-    constexpr int64_t val = 1;
+    // The noise is scaled by m, so the most valid tests are with binary val
+    constexpr int64_t val = 3;
     const std::vector<int64_t> value{val};
 
     auto params = params::Small<CryptoContextBGVRNS>();
@@ -27,15 +28,6 @@ TEST(BV, HPS) {
         const auto rgsw = bv.EncryptRGSW(keys.publicKey, pt);
         const auto rlwe = cc->Encrypt(keys.publicKey, pt);
         
-        // DEBUG_PRINT("\nRGSW:");
-        // for(const auto& row : rgsw) {
-        //     Plaintext dec;
-        //     cc->Decrypt(keys.secretKey, row, &dec);
-        //     dec->SetLength(16);
-        //     DEBUG_PRINT(dec);
-        // }
-        // DEBUG_PRINT("");
-        
         DEBUG_TIMER("External Product");
         const auto result = bv.EvalExternalProduct(rlwe, rgsw);
 
@@ -48,6 +40,42 @@ TEST(BV, HPS) {
 
         const auto expected = cc->MakeCoefPackedPlaintext({val * val});
         ASSERT_EQ(decrypted, expected);
+    }
+
+    /* Depth Ext */ {
+        const int64_t t = params.GetPlaintextModulus();
+        
+        int64_t expected = 1;
+
+        const auto mult_pt = cc->MakeCoefPackedPlaintext({val});
+        const auto initial_pt = cc->MakeCoefPackedPlaintext({expected});
+
+        auto current = cc->Encrypt(keys.publicKey, initial_pt);
+
+        for (int n = 1; n <= 64; ++n) {
+            const auto mult = bv.EncryptRGSW(keys.publicKey, mult_pt);
+
+            current = bv.EvalExternalProduct(current, mult);
+            expected = (expected * val) % t;
+            if (expected > t / 2) expected -= t;
+
+            Plaintext decrypted;
+            cc->Decrypt(keys.secretKey, current, &decrypted);
+            
+            const auto& coef = decrypted->GetCoefPackedValue();
+            const int64_t got = coef.empty() ? 0 : coef[0];
+            
+            // decrypted->SetLength(1);
+            // DEBUG_PRINT("EXTERNAL PRODUCT " << n << ": " << decrypted);
+
+            if (got != expected) {
+                DEBUG_PRINT("External product chain length: " << n - 1);
+                ASSERT_GT(n, 1) << "Internal product could not be chained!";
+                return;
+            }
+        }
+
+        DEBUG_PRINT("Chained 64 internal products!");
     }
 
     /* Internal Product */ {
@@ -71,11 +99,9 @@ TEST(BV, HPS) {
         ASSERT_EQ(decrypted, expected);
     }
 
-    /* Depth */ {
+    /* Depth - TODO: Refactor */ {
         const int64_t t = params.GetPlaintextModulus();
 
-        // The fixed multiplier applied each round.
-        // Noise is scaled by value so keep it binary.
         const auto mult  = val;
         const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
         const auto rgsw2 = bv.EncryptRGSW(keys.publicKey, pt3, true);
