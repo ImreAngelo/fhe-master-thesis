@@ -1,0 +1,16 @@
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 110
+PointerAlignment: Left           # int* p, not int *p
+AllowShortFunctionsOnASingleLine: Inline
+SortIncludes: CaseInsensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"fhe/'              # your project headers first
+    Priority: 1
+  - Regex: '^"openfhe'           # then OpenFHE
+    Priority: 2
+  - Regex: '^<.*\.h>'            # C headers
+    Priority: 3
+  - Regex: '^<.*>'               # C++ stdlib
+    Priority: 4
