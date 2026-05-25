@@ -5,7 +5,6 @@
 #pragma once
 
 #include <gtest/gtest.h>
-#include "cli_params.h"
 #include "openfhe.h"
 
 // DEBUG_TIMING / DEBUG_LOGGING are opt-in via `DEBUG=1 make test-<name>`,
@@ -21,8 +20,8 @@ namespace params {
     inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
         lbcrypto::CCParams<T> params;
         params.SetMultiplicativeDepth(depth);
-        params.SetPlaintextModulus(test_cli::g_plaintext_modulus.value_or(65537));
-        params.SetRingDim(test_cli::g_ring_dim.value_or(1 << 14));
+        params.SetPlaintextModulus(65537);
+        params.SetRingDim(1 << 14);
 
         params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
         params.SetNumLargeDigits(1);

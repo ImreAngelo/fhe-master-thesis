@@ -1,7 +1,8 @@
-#include "scheme/context-bv.h"
+#include "context-bv.h"
+#include "factory.h"
 
-using namespace spar;
 
+namespace spar {
 
 //---------------------//
 // Pre-computed values //
@@ -45,10 +46,11 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
 
 } // namespace
 
-BVCryptoContextImpl::BVCryptoContextImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
-    : IExtendedCryptoContextImpl(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
+ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
+    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
       m_powers(ComputePowers(cc, m_ell, m_logB))
     {}
+
 
 //---------//
 // Helpers //
@@ -74,7 +76,7 @@ Poly CloneToCoefficient(const Poly& poly) {
 // API //
 //-----//
 
-RGSW BVCryptoContextImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
+RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
     const auto msg = pt->GetElement<Poly>();
     const auto zero = IsCoefPackedPlaintext(pt)
         ? this->MakeCoefPackedPlaintext({0})
@@ -122,7 +124,7 @@ RGSW BVCryptoContextImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, 
     return rows;
 }
 
-RLWE BVCryptoContextImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
+RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
     const size_t k = rlwe->GetElements()[0].GetNumOfElements();
     const size_t half_size = k * m_ell;
 
@@ -157,7 +159,7 @@ RLWE BVCryptoContextImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw
     return result;
 }
 
-RGSW BVCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
+RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
     RGSW result = lhs;
     for(auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
     return result;
@@ -168,11 +170,11 @@ RGSW BVCryptoContextImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) 
 // Internals //
 //-----------//
 
-NativeInteger BVCryptoContextImpl::GetPower(const uint32_t i, const uint32_t j) const {
+NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
     return m_powers[i + m_ell * j];
 }
 
-std::vector<Poly> BVCryptoContextImpl::PowersOfBase(const Poly& input) const {
+std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
     const auto n_towers = this->GetElementParams()->GetParams().size();
 
     std::vector<Poly> result(m_ell);
@@ -194,7 +196,7 @@ std::vector<Poly> BVCryptoContextImpl::PowersOfBase(const Poly& input) const {
     return result;
 }
 
-std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
+std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
     const Poly coefs = CloneToCoefficient(input);
     const size_t k = coefs.GetNumOfElements();
     const size_t ring_dim = coefs.GetRingDimension();
@@ -205,7 +207,7 @@ std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
     // The output is k * \ell fully broadcasted Polys
     std::vector<Poly> result(k * m_ell, Poly(coefs.GetParams(), Format::COEFFICIENT, true));
 
-    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(k))
+    #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(k))
     for (size_t j = 0; j < k; j++) {
         
         const auto& limb = coefs.GetElementAtIndex(j);
@@ -223,9 +225,7 @@ std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
             uint64_t a_prime = limb[x].ConvertToInt();
             
             for (size_t i = 0; i < m_ell; i++) {
-                
-                // THE L=1 / LOST CARRY FIX
-                // If this is the final digit, absorb the remainder completely.
+                // If this is the final digit, absorb the remainder completely
                 if (i == m_ell - 1) {
                     for (size_t t = 0; t < k; t++) {
                         broadcast_limbs[i][t][x] = a_prime;
@@ -235,30 +235,29 @@ std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
 
                 uint64_t u = a_prime & mask;
                 uint64_t carry = u >> offset;
-                
+
                 // Extract true signed integer
                 int64_t d_signed = u;
                 if (carry) d_signed -= B;
                 
                 a_prime = (a_prime >> m_logB) + carry;
-                
-                // BROADCAST to all towers 't'
+
+                // BROADCAST to all towers
                 for (size_t t = 0; t < k; t++) {
                     const uint64_t qt = broadcast_limbs[i][t].GetModulus().ConvertToInt();
-                    // Wrap negative numbers safely modulo qt
                     uint64_t d_mod_qt = (d_signed < 0) ? (qt - (uint64_t)(-d_signed)) : (uint64_t)d_signed;
                     broadcast_limbs[i][t][x] = d_mod_qt;
                 }
             }
         }
-        
+
         // Assemble the fully broadcasted limbs into the target Poly
         for (size_t i = 0; i < m_ell; i++) {
             Poly poly(coefs.GetParams(), Format::COEFFICIENT, true);
             for (size_t t = 0; t < k; t++) {
                 poly.SetElementAtIndex(t, std::move(broadcast_limbs[i][t]));
             }
-            // Switch to Evaluation domain for fast multiplication!
+
             poly.SetFormat(Format::EVALUATION);
             result[j * m_ell + i] = std::move(poly);
         }
@@ -267,29 +266,39 @@ std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
     return result;
 }
 
+
 //-------------------------//
 // OpenFHE-Context Factory //
 //-------------------------//
 
-namespace {
-
-using CCFactory = lbcrypto::CryptoContextFactory<Poly>;
-
-struct ContextRegistrar : protected CCFactory {
-    static void Register(std::shared_ptr<lbcrypto::CryptoContextImpl<Poly>> cc) {
-        CCFactory::AddContext(cc);
-    }
-};
-
-} // namespace
-
-BVCryptoContext CryptoContextBV::genCryptoContext(
-    const lbcrypto::CCParams<CryptoContextBV>& parameters) {
-    const lbcrypto::CCParams<CryptoContextBGVRNS>& bgvParams = parameters;
-
-    auto baseCC = lbcrypto::CryptoContextBGVRNS::genCryptoContext(bgvParams);
-    auto ctx    = std::make_shared<BVCryptoContextImpl>(*baseCC, parameters.GetEll());
-
-    ContextRegistrar::Register(ctx);
-    return ctx;
+ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>& parameters, const uint32_t ell) {
+    auto baseCC = lbcrypto::GenCryptoContext(parameters);
+    auto ext = std::make_shared<ExtendedContextBVImpl>(*baseCC, ell);
+    factory::FactoryRegistrar<Poly>::Add(ext);
+    return ext;
 }
+
+} // namespace spar
+
+// namespace {
+//
+// using CCFactory = lbcrypto::CryptoContextFactory<Poly>;
+//
+// struct ContextRegistrar : protected CCFactory {
+//     static void Register(std::shared_ptr<lbcrypto::CryptoContextImpl<Poly>> cc) {
+//         CCFactory::AddContext(cc);
+//     }
+// };
+//
+// } // namespace
+//
+// BVCryptoContext CryptoContextBV::genCryptoContext(
+//     const lbcrypto::CCParams<CryptoContextBV>& parameters) {
+//     const lbcrypto::CCParams<CryptoContextBGVRNS>& bgvParams = parameters;
+//
+//     auto baseCC = lbcrypto::CryptoContextBGVRNS::genCryptoContext(bgvParams);
+//     auto ctx    = std::make_shared<ExtendedContextBVImpl>(*baseCC, parameters.GetEll());
+//
+//     ContextRegistrar::Register(ctx);
+//     return ctx;
+// }

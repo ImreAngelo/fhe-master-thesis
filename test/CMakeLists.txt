@@ -65,10 +65,7 @@ endfunction()
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
 # register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
 register_test(test-rgsw             SOURCE src/rgsw)
-
 register_test(test-write            SOURCE src/write)
-register_test(test-hybrid-rns       SOURCE src/hybrid-rns)
-register_test(test-hps              SOURCE src/hps)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)

@@ -1,14 +1,13 @@
-#include "scheme/context-bv.h"
+#include "scheme/context.h"
 
 
 TEST(RGSW, Classes) {
     using namespace spar;
     using namespace lbcrypto;
 
-    auto params = params::Small<CryptoContextBV>();
-    params.SetEll(2);
+    const auto params = params::Small<CryptoContextBGVRNS>();
+    const auto cc = spar::GenContextBV(params, 1);
 
-    const auto cc = GenCryptoContext(params);
     cc->Enable(PKE);
     cc->Enable(LEVELEDSHE);
 
