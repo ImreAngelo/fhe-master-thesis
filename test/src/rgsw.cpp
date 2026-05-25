@@ -1,135 +1,143 @@
 #include "scheme/context.h"
+#include <gtest/gtest.h>
+#include <functional>
+#include <string>
 
+namespace spar::test {
 
-TEST(RGSW, Classes) {
-    using namespace spar;
-    using namespace lbcrypto;
+using namespace lbcrypto;
 
-    const auto params = params::Small<CryptoContextBGVRNS>();
-    const auto cc = spar::GenContextBV(params, 1);
+struct SchemeCase {
+    std::string name;
+    std::function<ExtendedContext()> make;
+};
 
-    cc->Enable(PKE);
-    cc->Enable(LEVELEDSHE);
+class RGSW : public ::testing::TestWithParam<SchemeCase> {
+protected:
+    ExtendedContext cc;
+    KeyPair<Poly>   keys;
+    Plaintext       pt_one;
 
-    const auto keys = cc->KeyGen();
+    // Noise scales with message magnitude; binary plaintexts give the cleanest signal.
+    static constexpr int64_t kVal = 1;
 
-    // The noise is scaled by m, so the most valid tests are with binary val
-    constexpr int64_t val = 1;
+    void SetUp() override {
+        cc = GetParam().make();
+        cc->Enable(PKE);
+        cc->Enable(LEVELEDSHE);
 
-    const Plaintext pt = cc->MakeCoefPackedPlaintext({val});
-
-    /* Encrypt */ {
-        DEBUG_TIMER("Encrypt");
-        const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
+        keys   = cc->KeyGen();
+        pt_one = cc->MakeCoefPackedPlaintext({kVal});
     }
 
-    /* External Product */ {
-        const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
-        const auto rlwe = cc->Encrypt(keys.publicKey, pt);
-
-        DEBUG_TIMER("External Product");
-        const auto result = cc->EvalExternalProduct(rlwe, rgsw);
-
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, result, &decrypted);
-        decrypted->SetLength(1);
-
-        DEBUG_PRINT("A: " << decrypted);
-        DEBUG_PRINT("");
-
-        const auto expected = cc->MakeCoefPackedPlaintext({val * val});
-        ASSERT_EQ(decrypted, expected);
+    int64_t PlaintextModulus() const {
+        return cc->GetCryptoParameters()->GetPlaintextModulus();
     }
 
-    /* Depth Ext */ {
-        const int64_t t = params.GetPlaintextModulus();
-
-        int64_t expected = 1;
-
-        const auto mult_pt = cc->MakeCoefPackedPlaintext({val});
-        const auto initial_pt = cc->MakeCoefPackedPlaintext({expected});
-
-        auto current = cc->Encrypt(keys.publicKey, initial_pt);
-
-        for (int n = 1; n <= 64; ++n) {
-            const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
-
-            current = cc->EvalExternalProduct(current, mult);
-            expected = (expected * val) % t;
-            if (expected > t / 2) expected -= t;
-
-            Plaintext decrypted;
-            cc->Decrypt(keys.secretKey, current, &decrypted);
-
-            const auto& coef = decrypted->GetCoefPackedValue();
-            const int64_t got = coef.empty() ? 0 : coef[0];
-
-            // decrypted->SetLength(1);
-            // DEBUG_PRINT("EXTERNAL PRODUCT " << n << ": " << decrypted);
-
-            if (got != expected) {
-                DEBUG_PRINT("External product chain length: " << n - 1);
-                ASSERT_GT(n, 1) << "Internal product could not be chained!";
-                break;
-            }
-        }
-    }
-
-    /* Internal Product */ {
-        DEBUG_TIMER("Internal Product");
-
-        const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt);
-        const auto prod = cc->EvalInternalProduct(rgsw, rgsw);
-
-        const auto one = cc->MakeCoefPackedPlaintext({1});
-        const auto identity = cc->Encrypt(keys.publicKey, one);
-        const auto result = cc->EvalExternalProduct(identity, prod);
-
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, result, &decrypted);
-        decrypted->SetLength(1);
-
-        DEBUG_PRINT("B: " << decrypted);
-        DEBUG_PRINT("");
-
-        const auto expected = cc->MakeCoefPackedPlaintext({val * val});
-        ASSERT_EQ(decrypted, expected);
-    }
-
-    /* Depth - TODO: Refactor */ {
-        const int64_t t = params.GetPlaintextModulus();
-
-        const auto mult  = val;
-        const auto pt3   = cc->MakeCoefPackedPlaintext({mult});
-        const auto rgsw2 = cc->EncryptRGSW(keys.publicKey, pt3);
-
-        // val = RGSW(1) initially; RLWE(1) used as the left operand for verification.
-        const auto pt1   = cc->MakeCoefPackedPlaintext({1});
-        const auto rlwe1 = cc->Encrypt(keys.publicKey, pt1);
-        auto current = cc->EncryptRGSW(keys.publicKey, pt1);
-
-        // 2^n mod t, kept centered in (-t/2, t/2].
-        int64_t expected = 1;
-
-        for (int n = 1; n <= 64; ++n) {
-            current = cc->EvalInternalProduct(rgsw2, current);
-            expected = (expected * mult) % t;
-            if (expected > t / 2) expected -= t;
-
-            const auto res = cc->EvalExternalProduct(rlwe1, current);
-            Plaintext decrypted;
-            cc->Decrypt(keys.secretKey, res, &decrypted);
-
-            const auto& coef = decrypted->GetCoefPackedValue();
-            const int64_t got = coef.empty() ? 0 : coef[0];
-
-            if (got != expected) {
-                DEBUG_PRINT("Chain length: " << n - 1);
-                ASSERT_GT(n, 1) << "Internal product could not be chained!";
-                return;
-            }
-        }
-
-        DEBUG_PRINT("Chained 64 internal products!");
+    int64_t FirstCoef(const Plaintext& pt) const {
+        const auto& coef = pt->GetCoefPackedValue();
+        return coef.empty() ? 0 : coef[0];
     }
 };
+
+TEST_P(RGSW, Encrypt) {
+    DEBUG_TIMER("Encrypt");
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
+    (void)rgsw;
+}
+
+TEST_P(RGSW, ExternalProduct) {
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
+    const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);
+
+    DEBUG_TIMER("External Product");
+    const auto result = cc->EvalExternalProduct(rlwe, rgsw);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    decrypted->SetLength(1);
+
+    const auto expected = cc->MakeCoefPackedPlaintext({kVal * kVal});
+    ASSERT_EQ(decrypted, expected);
+}
+
+TEST_P(RGSW, InternalProduct) {
+    DEBUG_TIMER("Internal Product");
+
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
+    const auto prod = cc->EvalInternalProduct(rgsw, rgsw);
+
+    const auto identity = cc->Encrypt(keys.publicKey, pt_one);
+    const auto result   = cc->EvalExternalProduct(identity, prod);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    decrypted->SetLength(1);
+
+    const auto expected = cc->MakeCoefPackedPlaintext({kVal * kVal});
+    ASSERT_EQ(decrypted, expected);
+}
+
+TEST_P(RGSW, ExternalProductChainsAtLeastOnce) {
+    const int64_t t = PlaintextModulus();
+    const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
+
+    auto current     = cc->Encrypt(keys.publicKey, pt_one);
+    int64_t expected = 1;
+    int last_ok      = 0;
+
+    for (int n = 1; n <= 64; ++n) {
+        const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
+        current = cc->EvalExternalProduct(current, mult);
+
+        expected = (expected * kVal) % t;
+        if (expected > t / 2) expected -= t;
+
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, current, &decrypted);
+        if (FirstCoef(decrypted) != expected) break;
+        last_ok = n;
+    }
+
+    DEBUG_PRINT("External product chain length: " << last_ok);
+    ASSERT_GT(last_ok, 0) << "Could not chain even one external product";
+}
+
+TEST_P(RGSW, InternalProductChainsAtLeastOnce) {
+    const int64_t t = PlaintextModulus();
+    const auto mult_pt   = cc->MakeCoefPackedPlaintext({kVal});
+    const auto rgsw_mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
+    const auto rlwe_one  = cc->Encrypt(keys.publicKey, pt_one);
+
+    auto current     = cc->EncryptRGSW(keys.publicKey, pt_one);
+    int64_t expected = 1;
+    int last_ok      = 0;
+
+    for (int n = 1; n <= 64; ++n) {
+        current = cc->EvalInternalProduct(rgsw_mult, current);
+
+        expected = (expected * kVal) % t;
+        if (expected > t / 2) expected -= t;
+
+        const auto res = cc->EvalExternalProduct(rlwe_one, current);
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, res, &decrypted);
+        if (FirstCoef(decrypted) != expected) break;
+        last_ok = n;
+    }
+
+    DEBUG_PRINT("Internal product chain length: " << last_ok);
+    ASSERT_GT(last_ok, 0) << "Could not chain even one internal product";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllSchemes, RGSW,
+    ::testing::Values(
+        SchemeCase{"BV_ell1", [] { return GenContextBV(::params::Small(), /*ell=*/ 1); }},
+        SchemeCase{"BV_ell2", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }}
+        // SchemeCase{"Hybrid",  [] { return GenContextHybrid(::params::Small()); }}
+    ),
+    [](const auto& info) { return info.param.name; }
+);
+
+} // namespace spar::test
