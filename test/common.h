@@ -39,7 +39,7 @@ namespace params {
 
     template<typename T = lbcrypto::CryptoContextBGVRNS>
     inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
-        lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> params;
+        lbcrypto::CCParams<T> params;
         params.SetMultiplicativeDepth(depth);
         params.SetPlaintextModulus(1 << 8);
         params.SetRingDim(1 << 11);
@@ -55,12 +55,12 @@ namespace params {
         // params.SetFirstModSize(60);
         // params.SetScalingModSize(55);
         // params.SetStandardDeviation(.0f);
+        // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
         // From sPAR
         double sigma = std::pow(2.0, -55.0);
         params.SetStandardDeviation(sigma);
 
-        // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
         return params;
     }

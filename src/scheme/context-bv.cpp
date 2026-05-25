@@ -139,7 +139,7 @@ RLWE BVCryptoContextImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw
 
     // Multiply the k*ell decomposed polynomials against the k*ell RGSW rows
     for (size_t idx = 0; idx < half_size; idx++) {
-        
+
         // --- Upper Half (C_0 interacts strictly with d0) ---
         const auto& C0_row = rgsw[idx]->GetElements();
         res_c0 += d0[idx] * C0_row[0];
@@ -195,56 +195,73 @@ std::vector<Poly> BVCryptoContextImpl::PowersOfBase(const Poly& input) const {
 }
 
 std::vector<Poly> BVCryptoContextImpl::Decompose(const Poly& input) const {
-    const Poly coef = CloneToCoefficient(input);
-
-    const size_t num_towers = coef.GetNumOfElements();
-    const size_t ring_dim = coef.GetRingDimension();
-    
-    const uint64_t B      = 1ULL << m_logB;
-    const uint64_t mask   = B - 1;
+    const Poly coefs = CloneToCoefficient(input);
+    const size_t k = coefs.GetNumOfElements();
+    const size_t ring_dim = coefs.GetRingDimension();
+    const uint64_t B = 1ULL << m_logB;
+    const uint64_t mask = B - 1;
     const uint64_t offset = m_logB - 1;
 
-    // The entire point of the optimization: we only need \ell DCRT polynomials
-    std::vector<Poly> result(m_ell, Poly(coef.GetParams(), Format::COEFFICIENT, true));
+    // The output is k * \ell fully broadcasted Polys
+    std::vector<Poly> result(k * m_ell, Poly(coefs.GetParams(), Format::COEFFICIENT, true));
 
-    // 2. Decompose independently across towers
-    #pragma omp parallel for //
-    for (size_t j = 0; j < num_towers; j++) {
+    #pragma omp parallel for // num_threads(OpenFHEParallelControls.GetThreadLimit(k))
+    for (size_t j = 0; j < k; j++) {
         
-        const auto& limb = coef.GetElementAtIndex(j);
-        const uint64_t q_j = limb.GetModulus().ConvertToInt();
-        
+        const auto& limb = coefs.GetElementAtIndex(j);
         using NativePoly = std::decay_t<decltype(limb)>;
-        std::vector<NativePoly> res_limbs(m_ell, NativePoly(limb.GetParams(), Format::COEFFICIENT, true));
+
+        // Temporary storage to build the broadcasted Polys for this tower's digits
+        std::vector<std::vector<NativePoly>> broadcast_limbs(m_ell);
+        for (size_t i = 0; i < m_ell; i++) {
+            for (size_t t = 0; t < k; t++) {
+                broadcast_limbs[i].emplace_back(coefs.GetElementAtIndex(t).GetParams(), Format::COEFFICIENT, true);
+            }
+        }
 
         for (size_t x = 0; x < ring_dim; x++) {
             uint64_t a_prime = limb[x].ConvertToInt();
             
             for (size_t i = 0; i < m_ell; i++) {
-                uint64_t u     = a_prime & mask;
+                
+                // THE L=1 / LOST CARRY FIX
+                // If this is the final digit, absorb the remainder completely.
+                if (i == m_ell - 1) {
+                    for (size_t t = 0; t < k; t++) {
+                        broadcast_limbs[i][t][x] = a_prime;
+                    }
+                    break;
+                }
+
+                uint64_t u = a_prime & mask;
                 uint64_t carry = u >> offset;
                 
-                uint64_t d = u;
-                if (carry) {
-                    d = q_j - (B - u);
-                }
+                // Extract true signed integer
+                int64_t d_signed = u;
+                if (carry) d_signed -= B;
                 
                 a_prime = (a_prime >> m_logB) + carry;
-                res_limbs[i][x] = d;
+                
+                // BROADCAST to all towers 't'
+                for (size_t t = 0; t < k; t++) {
+                    const uint64_t qt = broadcast_limbs[i][t].GetModulus().ConvertToInt();
+                    // Wrap negative numbers safely modulo qt
+                    uint64_t d_mod_qt = (d_signed < 0) ? (qt - (uint64_t)(-d_signed)) : (uint64_t)d_signed;
+                    broadcast_limbs[i][t][x] = d_mod_qt;
+                }
             }
         }
-
-        // Thread-safely assign the populated limbs back to the specific tower 'j' 
-        // across the \ell resulting Poly objects.
-        // (Since each thread owns a unique 'j', there are no write collisions on SetElementAtIndex)
+        
+        // Assemble the fully broadcasted limbs into the target Poly
         for (size_t i = 0; i < m_ell; i++) {
-            result[i].SetElementAtIndex(j, std::move(res_limbs[i]));
+            Poly poly(coefs.GetParams(), Format::COEFFICIENT, true);
+            for (size_t t = 0; t < k; t++) {
+                poly.SetElementAtIndex(t, std::move(broadcast_limbs[i][t]));
+            }
+            // Switch to Evaluation domain for fast multiplication!
+            poly.SetFormat(Format::EVALUATION);
+            result[j * m_ell + i] = std::move(poly);
         }
-    }
-
-    // 3. Switch back to NTT domain for fast multiplication
-    for (size_t i = 0; i < m_ell; i++) {
-        result[i].SetFormat(Format::EVALUATION);
     }
 
     return result;
