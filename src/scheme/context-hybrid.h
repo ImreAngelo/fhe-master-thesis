@@ -13,9 +13,9 @@ public:
     RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const override;
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const override;
 
-    RGSW EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const;
-    RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const;
-    RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const;
+    RGSW EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const override;
+    RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const override;
+    RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const override;
 
 private:
     /// @brief Scale Q -> QP

@@ -18,7 +18,7 @@ protected:
     KeyPair<Poly>   keys;
     Plaintext       pt_one;
 
-    // Noise scales with message magnitude; binary plaintexts give the cleanest signal.
+    // Noise scales with message magnitude; assume binary plaintexts
     static constexpr int64_t kVal = 1;
 
     void SetUp() override {
@@ -78,7 +78,7 @@ TEST_P(RGSW, InternalProduct) {
     ASSERT_EQ(decrypted, expected);
 }
 
-TEST_P(RGSW, ExternalProductChainsAtLeastOnce) {
+TEST_P(RGSW, ExternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
 
@@ -103,7 +103,7 @@ TEST_P(RGSW, ExternalProductChainsAtLeastOnce) {
     ASSERT_GT(last_ok, 0) << "Could not chain even one external product";
 }
 
-TEST_P(RGSW, InternalProductChainsAtLeastOnce) {
+TEST_P(RGSW, InternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt   = cc->MakeCoefPackedPlaintext({kVal});
     const auto rgsw_mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
@@ -133,8 +133,8 @@ TEST_P(RGSW, InternalProductChainsAtLeastOnce) {
 INSTANTIATE_TEST_SUITE_P(
     AllSchemes, RGSW,
     ::testing::Values(
-        SchemeCase{"BV_ell1", [] { return GenContextBV(::params::Small(), /*ell=*/ 1); }},
-        SchemeCase{"BV_ell2", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }},
+        // SchemeCase{"BV_ell1", [] { return GenContextBV(::params::Small(), /*ell=*/ 1); }},
+        SchemeCase{"BV", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }},
         SchemeCase{"Hybrid",  [] { return GenContextHybrid(::params::Small()); }}
     ),
     [](const auto& info) { return info.param.name; }

@@ -12,8 +12,21 @@ class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
 public:
     /// @brief Encrypt an RGSW ciphertext of message
     virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&, const bool noisy = true) const = 0;
+
+    /// @brief External product
     virtual RLWE EvalExternalProduct(const RLWE&, const RGSW&) const = 0;
+
+    /// @brief Internal product
     virtual RGSW EvalInternalProduct(const RGSW&, const RGSW&) const = 0;
+
+    /// @brief Add two RGSW ciphertexts
+    virtual RGSW EvalAddRGSW(const RGSW&, const RGSW&) const = 0;
+
+    /// @brief Subtract an RGSW ciphertext from another (lhs - rhs)
+    virtual RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const = 0;
+
+    /// @brief Multiply an RGSW ciphertext by a plaintext
+    virtual RGSW EvalMultRGSW(const RGSW&, const Plaintext&) const = 0;
 
 protected:
     explicit IExtendedContext(const Base& cc) : Base(cc) {}

@@ -1,79 +1,105 @@
-// Benchmark RGSW encryption, external product, and internal product.
-//
-// All ops share one CryptoContext + KeyPair built once in SetUp(); only the
-// op itself runs inside the timed loop. To run a subset:
-//   ./bench-rgsw --benchmark_filter=ExternalProduct
-
 #include <benchmark/benchmark.h>
-#include <optional>
-#include "openfhe.h"
-#include "core/context.h"
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "scheme/context.h"
+
+namespace {
 
 using namespace lbcrypto;
 
-namespace {
-    
-class RGSW : public benchmark::Fixture {
-    public:
-    void SetUp(const benchmark::State&) override {
-        if (cc) return;
-            
-        // TODO: Unified set of params cross-project
-        CCParams<CryptoContextBGVRNS> params;
-        params.SetMultiplicativeDepth(1);
-        params.SetPlaintextModulus(1 << 8);
-        params.SetRingDim(1 << 11);
-        params.SetScalingTechnique(FIXEDMANUAL);
-        params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-
-        // Large params (about ~ 8x slower internal products)
-        // params.SetMultiplicativeDepth(1);
-        // params.SetPlaintextModulus(65537);
-        // params.SetRingDim(1 << 14);
-        // params.SetScalingTechnique(FIXEDMANUAL);
-        
-        // Tuneable parameter
-        // params.SetNumLargeDigits(2);
-
-        cc = GenCryptoContext(params);
-        cc->Enable(PKE);
-        cc->Enable(LEVELEDSHE);
-
-        keys = cc->KeyGen();
-        
-        // TODO: Benchmark packed plaintext
-        pt_one   = cc->MakeCoefPackedPlaintext({ 1 });
-        pt_msg   = cc->MakeCoefPackedPlaintext({ 2 });
-        pt_scale = cc->MakeCoefPackedPlaintext({ 3 });
-
-        constexpr uint32_t ell = 2;
-        hps.emplace(cc, ell);
-
-        rlwe_ct = cc->Encrypt(keys.publicKey, pt_one);
-        rgsw_ct = hps->EncryptRGSW(keys.publicKey, pt_msg);
-    }
-
-    CryptoContext<DCRTPoly> cc;
-    std::optional<Core::HPSContext> hps;
-    std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
-    Plaintext                pt_one, pt_msg, pt_scale;
-    Ciphertext<DCRTPoly>     rlwe_ct;
-    KeyPair<DCRTPoly>        keys;
-    size_t ell;
+struct SchemeCase {
+    std::string name;
+    std::function<spar::ExtendedContext()> make;
 };
+
+// TODO: Unified set of params cross-project (share with test/common.h).
+CCParams<CryptoContextBGVRNS> MakeBaseParams() {
+    CCParams<CryptoContextBGVRNS> params;
+    params.SetMultiplicativeDepth(1);
+    params.SetPlaintextModulus(1 << 8);
+    params.SetRingDim(1 << 11);
+    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+    params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
+    params.SetNumLargeDigits(2);
+    return params;
+}
+
+struct Fixture {
+    spar::ExtendedContext             cc;
+    KeyPair<DCRTPoly>                 keys;
+    Plaintext                         pt_msg;
+    Ciphertext<DCRTPoly>              rlwe_ct;
+    std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
+};
+
+Fixture BuildFixture(const SchemeCase& sc) {
+    Fixture f;
+    f.cc = sc.make();
+    f.cc->Enable(PKE);
+    f.cc->Enable(LEVELEDSHE);
+    f.keys    = f.cc->KeyGen();
+    f.pt_msg  = f.cc->MakeCoefPackedPlaintext({2});
+    f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
+    f.rgsw_ct = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
+    return f;
+}
+
+const Fixture& GetFixture(const SchemeCase& sc) {
+    static std::unordered_map<std::string, Fixture> cache;
+    auto it = cache.find(sc.name);
+    if (it == cache.end()) it = cache.emplace(sc.name, BuildFixture(sc)).first;
+    return it->second;
+}
+
+void EncryptBench(benchmark::State& s, const SchemeCase& sc) {
+    const auto& f = GetFixture(sc);
+    for (auto _ : s) {
+        auto c = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
+        benchmark::DoNotOptimize(c);
+    }
+}
+
+void ExternalProductBench(benchmark::State& s, const SchemeCase& sc) {
+    const auto& f = GetFixture(sc);
+    for (auto _ : s) {
+        auto c = f.cc->EvalExternalProduct(f.rlwe_ct, f.rgsw_ct);
+        benchmark::DoNotOptimize(c);
+    }
+}
+
+void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
+    const auto& f = GetFixture(sc);
+    for (auto _ : s) {
+        auto c = f.cc->EvalInternalProduct(f.rgsw_ct, f.rgsw_ct);
+        benchmark::DoNotOptimize(c);
+    }
+}
+
+const std::vector<SchemeCase> kSchemes = {
+    {"BV", [] { return spar::GenContextBV(MakeBaseParams(), /*ell=*/2); }},
+    {"Hybrid",  [] { return spar::GenContextHybrid(MakeBaseParams()); }},
+};
+
+void RegisterAll() {
+    for (const auto& sc : kSchemes) {
+        benchmark::RegisterBenchmark("RGSW/Encrypt/"         + sc.name,
+            [sc](benchmark::State& s) { EncryptBench(s, sc); });
+        benchmark::RegisterBenchmark("RGSW/ExternalProduct/" + sc.name,
+            [sc](benchmark::State& s) { ExternalProductBench(s, sc); });
+        benchmark::RegisterBenchmark("RGSW/InternalProduct/" + sc.name,
+            [sc](benchmark::State& s) { InternalProductBench(s, sc); });
+    }
+}
 
 } // namespace
 
-#define MAKE_BENCHMARK(name, cmd) BENCHMARK_F(RGSW, name)(benchmark::State& s) { \
-    for (auto _ : s) { \
-        auto c = cmd; \
-        benchmark::DoNotOptimize(c); \
-    } \
+int main(int argc, char** argv) {
+    benchmark::Initialize(&argc, argv);
+    RegisterAll();
+    benchmark::RunSpecifiedBenchmarks();
+    benchmark::Shutdown();
+    return 0;
 }
-
-
-MAKE_BENCHMARK(Encrypt, hps->EncryptRGSW(keys.publicKey, pt_msg))
-MAKE_BENCHMARK(ExternalProduct, hps->EvalExternalProduct(rlwe_ct, rgsw_ct))
-MAKE_BENCHMARK(InternalProduct, hps->EvalInternalProduct(rgsw_ct, rgsw_ct))
-
-BENCHMARK_MAIN();
