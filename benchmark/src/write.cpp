@@ -86,10 +86,11 @@ void WriteBench(benchmark::State& s, uint32_t N) {
         }
         s.ResumeTiming();
 
-        for (uint32_t r = 0; r < N; r++) {
-            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vrs[r], N, f.L_mat, f.I_mat, zs[r]);
+        // Per user test - The total runtime is this time * N
+        // for (uint32_t r = 0; r < N; r++) {
+            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
             benchmark::DoNotOptimize(nothw);
-        }
+        // }
     }
 }
 
