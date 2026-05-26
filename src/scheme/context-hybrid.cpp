@@ -4,6 +4,7 @@
 namespace {
 using namespace spar;
 
+/// @brief Get a shared pointer to the RNS parameters
 std::shared_ptr<lbcrypto::CryptoParametersRNS> GetRNSParameters(const lbcrypto::CryptoContextImpl<spar::Poly>& base) {
     return std::dynamic_pointer_cast<lbcrypto::CryptoParametersRNS>(base.GetCryptoParameters());
 }
@@ -48,6 +49,15 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
 
     return qHatModP;
 }
+
+/// @brief Thin wrapper around OpenFHE's ApproxModDown (QP -> Q)
+Poly ApproxModDown(const std::shared_ptr<lbcrypto::CryptoParametersRNS> params, const Poly& input) {
+    return input.ApproxModDown(params->GetElementParams(), params->GetParamsP(), params->GetPInvModq(),
+        params->GetPInvModqPrecon(), params->GetPHatInvModp(),
+        params->GetPHatInvModpPrecon(), params->GetPHatModq(),
+        params->GetModqBarrettMu(), params->GettInvModp(),
+        params->GettInvModpPrecon(), params->GetPlaintextModulus(), params->GettModqPrecon());
+};
 
 } // namespace
 
@@ -103,8 +113,8 @@ RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW
     out1 += (d1 * rgsw[1]->GetElements()[1]);
 
     auto result = rlwe->Clone();
-    result->GetElements()[0] = ApproxModDown(out0);
-    result->GetElements()[1] = ApproxModDown(out1);
+    result->GetElements()[0] = ApproxModDown(m_params, out0);
+    result->GetElements()[1] = ApproxModDown(m_params, out1);
 
     return result;
 }
@@ -118,8 +128,8 @@ RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW&
 
         // FIX: Modulus switch down from QP to Q FIRST!
         // This drops the factor of P that 'lhs' currently encrypts.
-        Poly c0_Q = ApproxModDown(c[0]);
-        Poly c1_Q = ApproxModDown(c[1]);
+        Poly c0_Q = ApproxModDown(m_params, c[0]);
+        Poly c1_Q = ApproxModDown(m_params, c[1]);
 
         c0_Q.SetFormat(Format::EVALUATION);
         c1_Q.SetFormat(Format::EVALUATION);
@@ -153,16 +163,6 @@ RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW&
 // Internals //
 //-----------//
 
-// Approximate mod down QP -> Q
-// TODO: Doesn't need to be member of context
-// NOTE: Might need exact mod down
-Poly ExtendedContextHybridImpl::ApproxModDown(const Poly& input) const {
-    return input.ApproxModDown(m_params->GetElementParams(), m_params->GetParamsP(), m_params->GetPInvModq(),
-        m_params->GetPInvModqPrecon(), m_params->GetPHatInvModp(),
-        m_params->GetPHatInvModpPrecon(), m_params->GetPHatModq(),
-        m_params->GetModqBarrettMu(), m_params->GettInvModp(),
-        m_params->GettInvModpPrecon(), m_params->GetPlaintextModulus(), m_params->GettModqPrecon());
-};
 
 // TODO: Do not pass const, modify directly
 Poly ExtendedContextHybridImpl::Power(const Poly& input) const

@@ -18,9 +18,6 @@ public:
     RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const;
 
 private:
-    /// @brief Thin wrapper around OpenFHE's ApproxModDown (QP -> Q)
-    Poly ApproxModDown(const Poly&) const;
-
     /// @brief Scale Q -> QP
     Poly Power(const Poly&) const;
 
