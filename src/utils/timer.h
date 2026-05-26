@@ -45,5 +45,5 @@ namespace utils {
 #define DEBUG_TIMER(label) utils::Timer CONCAT(t,__COUNTER__)(label)
 #else
 /// Enable timer by defining a DEBUG_TIMING macro
-#define DEBUG_TIMER(label) 
+#define DEBUG_TIMER(label) do {} while(0);
 #endif

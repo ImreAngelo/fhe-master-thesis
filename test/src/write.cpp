@@ -1,96 +1,103 @@
 #include "openfhe.h"
-#include "core/include/context.h"
+#include "scheme/context.h"
 #include "server/write.h"
-#include "utils/logging.h"
+#include "../common.h"
+#include <gtest/gtest.h>
 
-// Map a centered value (-m/2, m/2] back to [0, m).
-#define RECENTER(x, m) ((x) < 0 ? (x) + (m) : (x))
+namespace spar::test {
 
 using namespace lbcrypto;
-using namespace Context;
 
-/**
- * @brief Run sPAR Algorithm 2 (per-bin loops) for each user, then verify
- * the message landed at L_mat[r][0] = r+1 with hasWritten flipped to 1.
- *
- * @tparam K Number of slots per bin
- * @tparam D Number of choices (default = A1, A2, A3)
- * @tparam L Bit-length of the address — N = 2^L users (and bins)
- */
-template <size_t K = 3, uint32_t D = 3, uint32_t L = 1>
-void TestServerWrite(const CCParams<CryptoContextBGVRNS>& params)
-{
-    auto cc = Context::GenExtendedCryptoContext(params);
-    cc->Enable(PKE);
-    cc->Enable(LEVELEDSHE);
+class Server : public ::testing::TestWithParam<uint32_t> {
+protected:
+    static constexpr uint32_t K = 3;
+    static constexpr uint32_t D = 3;
 
-    KeyPair<DCRTPoly> keys = cc->KeyGen();
+    uint32_t N = 0;
 
-    constexpr uint64_t N = (uint64_t(1) << L);
-    // const int64_t t = static_cast<int64_t>(params.GetPlaintextModulus());
+    ExtendedContext   cc;
+    KeyPair<Poly>     keys;
 
-    const auto rgsw_zero = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
-    const auto rgsw_one  = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
-    const auto rlwe_one  = cc->Encrypt(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+    Plaintext zero_pt;
+    Plaintext one_pt;
 
-    std::array<std::array<server::RGSWCiphertext<DCRTPoly>, K>, N> L_mat;
-    std::array<std::array<server::RGSWCiphertext<DCRTPoly>, K>, N> I_mat;
-    for (uint64_t i = 0; i < N; i++) {
-        for (size_t k = 0; k < K; k++) {
-            L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 0 }));
-            I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({ 1 }));
+    ServerMatrix<RGSW, K> L_mat;
+    ServerMatrix<RGSW, K> I_mat;
+
+    void SetUp() override {
+        N = GetParam();
+
+        // cc = GenContextBV(::params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
+        cc = GenContextHybrid(::params::Small());
+        cc->Enable(PKE);
+        cc->Enable(LEVELEDSHE);
+        keys = cc->KeyGen();
+
+        zero_pt = cc->MakeCoefPackedPlaintext({0});
+        one_pt  = cc->MakeCoefPackedPlaintext({1});
+
+        L_mat.resize(N);
+        I_mat.resize(N);
+        for (uint32_t i = 0; i < N; i++) {
+            for (uint32_t k = 0; k < K; k++) {
+                L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
+                I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
+            }
         }
     }
 
-    DEBUG_PRINT("Initial state:");
-    server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
-    server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
+    std::vector<std::vector<RGSW>> MakeZ(uint32_t target) {
+        std::vector<RGSW> hot(N);
+        for (uint32_t i = 0; i < N; i++) {
+            hot[i] = cc->EncryptRGSW(keys.publicKey, (i == target) ? one_pt : zero_pt);
+        }
+        return std::vector<std::vector<RGSW>>(D, hot);
+    }
+};
 
-    for (uint64_t r = 0; r < N; r++) {
-        DEBUG_PRINT("User " << std::to_string(r + 1) << ":");
-        DEBUG_TIMER("User " + std::to_string(r + 1));
+TEST_P(Server, Write) {
+    const auto one      = cc->Encrypt(keys.publicKey, one_pt);
+    const auto expected = cc->MakeCoefPackedPlaintext({0});
 
-        const auto Vr = cc->MakeCoefPackedPlaintext({ static_cast<int64_t>(r + 1) });
+    for (uint32_t r = 0; r < N; r++) {
+        const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
+        const auto z  = MakeZ(r);
 
-        // Loop 1 - Place all at index r (user 0 always writes to slot 1 etc.)
-        const auto z = client::PlaceAtN<DCRTPoly,D,L>(cc, keys.publicKey, r);
+        const auto nothw  = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z);
+        const auto result = cc->EvalExternalProduct(one, nothw);
 
-        // Loop 2
-        const auto hasWritten = server::Write<DCRTPoly,K,D,L>(cc, keys.publicKey, Vr, L_mat, I_mat, z, keys.secretKey, r + 1);
+        Plaintext decrypted;
+        cc->Decrypt(keys.secretKey, result, &decrypted);
+        decrypted->SetLength(1);
 
-        // Output results
-        auto hw = server::Decrypt(cc, keys.secretKey, hasWritten);
-        DEBUG_PRINT("User " << (r + 1) << " hasWritten: " << hw);
-
-        DEBUG_PRINT("");
-        server::debug::PrintMatrix("L", cc, L_mat, keys.secretKey); DEBUG_PRINT("");
-        server::debug::PrintMatrix("I", cc, I_mat, keys.secretKey); DEBUG_PRINT("");
-
-        // Verify hasWritten is correct for this user
-        ASSERT_EQ(hw[0], 1);
+        // Verify user has written
+        ASSERT_EQ(decrypted, expected) << "User " << r;
     }
 
-    // // Final state: L_mat[i][0] == i+1 (and 0 elsewhere), I_mat[i][k] == 0.
-    // for (uint64_t i = 0; i < N; i++) {
-    //     for (size_t k = 0; k < K; k++) {
-    //         auto Lcell = server::Decrypt(cc, keys.secretKey, L_mat[i][k]);
-    //         const int64_t expectedL = (k == 0) ? static_cast<int64_t>(i + 1) : 0;
-    //         auto L_val = RECENTER(Lcell[0], t);
-    //         ASSERT_EQ(L_val, expectedL) << "L[" << i << "][" << k << "]";
+    auto decrypt = [&](const RGSW& ct) {
+        Plaintext pt;
+        cc->Decrypt(keys.secretKey, cc->EvalExternalProduct(one, ct), &pt);
+        pt->SetLength(1);
+        return pt;
+    };
 
-    //         auto Icell = server::Decrypt(cc, keys.secretKey, I_mat[i][k]);
-    //         auto I_val = RECENTER(Icell[0], t);
-    //         ASSERT_EQ(I_val, 0) << "I[" << i << "][" << k << "]";
-    //     }
-    // }
+    // Verify final state
+    for (uint32_t i = 0; i < N; i++) {
+        for (uint32_t k = 0; k < K; k++) {
+            const auto expected_L = cc->MakeCoefPackedPlaintext(
+                {(k == 0) ? static_cast<int64_t>(i + 1) : 0});
+            const auto expected_I = cc->MakeCoefPackedPlaintext({(k == 0) ? 0 : 1});
+
+            EXPECT_EQ(decrypt(L_mat[i][k]), expected_L) << "L[" << i << "][" << k << "]";
+            EXPECT_EQ(decrypt(I_mat[i][k]), expected_I) << "I[" << i << "][" << k << "]";
+        }
+    }
 }
 
-// Main tests
-TEST(ServerWrite, N2)  { TestServerWrite<DCRTPoly, 3, 3, 1>(params::Small<CryptoContextBGVRNS>()); }
-// TEST(ServerWrite, N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
-// TEST(ServerWrite, N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
-// TEST(ServerWrite, N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }
-// TEST(Server, Write_N4)  { server::TestServerWrite<DCRTPoly, 3, 3, 2>(CreateParams(3)); }
-// TEST(Server, Write_N8)  { server::TestServerWrite<DCRTPoly, 3, 3, 3>(CreateParams(3)); }
-// TEST(Server, Write_N16) { server::TestServerWrite<DCRTPoly, 3, 3, 4>(CreateParams(3)); }
-// TEST(Server, Write_N32) { server::TestServerWrite<DCRTPoly, 3, 3, 5>(CreateParams(3)); }
+INSTANTIATE_TEST_SUITE_P(
+    Sizes, Server,
+    ::testing::Values(2u, 4u),
+    [](const auto& info) { return "N" + std::to_string(info.param); }
+);
+
+} // namespace spar::test

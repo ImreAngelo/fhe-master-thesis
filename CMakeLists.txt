@@ -62,10 +62,6 @@ else()
     link_libraries(${OpenFHE_SHARED_LIBRARIES})
 endif()
 
-###
-### Include source files
-include_directories(src)
-
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.
 # "make" / "make all" builds only what is listed here — tests are excluded.
@@ -74,28 +70,31 @@ include_directories(src)
 # add_executable(client src/client/main.cpp)
 # add_executable(server src/server/main.cpp)
 
-# ── Core library ─────────────────────────────────────────────────────────────
-add_library(core_lib STATIC
-    src/core/lib/context.cpp
+# ── Library ──────────────────────────────────────────────────────────────────
+# Single consolidated lib during the refactor. Will be split back into
+# core_lib / server_lib once the include/ + src/ reshuffle settles.
+# CONFIGURE_DEPENDS makes CMake re-glob on rebuild when files are added/removed
+# (slower configure step, but avoids stale builds while files are moving around).
+file(GLOB_RECURSE SERVER_LIB_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
-    # src/core/lib/context-bv.cpp
-    # src/core/lib/gadget-bv.cpp
+add_library(server_lib STATIC ${SERVER_LIB_SOURCES})
+target_include_directories(server_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
 # Timing/logging macros in src/utils/timer.h are gated on DEBUG_TIMING /
 # DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
 # which passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON.
-option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core_lib"  OFF)
-option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core_lib" OFF)
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in server_lib"  OFF)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in server_lib" OFF)
 if(ENABLE_DEBUG_TIMING)
-    target_compile_definitions(core_lib PUBLIC DEBUG_TIMING)
+    target_compile_definitions(server_lib PUBLIC DEBUG_TIMING)
 endif()
 if(ENABLE_DEBUG_LOGGING)
-    target_compile_definitions(core_lib PUBLIC DEBUG_LOGGING)
+    target_compile_definitions(server_lib PUBLIC DEBUG_LOGGING)
 endif()
-
-# ── Server library ───────────────────────────────────────────────────────────
-add_library(server_lib STATIC src/server)
-target_link_libraries(server_lib PUBLIC core_lib)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.
