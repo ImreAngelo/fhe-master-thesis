@@ -2,13 +2,12 @@
 #include "factory.h"
 
 
-namespace spar {
+namespace {
+using namespace spar;
 
 //---------------------//
 // Pre-computed values //
 //---------------------//
-
-namespace {
 
 /// @brief Computes B from ell so that ell digits in base B covers max(q_i)
 uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell) {
@@ -44,19 +43,10 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
     return powers;
 }
 
-} // namespace
-
-ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
-    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
-      m_powers(ComputePowers(cc, m_ell, m_logB))
-    {}
-
 
 //---------//
 // Helpers //
 //---------//
-
-namespace {
     
 bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
     return plaintext->GetEncodingType() == lbcrypto::PlaintextEncodings::COEF_PACKED_ENCODING;
@@ -70,6 +60,14 @@ Poly CloneToCoefficient(const Poly& poly) {
 }
 
 } // namespace
+
+
+namespace spar {
+
+ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
+    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
+      m_powers(ComputePowers(cc, m_ell, m_logB))
+    {}
 
 
 //-----//
@@ -197,7 +195,7 @@ std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
 }
 
 std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
-    const Poly coefs = CloneToCoefficient(input);
+    const Poly coefs = ::CloneToCoefficient(input);
     const size_t k = coefs.GetNumOfElements();
     const size_t ring_dim = coefs.GetRingDimension();
     const uint64_t B = 1ULL << m_logB;
@@ -279,26 +277,3 @@ ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGV
 }
 
 } // namespace spar
-
-// namespace {
-//
-// using CCFactory = lbcrypto::CryptoContextFactory<Poly>;
-//
-// struct ContextRegistrar : protected CCFactory {
-//     static void Register(std::shared_ptr<lbcrypto::CryptoContextImpl<Poly>> cc) {
-//         CCFactory::AddContext(cc);
-//     }
-// };
-//
-// } // namespace
-//
-// BVCryptoContext CryptoContextBV::genCryptoContext(
-//     const lbcrypto::CCParams<CryptoContextBV>& parameters) {
-//     const lbcrypto::CCParams<CryptoContextBGVRNS>& bgvParams = parameters;
-//
-//     auto baseCC = lbcrypto::CryptoContextBGVRNS::genCryptoContext(bgvParams);
-//     auto ctx    = std::make_shared<ExtendedContextBVImpl>(*baseCC, parameters.GetEll());
-//
-//     ContextRegistrar::Register(ctx);
-//     return ctx;
-// }

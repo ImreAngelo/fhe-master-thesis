@@ -134,8 +134,8 @@ INSTANTIATE_TEST_SUITE_P(
     AllSchemes, RGSW,
     ::testing::Values(
         SchemeCase{"BV_ell1", [] { return GenContextBV(::params::Small(), /*ell=*/ 1); }},
-        SchemeCase{"BV_ell2", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }}
-        // SchemeCase{"Hybrid",  [] { return GenContextHybrid(::params::Small()); }}
+        SchemeCase{"BV_ell2", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }},
+        SchemeCase{"Hybrid",  [] { return GenContextHybrid(::params::Small()); }}
     ),
     [](const auto& info) { return info.param.name; }
 );

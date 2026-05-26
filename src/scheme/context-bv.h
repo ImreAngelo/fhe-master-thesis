@@ -32,36 +32,3 @@ private:
 using ExtendedContextBV = std::shared_ptr<ExtendedContextBVImpl>;
 
 } // namespace spar
-
-
-//-------------------------//
-// OpenFHE-Context Factory //
-//-------------------------//
-//
-// namespace spar {
-// /// @brief Tag class consumed by lbcrypto::GenCryptoContext<spar::CryptoContextBV>(params)
-// class CryptoContextBV {
-// public:
-//     using ContextType = BVCryptoContext;
-//
-//     static BVCryptoContext genCryptoContext(const CCParams<CryptoContextBV>& parameters);
-// };
-// } // namespace spar
-//
-// namespace lbcrypto {
-//
-// template <>
-// class CCParams<spar::CryptoContextBV> : public CCParams<CryptoContextBGVRNS> {
-//     uint32_t m_ell = 1;
-//
-// public:
-//     CCParams()                = default;
-//     CCParams(const CCParams&) = default;
-//     CCParams(CCParams&&)      = default;
-//     ~CCParams()               = default;
-//
-//     void SetEll(uint32_t ell) { m_ell = ell; }
-//     uint32_t GetEll() const   { return m_ell; }
-// };
-//
-// } // namespace lbcrypto

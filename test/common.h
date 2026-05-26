@@ -46,7 +46,8 @@ namespace params {
         params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
         
         // Hybrid should be default
-        // params.SetKeySwitchTechnique(lbcrypto::HYBRID); 
+        params.SetKeySwitchTechnique(lbcrypto::HYBRID);
+        params.SetNumLargeDigits(2);
         // params.SetNumLargeDigits(1); // Force |P| ~= |Q|
         
         // Debugging
