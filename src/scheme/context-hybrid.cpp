@@ -68,27 +68,44 @@ ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoConte
   : IExtendedContext(base), m_params(GetRNSParameters(base)), m_qHatModP(ComputeQHatModP(m_params)), m_qHatInv(ComputeQHatInverses(m_params))
 {}
 
-// TODO: Include noise!!
 RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
     const auto paramsQP = m_params->GetParamsQP();
 
-    // Scale by P
+    // mG payload, scaled by P, lives in QP
     Poly mP = Power(pt->GetElement<Poly>());
+
+    // Zero plaintext matching the input's encoding
+    const auto zero = (pt->GetEncodingType() == lbcrypto::COEF_PACKED_ENCODING)
+        ? this->MakeCoefPackedPlaintext({0})
+        : this->MakePackedPlaintext({0});
 
     RGSW rgsw;
     for(size_t i = 0; i < 2; i++) {
-        // TODO: This contains no noise!!! (not secure in production)
         Poly c0(paramsQP, Format::EVALUATION, true);
         Poly c1(paramsQP, Format::EVALUATION, true);
+
+        if (noisy) {
+            // 1. Fresh zero-encryption in basis Q via the standard public key.
+            auto z = this->Encrypt(pk, zero);
+            auto& zElems = z->GetElements();
+            zElems[0].SetFormat(Format::EVALUATION);
+            zElems[1].SetFormat(Format::EVALUATION);
+
+            // 2. Lift Q -> QP by scaling each component by P (Q-limbs hold P*z,
+            //    P-limbs are zero). This matches the P-scaling of mP, so the
+            //    factor of P cancels after ApproxModDown in the external product.
+            c0 = Power(zElems[0]);
+            c1 = Power(zElems[1]);
+        }
 
         // Keep correct CryptoContext without having a ciphertext to clone
         auto ct = std::make_shared<lbcrypto::CiphertextImpl<Poly>>(pk);
         ct->SetEncodingType(pt->GetEncodingType());
-        ct->SetElements({c0, c1});
-        rgsw.push_back(ct);
+        ct->SetElements({std::move(c0), std::move(c1)});
+        rgsw.push_back(std::move(ct));
     }
 
-    // Z + mG = Z + P(m) in hybrid
+    // 3. Z + mG = Z + P(m) in hybrid
     rgsw[0]->GetElements()[0] += mP;
     rgsw[1]->GetElements()[1] += mP;
 
@@ -165,6 +182,7 @@ RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW&
 
 
 // TODO: Do not pass const, modify directly
+// Mod up Q -> QP
 Poly ExtendedContextHybridImpl::Power(const Poly& input) const
 {
     const auto QP = m_params->GetParamsQP();
@@ -195,7 +213,6 @@ Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const
 {
     const auto QP = m_params->GetParamsQP();
 
-    // Coefficient mode required?
     Poly result(QP, Format::COEFFICIENT, true);
     Poly inputCoeff = input;
     inputCoeff.SetFormat(Format::COEFFICIENT);

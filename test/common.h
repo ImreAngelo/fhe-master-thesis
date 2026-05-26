@@ -47,8 +47,7 @@ namespace params {
         
         // Hybrid should be default
         params.SetKeySwitchTechnique(lbcrypto::HYBRID);
-        params.SetNumLargeDigits(2);
-        // params.SetNumLargeDigits(1); // Force |P| ~= |Q|
+        params.SetNumLargeDigits(1); // |P| ~= |Q|
         
         // Debugging
         // params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
@@ -60,7 +59,6 @@ namespace params {
         // From sPAR
         double sigma = std::pow(2.0, -55.0);
         params.SetStandardDeviation(sigma);
-
 
         return params;
     }
