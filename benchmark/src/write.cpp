@@ -26,7 +26,7 @@ CCParams<CryptoContextBGVRNS> MakeBaseParams() {
     params.SetRingDim(1 << 11);
     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
     params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
-    params.SetNumLargeDigits(2);
+    params.SetNumLargeDigits(1);
     params.SetStandardDeviation(std::pow(2.0, -55.0));
     return params;
 }
@@ -75,13 +75,19 @@ void WriteBench(benchmark::State& s, uint32_t N) {
     for (auto _ : s) {
         s.PauseTiming();
         Fixture f = BuildFixture(N);
+
+        std::vector<Plaintext> Vrs;
+        std::vector<std::vector<std::vector<RGSW>>> zs;
+        Vrs.reserve(N);
+        zs.reserve(N);
+        for (uint32_t r = 0; r < N; r++) {
+            Vrs.push_back(f.cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)}));
+            zs.push_back(MakeZ(f, r));
+        }
         s.ResumeTiming();
 
         for (uint32_t r = 0; r < N; r++) {
-            const auto Vr = f.cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
-            const auto z  = MakeZ(f, r);
-
-            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vr, N, f.L_mat, f.I_mat, z);
+            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vrs[r], N, f.L_mat, f.I_mat, zs[r]);
             benchmark::DoNotOptimize(nothw);
         }
     }
