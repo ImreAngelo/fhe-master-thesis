@@ -96,7 +96,7 @@ TEST_P(Server, Write) {
 
 INSTANTIATE_TEST_SUITE_P(
     Sizes, Server,
-    ::testing::Values(2u, 4u),
+    ::testing::Values(2u, 4u, 8u, 16u),
     [](const auto& info) { return "N" + std::to_string(info.param); }
 );
 
