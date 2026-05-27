@@ -1,5 +1,4 @@
 #include "scheme/context.h"
-#include <gtest/gtest.h>
 #include <functional>
 #include <string>
 
@@ -133,8 +132,8 @@ TEST_P(RGSW, InternalProductChains) {
 INSTANTIATE_TEST_SUITE_P(
     AllSchemes, RGSW,
     ::testing::Values(
-        SchemeCase{"BV", [] { return GenContextBV(::params::Small(), /*ell=*/ 2); }},
-        SchemeCase{"Hybrid",  [] { return GenContextHybrid(::params::Small()); }}
+        SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/ 2); }},
+        SchemeCase{"Hybrid",  [] { return GenContextHybrid(params::Small()); }}
     ),
     [](const auto& info) { return info.param.name; }
 );

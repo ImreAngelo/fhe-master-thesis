@@ -35,10 +35,11 @@ function(register_test name)
     add_executable(${name} ${_src})
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
+    # spar_shared provides the shared parameter presets (shared/params.h).
     if(ARG_CUSTOM_MAIN)
-        target_link_libraries(${name} PRIVATE GTest::gtest server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest spar spar_shared)
     else()
-        target_link_libraries(${name} PRIVATE GTest::gtest_main server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest_main spar spar_shared)
     endif()
 
     # Force-include common.h before every translation unit in this target.

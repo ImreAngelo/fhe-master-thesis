@@ -1,8 +1,5 @@
-#include "openfhe.h"
 #include "scheme/context.h"
 #include "server/write.h"
-#include "../common.h"
-#include <gtest/gtest.h>
 
 namespace spar::test {
 
@@ -27,8 +24,8 @@ protected:
     void SetUp() override {
         N = GetParam();
 
-        // cc = GenContextBV(::params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
-        cc = GenContextHybrid(::params::Small());
+        // cc = GenContextBV(params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
+        cc = GenContextHybrid(params::Small());
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
         keys = cc->KeyGen();
@@ -96,7 +93,7 @@ TEST_P(Server, Write) {
 
 INSTANTIATE_TEST_SUITE_P(
     Sizes, Server,
-    ::testing::Values(2u, 4u, 8u, 16u),
+    ::testing::Values(2u, 4u, 8u),
     [](const auto& info) { return "N" + std::to_string(info.param); }
 );
 

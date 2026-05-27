@@ -1,4 +1,4 @@
-#include "openfhe.h"
+#include "scheme/context.h"
 
 using namespace lbcrypto;
 

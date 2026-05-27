@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../scheme/context.h"
-#include "../scheme/types.h"
+#include "scheme/context.h"
+#include "scheme/types.h"
 #include "openfhe.h"
 
 namespace spar::server {

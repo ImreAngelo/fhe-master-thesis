@@ -26,7 +26,7 @@ function(register_benchmark name)
     endif()
 
     add_executable(${name} ${_src})
-    target_link_libraries(${name} PRIVATE benchmark::benchmark server_lib)
+    target_link_libraries(${name} PRIVATE benchmark::benchmark spar spar_shared)
 
     add_custom_target(run-${name}
         COMMAND $<TARGET_FILE:${name}> --benchmark_color=yes
