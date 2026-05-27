@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/context.h"
+#include "params.h"
 
 namespace {
 
@@ -14,18 +15,6 @@ struct SchemeCase {
     std::string name;
     std::function<core::ExtendedContext()> make;
 };
-
-// TODO: Unified set of params cross-project (share with test/common.h).
-CCParams<CryptoContextBGVRNS> MakeBaseParams() {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 11);
-    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-    params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
-    params.SetNumLargeDigits(2);
-    return params;
-}
 
 struct Fixture {
     core::ExtendedContext             cc;
@@ -79,8 +68,8 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
 }
 
 const std::vector<SchemeCase> kSchemes = {
-    {"BV", [] { return core::GenContextBV(MakeBaseParams(), /*ell=*/2); }},
-    {"Hybrid",  [] { return core::GenContextHybrid(MakeBaseParams()); }},
+    {"BV", [] { return core::GenContextBV(spar::params::Small(), /*ell=*/2); }},
+    {"Hybrid",  [] { return core::GenContextHybrid(spar::params::Small()); }},
 };
 
 void RegisterAll() {

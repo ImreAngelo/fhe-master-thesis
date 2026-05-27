@@ -6,6 +6,7 @@
 
 #include "core/context.h"
 #include "server/write.h"
+#include "params.h"
 
 namespace {
 
@@ -19,17 +20,17 @@ using spar::server::Matrix;
 constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
 
-CCParams<CryptoContextBGVRNS> MakeBaseParams() {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 11);
-    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-    params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
-    params.SetNumLargeDigits(1);
-    params.SetStandardDeviation(std::pow(2.0, -55.0));
-    return params;
-}
+// CCParams<CryptoContextBGVRNS> MakeBaseParams() {
+//     CCParams<CryptoContextBGVRNS> params;
+//     params.SetMultiplicativeDepth(1);
+//     params.SetPlaintextModulus(1 << 8);
+//     params.SetRingDim(1 << 11);
+//     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+//     params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
+//     params.SetNumLargeDigits(1);
+//     params.SetStandardDeviation(std::pow(2.0, -55.0));
+//     return params;
+// }
 
 struct Fixture {
     uint32_t                N = 0;
@@ -44,7 +45,7 @@ struct Fixture {
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N  = N;
-    f.cc = core::GenContextHybrid(MakeBaseParams());
+    f.cc = core::GenContextHybrid(spar::params::Small());
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
@@ -88,7 +89,7 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 
         // Per user test - The total runtime is this time * N
         // for (uint32_t r = 0; r < N; r++) {
-            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
+            auto nothw = spar::server::Write<3, 3>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
             benchmark::DoNotOptimize(nothw);
         // }
     }
