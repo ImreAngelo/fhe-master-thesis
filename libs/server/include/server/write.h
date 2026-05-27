@@ -5,7 +5,9 @@
 #include "openfhe.h"
 
 namespace spar::server {
-using namespace core;
+
+template<uint32_t K = 3>
+using Matrix = std::vector<std::array<core::RGSW, K>>;
 
 /// @brief Second loop of algorithm 2
 /// 
@@ -19,14 +21,14 @@ using namespace core;
 ///
 /// @return 
 template<uint32_t K = 3, uint32_t D = 3>
-RGSW Write(
-    const ExtendedContext& cc, 
-    const PublicKey& pk,
-    const Plaintext& Vr,
+core::RGSW Write(
+    const core::ExtendedContext& cc,
+    const core::PublicKey& pk,
+    const core::Plaintext& Vr,
     const uint32_t n,
-    ServerMatrix<RGSW, K>& L,
-    ServerMatrix<RGSW, K>& I,
-    const std::vector<std::vector<RGSW>>& z
+    Matrix<K>& L,
+    Matrix<K>& I,
+    const std::vector<std::vector<core::RGSW>>& z
     // Debugging
     // const PrivateKey& debug_sk
 );

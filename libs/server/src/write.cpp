@@ -6,8 +6,7 @@ using namespace core;
 
 template <uint32_t K, uint32_t D>
 RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const Plaintext& Vr, const uint32_t n,
-                            ServerMatrix<RGSW, K>& L, ServerMatrix<RGSW, K>& I,
-                            const std::vector<std::vector<RGSW>>& z)
+                            Matrix<K>& L, Matrix<K>& I, const std::vector<std::vector<RGSW>>& z)
 {
     if(L.size() != n || I.size() != n) { throw std::logic_error("Incorrect state dimensions"); }
     if(z.size() != D) { throw std::logic_error("Incorrect number of choice vectors"); }
@@ -55,7 +54,6 @@ RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const Plaintext& Vr, 
 // We always use K = D = 3
 // TODO: Make compilation variable and use across project
 template RGSW Write<3, 3>(const ExtendedContext&, const PublicKey&, const Plaintext&, const uint32_t,
-                          ServerMatrix<RGSW, 3>&, ServerMatrix<RGSW, 3>&,
-                          const std::vector<std::vector<RGSW>>&);
+                          Matrix<3>&, Matrix<3>&, const std::vector<std::vector<RGSW>>&);
 
 } // namespace spar::server

@@ -18,8 +18,8 @@ protected:
     Plaintext zero_pt;
     Plaintext one_pt;
 
-    ServerMatrix<RGSW, K> L_mat;
-    ServerMatrix<RGSW, K> I_mat;
+    server::Matrix<K> L_mat;
+    server::Matrix<K> I_mat;
 
     void SetUp() override {
         N = GetParam();

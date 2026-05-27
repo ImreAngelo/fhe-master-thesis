@@ -15,9 +15,6 @@ using Plaintext = lbcrypto::Plaintext;
 using RLWE = lbcrypto::Ciphertext<Poly>;
 using RGSW = std::vector<RLWE>;
 
-template<typename T = RGSW, uint32_t K = 3>
-using ServerMatrix = std::vector<std::array<T, K>>;
-
 using BigInteger = lbcrypto::BigInteger;
 using NativeInteger = lbcrypto::NativeInteger;
 using NativeVector = std::vector<NativeInteger>;
