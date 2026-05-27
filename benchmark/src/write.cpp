@@ -14,7 +14,7 @@ using core::ExtendedContext;
 using core::Plaintext;
 using core::PublicKey;
 using core::RGSW;
-using core::ServerMatrix;
+using spar::server::Matrix;
 
 constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
@@ -37,8 +37,8 @@ struct Fixture {
     KeyPair<DCRTPoly>     keys;
     Plaintext               zero_pt;
     Plaintext               one_pt;
-    ServerMatrix<RGSW, K>   L_mat;
-    ServerMatrix<RGSW, K>   I_mat;
+    Matrix<K>   L_mat;
+    Matrix<K>   I_mat;
 };
 
 Fixture BuildFixture(uint32_t N) {
