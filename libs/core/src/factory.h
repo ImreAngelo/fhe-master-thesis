@@ -2,7 +2,7 @@
 #include "openfhe.h"
 
 /// @brief Factory for constructing and registering ExtendedContext instances similar to creating OpenFHE CryptoContexts
-namespace spar::factory {
+namespace core::factory {
 
 // CryptoContextFactory::AddContext is protected to push users through GenCryptoContext(). 
 // For our extended impls we construct the context ourselves, so we need direct access.
@@ -13,4 +13,4 @@ struct FactoryRegistrar : protected lbcrypto::CryptoContextFactory<Element> {
     }
 };
 
-} // namespace spar::factory
+} // namespace core::factory

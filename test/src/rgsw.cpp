@@ -1,4 +1,4 @@
-#include "scheme/context.h"
+#include "core/context.h"
 #include <functional>
 #include <string>
 
@@ -11,10 +11,10 @@ struct SchemeCase {
     std::function<ExtendedContext()> make;
 };
 
-class RGSW : public ::testing::TestWithParam<SchemeCase> {
+class RgswTest : public ::testing::TestWithParam<SchemeCase> {
 protected:
     ExtendedContext cc;
-    KeyPair<Poly>   keys;
+    KeyPair<DCRTPoly>   keys;
     Plaintext       pt_one;
 
     // Noise scales with message magnitude; assume binary plaintexts
@@ -39,13 +39,13 @@ protected:
     }
 };
 
-TEST_P(RGSW, Encrypt) {
+TEST_P(RgswTest, Encrypt) {
     DEBUG_TIMER("Encrypt");
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
     (void)rgsw;
 }
 
-TEST_P(RGSW, ExternalProduct) {
+TEST_P(RgswTest, ExternalProduct) {
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
     const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);
 
@@ -60,7 +60,7 @@ TEST_P(RGSW, ExternalProduct) {
     ASSERT_EQ(decrypted, expected);
 }
 
-TEST_P(RGSW, InternalProduct) {
+TEST_P(RgswTest, InternalProduct) {
     DEBUG_TIMER("Internal Product");
 
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
@@ -77,7 +77,7 @@ TEST_P(RGSW, InternalProduct) {
     ASSERT_EQ(decrypted, expected);
 }
 
-TEST_P(RGSW, ExternalProductChains) {
+TEST_P(RgswTest, ExternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
 
@@ -102,7 +102,7 @@ TEST_P(RGSW, ExternalProductChains) {
     ASSERT_GT(last_ok, 0) << "Could not chain even one external product";
 }
 
-TEST_P(RGSW, InternalProductChains) {
+TEST_P(RgswTest, InternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt   = cc->MakeCoefPackedPlaintext({kVal});
     const auto rgsw_mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
@@ -130,7 +130,7 @@ TEST_P(RGSW, InternalProductChains) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    AllSchemes, RGSW,
+    AllSchemes, RgswTest,
     ::testing::Values(
         SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/ 2); }},
         SchemeCase{"Hybrid",  [] { return GenContextHybrid(params::Small()); }}

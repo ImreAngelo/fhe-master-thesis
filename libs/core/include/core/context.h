@@ -4,7 +4,7 @@
 #include "types.h"
 
 
-namespace spar {
+namespace core {
 
 class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     using Base = lbcrypto::CryptoContextImpl<Poly>;
@@ -42,4 +42,4 @@ using ExtendedContext = std::shared_ptr<IExtendedContext>;
 ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>&, const uint32_t ell = 1);
 ExtendedContext GenContextHybrid(const lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>&);
 
-}  // namespace spar
+}  // namespace core

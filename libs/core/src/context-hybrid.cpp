@@ -2,10 +2,10 @@
 #include "factory.h"
 
 namespace {
-using namespace spar;
+using namespace core;
 
 /// @brief Get a shared pointer to the RNS parameters
-std::shared_ptr<lbcrypto::CryptoParametersRNS> GetRNSParameters(const lbcrypto::CryptoContextImpl<spar::Poly>& base) {
+std::shared_ptr<lbcrypto::CryptoParametersRNS> GetRNSParameters(const lbcrypto::CryptoContextImpl<core::Poly>& base) {
     return std::dynamic_pointer_cast<lbcrypto::CryptoParametersRNS>(base.GetCryptoParameters());
 }
 
@@ -62,7 +62,7 @@ Poly ApproxModDown(const std::shared_ptr<lbcrypto::CryptoParametersRNS> params, 
 } // namespace
 
 
-namespace spar {
+namespace core {
 
 ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoContextImpl<Poly>& base)
   : IExtendedContext(base), m_params(GetRNSParameters(base)), m_qHatModP(ComputeQHatModP(m_params)), m_qHatInv(ComputeQHatInverses(m_params))
@@ -362,4 +362,4 @@ ExtendedContext GenContextHybrid(const lbcrypto::CCParams<lbcrypto::CryptoContex
     return ext;
 }
 
-} // namespace spar
+} // namespace core

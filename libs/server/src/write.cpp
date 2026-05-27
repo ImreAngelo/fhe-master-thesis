@@ -1,7 +1,8 @@
 #include "server/write.h"
-#include "utils/logging.h"
+#include "core/utils/logging.h"
 
 namespace spar::server {
+using namespace core;
 
 template <uint32_t K, uint32_t D>
 RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const Plaintext& Vr, const uint32_t n,

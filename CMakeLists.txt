@@ -69,38 +69,54 @@ endif()
 # add_executable(simulate apps/simulate.cpp)
 # add_executable(server   apps/server.cpp)
 
-# ── spar library ─────────────────────────────────────────────────────────────
-# Everything under spar/ is the library: public headers in spar/include/,
-# private headers and impls in spar/src/.
-# CONFIGURE_DEPENDS makes CMake re-glob on rebuild when files are added/removed
-# (slower configure step, but avoids stale builds during the reshuffle).
-file(GLOB_RECURSE SPAR_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/spar/src/*.cpp"
+# ── core library: RGSW extension to OpenFHE (the scheme) ─────────────────────
+# Reusable building block; not tied to the sPAR protocol. Public headers under
+# libs/core/include/core/, private impl under libs/core/src/.
+# CONFIGURE_DEPENDS re-globs on rebuild when files are added/removed.
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/core/src/*.cpp"
 )
-add_library(spar STATIC ${SPAR_SOURCES})
-target_include_directories(spar
-    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/spar/include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/spar/src
+add_library(core STATIC ${CORE_SOURCES})
+target_include_directories(core
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/core/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/core/src
 )
 
-# Timing/logging macros in spar/include/utils/ are gated on DEBUG_TIMING /
-# DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
+# Timing/logging macros in libs/core/include/core/utils/ are gated on DEBUG_TIMING
+# / DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
 # which passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON.
-option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in spar"  OFF)
-option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in spar"  OFF)
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core"  OFF)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core"  OFF)
 if(ENABLE_DEBUG_TIMING)
-    target_compile_definitions(spar PUBLIC DEBUG_TIMING)
+    target_compile_definitions(core PUBLIC DEBUG_TIMING)
 endif()
 if(ENABLE_DEBUG_LOGGING)
-    target_compile_definitions(spar PUBLIC DEBUG_LOGGING)
+    target_compile_definitions(core PUBLIC DEBUG_LOGGING)
 endif()
+
+# ── spar_client library: client-side protocol ────────────────────────────────
+# Header-only for now (no .cpp yet). Becomes STATIC when implementations land.
+add_library(spar_client INTERFACE)
+target_include_directories(spar_client INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/include)
+target_link_libraries(spar_client INTERFACE core)
+
+# ── spar_server library: server-side protocol ────────────────────────────────
+file(GLOB_RECURSE SPAR_SERVER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/server/src/*.cpp"
+)
+add_library(spar_server STATIC ${SPAR_SERVER_SOURCES})
+target_include_directories(spar_server
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/server/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/server/src
+)
+target_link_libraries(spar_server PUBLIC core)
 
 # ── Shared test/benchmark fixtures ───────────────────────────────────────────
 # Header-only INTERFACE target. Parameter presets live in shared/params.h and
-# are consumed by both test/ and benchmark/ — never by spar itself.
+# are consumed by both test/ and benchmark/ — never by the libraries themselves.
 add_library(spar_shared INTERFACE)
 target_include_directories(spar_shared INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/shared)
-target_link_libraries(spar_shared INTERFACE spar)
+target_link_libraries(spar_shared INTERFACE core spar_client spar_server)
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.

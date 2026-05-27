@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "scheme/context.h"
+#include "core/context.h"
 
 namespace {
 
@@ -12,7 +12,7 @@ using namespace lbcrypto;
 
 struct SchemeCase {
     std::string name;
-    std::function<spar::ExtendedContext()> make;
+    std::function<core::ExtendedContext()> make;
 };
 
 // TODO: Unified set of params cross-project (share with test/common.h).
@@ -28,7 +28,7 @@ CCParams<CryptoContextBGVRNS> MakeBaseParams() {
 }
 
 struct Fixture {
-    spar::ExtendedContext             cc;
+    core::ExtendedContext             cc;
     KeyPair<DCRTPoly>                 keys;
     Plaintext                         pt_msg;
     Ciphertext<DCRTPoly>              rlwe_ct;
@@ -79,8 +79,8 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
 }
 
 const std::vector<SchemeCase> kSchemes = {
-    {"BV", [] { return spar::GenContextBV(MakeBaseParams(), /*ell=*/2); }},
-    {"Hybrid",  [] { return spar::GenContextHybrid(MakeBaseParams()); }},
+    {"BV", [] { return core::GenContextBV(MakeBaseParams(), /*ell=*/2); }},
+    {"Hybrid",  [] { return core::GenContextHybrid(MakeBaseParams()); }},
 };
 
 void RegisterAll() {

@@ -6,7 +6,7 @@
 #include <string>
 
 
-namespace utils {
+namespace core::utils {
     using Clock = std::chrono::high_resolution_clock;
     using Ms    = std::chrono::duration<double, std::milli>;
 
@@ -42,7 +42,7 @@ namespace utils {
 #define CONCAT(a, b) a ## b
 #if defined(DEBUG_TIMING)
 /// Macro for creating an RAII timer
-#define DEBUG_TIMER(label) utils::Timer CONCAT(t,__COUNTER__)(label)
+#define DEBUG_TIMER(label) core::utils::Timer CONCAT(t,__COUNTER__)(label)
 #else
 /// Enable timer by defining a DEBUG_TIMING macro
 #define DEBUG_TIMER(label) do {} while(0);

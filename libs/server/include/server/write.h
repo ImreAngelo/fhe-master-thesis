@@ -1,10 +1,11 @@
 #pragma once
 
-#include "scheme/context.h"
-#include "scheme/types.h"
+#include "core/context.h"
+#include "core/types.h"
 #include "openfhe.h"
 
 namespace spar::server {
+using namespace core;
 
 /// @brief Second loop of algorithm 2
 /// 

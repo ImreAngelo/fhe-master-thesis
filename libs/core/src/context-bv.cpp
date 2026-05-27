@@ -3,7 +3,7 @@
 
 
 namespace {
-using namespace spar;
+using namespace core;
 
 //---------------------//
 // Pre-computed values //
@@ -62,7 +62,7 @@ Poly CloneToCoefficient(const Poly& poly) {
 } // namespace
 
 
-namespace spar {
+namespace core {
 
 ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
     : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
@@ -276,4 +276,4 @@ ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGV
     return ext;
 }
 
-} // namespace spar
+} // namespace core

@@ -1,4 +1,4 @@
-#include "scheme/context.h"
+#include "core/context.h"
 
 using namespace lbcrypto;
 
@@ -40,12 +40,12 @@ void OrchestrateRound(uint32_t n) {
         ASSERT_TRUE(u.kpShard.good());
     }
 
-    std::vector<PrivateKey<DCRTPoly>> secretKeys;
-    for (usint i = 0; i < n; i++) {
-        secretKeys.push_back(parties[i].kpShard.secretKey);
-    }
+    // std::vector<PrivateKey<DCRTPoly>> secretKeys;
+    // for (usint i = 0; i < n; i++) {
+    //     secretKeys.push_back(parties[i].kpShard.secretKey);
+    // }
 
-    KeyPair<DCRTPoly> kpMultiparty = cryptoContext->MultipartyKeyGen(secretKeys);
+    // KeyPair<DCRTPoly> kpMultiparty = cryptoContext->MultipartyKeyGen(secretKeys);
 }
 
 TEST(MP, N4) { OrchestrateRound(4); }

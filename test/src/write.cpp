@@ -1,4 +1,4 @@
-#include "scheme/context.h"
+#include "core/context.h"
 #include "server/write.h"
 
 namespace spar::test {
@@ -13,7 +13,7 @@ protected:
     uint32_t N = 0;
 
     ExtendedContext   cc;
-    KeyPair<Poly>     keys;
+    KeyPair<DCRTPoly>     keys;
 
     Plaintext zero_pt;
     Plaintext one_pt;

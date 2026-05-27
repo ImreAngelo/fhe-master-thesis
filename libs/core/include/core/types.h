@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-namespace spar {
+namespace core {
 
 using Poly = lbcrypto::DCRTPoly;
 using NativePoly = lbcrypto::NativePoly;
@@ -28,4 +28,4 @@ template <typename T>
 using CCParams = lbcrypto::CCParams<T>;
 using CryptoContextBGVRNS = lbcrypto::CryptoContextBGVRNS;
 
-} // namespace spar
+} // namespace core

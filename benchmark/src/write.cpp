@@ -4,17 +4,17 @@
 #include <string>
 #include <vector>
 
-#include "scheme/context.h"
+#include "core/context.h"
 #include "server/write.h"
 
 namespace {
 
 using namespace lbcrypto;
-using spar::ExtendedContext;
-using spar::Plaintext;
-using spar::PublicKey;
-using spar::RGSW;
-using spar::ServerMatrix;
+using core::ExtendedContext;
+using core::Plaintext;
+using core::PublicKey;
+using core::RGSW;
+using core::ServerMatrix;
 
 constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
@@ -34,7 +34,7 @@ CCParams<CryptoContextBGVRNS> MakeBaseParams() {
 struct Fixture {
     uint32_t                N = 0;
     ExtendedContext         cc;
-    KeyPair<spar::Poly>     keys;
+    KeyPair<DCRTPoly>     keys;
     Plaintext               zero_pt;
     Plaintext               one_pt;
     ServerMatrix<RGSW, K>   L_mat;
@@ -44,7 +44,7 @@ struct Fixture {
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N  = N;
-    f.cc = spar::GenContextHybrid(MakeBaseParams());
+    f.cc = core::GenContextHybrid(MakeBaseParams());
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();

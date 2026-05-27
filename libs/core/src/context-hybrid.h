@@ -1,9 +1,9 @@
 #pragma once
 
-#include "scheme/context.h"
+#include "core/context.h"
 
 
-namespace spar {
+namespace core {
 
 class ExtendedContextHybridImpl final : public IExtendedContext {
 public:
@@ -32,4 +32,4 @@ private:
 
 using ExtendedContextHybrid = std::shared_ptr<ExtendedContextHybridImpl>;
 
-} // namespace spar
+} // namespace core
