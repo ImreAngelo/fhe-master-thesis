@@ -1,6 +1,6 @@
 #pragma once
+
 #include "openfhe.h"
-#include <array>
 #include <vector>
 
 namespace core {

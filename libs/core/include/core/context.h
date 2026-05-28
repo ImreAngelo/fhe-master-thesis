@@ -1,6 +1,6 @@
 #pragma once
 
-#include "openfhe.h"
+#include "pke/cryptocontext.h"
 #include "types.h"
 
 
@@ -23,7 +23,7 @@ public:
     virtual RGSW EvalAddRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Subtract an RGSW ciphertext from another (lhs - rhs)
-    virtual RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const = 0;
+    virtual RGSW EvalSubRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Multiply an RGSW ciphertext by a plaintext
     virtual RGSW EvalMultRGSW(const RGSW&, const Plaintext&) const = 0;

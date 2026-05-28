@@ -1,15 +1,11 @@
 #pragma once
 
 #include "core/context.h"
-#include "core/types.h"
-#include "openfhe.h"
+#include "types.h"
 
 namespace spar::server {
 
-template<uint32_t K = 3>
-using Matrix = std::vector<std::array<core::RGSW, K>>;
-
-// This is really HomPlacing!
+// Not full write
 
 /// @brief Second loop of algorithm 2
 /// 
