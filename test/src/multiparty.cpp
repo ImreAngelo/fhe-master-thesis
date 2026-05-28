@@ -93,120 +93,141 @@ Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_
 };
 
 
-void OrchestrateRound(const uint32_t bits) {
-    ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
-    const uint32_t n = (1 << bits);
+// Fixture: SetUp() handles everything before the Encryption Phase
+// (crypto context, chained joint pk, server state matrices, identity ct).
+// Each TEST_P below corresponds to one scoped phase from the original flow.
+class Multiparty : public ::testing::TestWithParam<uint32_t> {
+protected:
+    uint32_t bits = 0;
+    uint32_t n    = 0;
+    uint64_t plaintextModulus = 0;
 
-    const auto params = params::Small();
-    const auto cc = GenContextHybrid(params);
+    ExtendedContext cc;
 
-    cc->Enable(lbcrypto::PKE);
-    cc->Enable(lbcrypto::KEYSWITCH);
-    cc->Enable(lbcrypto::LEVELEDSHE);
-    cc->Enable(lbcrypto::ADVANCEDSHE);
-    cc->Enable(lbcrypto::MULTIPARTY);
+    std::vector<Client>       clients;
+    std::vector<PrivateKey>   secrets;  // simulation-only: in practice each sk_i stays with its client
+    PublicKey                 jointPk;
+    server::Matrix<3>         I_mat;
+    server::Matrix<3>         L_mat;
+    RLWE                      identity; // for EvalExternalProduct-based RGSW->RLWE conversion
 
-    // In practice each secret key is only know by the client, but for simulation all clients are the same orchestrator
-    std::vector<PrivateKey> secrets(n);
+    void SetUp() override {
+        bits = GetParam();
+        ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
+        n = (1u << bits);
 
-    // Joint public key generation
-    std::vector<Client> clients(n);
-    clients[0] = {0, cc->KeyGen()};
-    secrets[0] = clients[0].kpShard.secretKey;
+        auto ccParams     = spar::params::Small();
+        plaintextModulus  = ccParams.GetPlaintextModulus();
+        cc                = GenContextHybrid(ccParams);
 
-    for (uint32_t i = 1; i < n; ++i) {
-        clients[i].id = i;
-        clients[i].kpShard = cc->MultipartyKeyGen(clients[i - 1].kpShard.publicKey);
-        secrets[i] = clients[i].kpShard.secretKey;
-    }
+        cc->Enable(lbcrypto::PKE);
+        cc->Enable(lbcrypto::KEYSWITCH);
+        cc->Enable(lbcrypto::LEVELEDSHE);
+        cc->Enable(lbcrypto::ADVANCEDSHE);
+        cc->Enable(lbcrypto::MULTIPARTY);
 
-    for (const auto& c : clients) {
-        ASSERT_TRUE(c.kpShard.good()) << "Client " << c.id << " has invalid key shard";
-    }
-
-    // The joint pk lives on the last link of the chain
-    const auto jointPk = clients[n - 1].kpShard.publicKey;
-    const auto joinTag = jointPk->GetKeyTag();
-
-    // Set up server state
-    auto [I_mat, L_mat] = server::InitializeStateMatrices(cc, jointPk, n);
-
-    // Helper for decryption using EvalExternalProduct
-    const auto one_pt = cc->MakeCoefPackedPlaintext({1});
-    const auto identity = cc->Encrypt(jointPk, one_pt);
-
-    //------------------//
-    // Encryption Phase //
-    //------------------//
-
-    { /* Method suggested in paper, requires HomExpand on server (not implemented yet) */
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> n_dist(0, n-1);
-
-        DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
-
-        for(auto& client : clients) {
-            const auto z0 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-            const auto z1 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-            const auto z2 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-            const auto pt = cc->MakeCoefPackedPlaintext({client.id});
+        // Chained joint pk generation
+        clients.resize(n);
+        secrets.resize(n);
+        clients[0] = {0, cc->KeyGen()};
+        secrets[0] = clients[0].kpShard.secretKey;
+        for (uint32_t i = 1; i < n; ++i) {
+            clients[i].id      = i;
+            clients[i].kpShard = cc->MultipartyKeyGen(clients[i - 1].kpShard.publicKey);
+            secrets[i]         = clients[i].kpShard.secretKey;
         }
+        for (const auto& c : clients) {
+            ASSERT_TRUE(c.kpShard.good()) << "Client " << c.id << " has invalid key shard";
+        }
+
+        jointPk = clients[n - 1].kpShard.publicKey;
+        std::tie(I_mat, L_mat) = server::InitializeStateMatrices(cc, jointPk, n);
+
+        identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
     }
 
-    { /* Higher bandwidth method, does not require HomExpand */
+    // Helpers so later phases can reproduce earlier ones in their own TEST_P.
+    void RunEncryptOneHot() {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> n_dist(0, n-1);
+        std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
+        const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
-        const auto bounds = static_cast<int64_t>(params.GetPlaintextModulus())/2;
-        // std::uniform_int_distribution<int64_t> pt_dist(-bounds, bounds - 1);
-        // DEBUG_PRINT("Bounds: [" << -bounds << ", " << bounds << ")");
-
-        DEBUG_TIMER("Client: Encrypt");
-
-        for(auto& client : clients) {
-            // std::cout << "Client " << (client.id + 1) << ": ";
+        for (auto& client : clients) {
             client.indices = {
                 OneHot(cc, jointPk, n, n_dist(gen)),
                 OneHot(cc, jointPk, n, n_dist(gen)),
                 OneHot(cc, jointPk, n, n_dist(gen))
             };
             client.value = cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
-            // std::cout << std::endl;
         }
     }
 
-    //--------------------//
-    // Server Write Phase //
-    //--------------------//
-
-    {
-        DEBUG_TIMER("Server: Write");
-
-        for(auto& client : clients) {
-            // TODO: rename hasWritten -> failed
-            client.hasWritten = server::Write<3,3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
-
-            // Verify (not)HasWritten = 0
-            Plaintext dec = MPDecryptFull(cc, client.hasWritten, n, jointPk, secrets);
-            ASSERT_EQ(dec->GetCoefPackedValue()[0], 0);
+    void RunServerWrite() {
+        for (auto& client : clients) {
+            client.hasWritten = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
         }
     }
+};
 
+//------------------//
+// Encryption Phase //
+//------------------//
 
-    //--------------------//
-    // Partial Decryption //
-    //--------------------//
+// Method suggested in paper, requires HomExpand on server (not implemented yet)
+TEST_P(Multiparty, EncryptBandwidth) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
+
+    DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
+
+    for (auto& client : clients) {
+        const auto z0 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
+        const auto z1 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
+        const auto z2 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
+        const auto pt = cc->MakeCoefPackedPlaintext({client.id});
+    }
+}
+
+// Higher bandwidth method, does not require HomExpand
+TEST_P(Multiparty, EncryptOneHot) {
+    DEBUG_TIMER("Client: Encrypt");
+    RunEncryptOneHot();
+}
+
+//--------------------//
+// Server Write Phase //
+//--------------------//
+
+TEST_P(Multiparty, ServerWrite) {
+    RunEncryptOneHot();
+
+    DEBUG_TIMER("Server: Write");
+    for (auto& client : clients) {
+        // TODO: rename hasWritten -> failed
+        client.hasWritten = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+
+        // Verify (not)HasWritten = 0
+        Plaintext dec = MPDecryptFull(cc, client.hasWritten, n, jointPk, secrets);
+        ASSERT_EQ(dec->GetCoefPackedValue()[0], 0);
+    }
+}
+
+//------------//
+// Decryption //
+//------------//
+
+TEST_P(Multiparty, Decryption) {
+    RunEncryptOneHot();
+    RunServerWrite();
 
     std::vector<std::vector<RLWE>> partials;
-
     {
         std::vector<RLWE> ciphertexts;
-        ciphertexts.reserve(3*n);
-
-        for(const auto& bucket : L_mat) {
-            for(const auto& rgsw : bucket) {
+        ciphertexts.reserve(3 * n);
+        for (const auto& bucket : L_mat) {
+            for (const auto& rgsw : bucket) {
                 ciphertexts.push_back(cc->EvalExternalProduct(identity, rgsw));
             }
         }
@@ -215,41 +236,28 @@ void OrchestrateRound(const uint32_t bits) {
         partials = MPDecryptPartials(cc, ciphertexts, n, secrets);
     }
 
-    //-------------------//
-    // Server Decryption //
-    //-------------------//
+    DEBUG_TIMER("Server: Final Decryption");
+    auto result = MPDecryptFinal(cc, partials);
 
-    {
-        DEBUG_TIMER("Server: Final Decryption");
-        auto result = MPDecryptFinal(cc, partials);
+    auto numValues = n;
+    for (size_t i = 0; i < result.size(); i++) {
+        const auto val = result[i]->GetCoefPackedValue()[0];
 
-        auto numValues = n;
-        for (size_t i = 0; i < result.size(); i++) {
-            const auto val = result[i]->GetCoefPackedValue()[0];
+        // Assert value is between 1 and n or 0; shows there is no noise when n << t/2
+        ASSERT_GE(val, 0);
+        ASSERT_LE(val, n);
 
-            // Assert value is between 1 and n or 0, should show there is no noise when n << t/2
-            ASSERT_GE(val, 0);
-            ASSERT_LE(val, n);
-
-            if(val != 0) {
-                numValues--;
-            }
-
-            result[i]->SetLength(1);
-            // std::cout << result[i] << " ";
-            // if((i + 1) % 3 == 0) std::cout << "\n";
-        }
-
-        // There are exactly n messages
-        ASSERT_EQ(numValues, 0);
+        if (val != 0) numValues--;
     }
+
+    // Verify there are exactly n messages
+    ASSERT_EQ(numValues, 0);
 }
 
-TEST(MP, N2)   { OrchestrateRound(1); }
-TEST(MP, N4)   { OrchestrateRound(2); }
-TEST(MP, N8)   { OrchestrateRound(3); }
-// TEST(MP, N32)  { OrchestrateRound(5); }
-// TEST(MP, N64)  { OrchestrateRound(6); }
-// TEST(MP, N128) { OrchestrateRound(7); }
+INSTANTIATE_TEST_SUITE_P(
+    Bits, Multiparty,
+    ::testing::Values(1u, 2u),
+    [](const auto& info) { return "N" + std::to_string(1u << info.param); }
+);
 
 } // namespace spar::test
