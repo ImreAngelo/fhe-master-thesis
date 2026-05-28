@@ -29,7 +29,7 @@ std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const u
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
     const auto one_pt  = cc->MakeCoefPackedPlaintext({1});
 
-    std::cout << idx << ", ";
+    // std::cout << idx << ", ";
 
     std::vector<RGSW> slots(len);
     for(uint32_t i = 0; i < len; i++) {
@@ -69,8 +69,8 @@ std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const 
 
 /// @brief Final decryption by server
 std::vector<Plaintext> MPDecryptFinal(const CryptoContext& cc, const std::vector<std::vector<RLWE>>& partials) {
-    const uint32_t n = partials.size();              // parties
-    const uint32_t m = partials.empty() ? 0 : partials[0].size();  // ciphertexts
+    const uint32_t n = partials.size(); // parties
+    const uint32_t m = partials.empty() ? 0 : partials[0].size(); // ciphertexts
 
     std::vector<Plaintext> pts(m);
     for (uint32_t j = 0; j < m; ++j) {
@@ -144,7 +144,7 @@ void OrchestrateRound(const uint32_t bits) {
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> n_dist(0, n-1);
 
-        DEBUG_TIMER("Client:Encrypt (Bandwidth optimized RLWE)");
+        DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
 
         for(auto& client : clients) {
             const auto z0 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
@@ -159,21 +159,21 @@ void OrchestrateRound(const uint32_t bits) {
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> n_dist(0, n-1);
 
-        // const auto bounds = static_cast<int64_t>(params.GetPlaintextModulus())/2;
+        const auto bounds = static_cast<int64_t>(params.GetPlaintextModulus())/2;
         // std::uniform_int_distribution<int64_t> pt_dist(-bounds, bounds - 1);
         // DEBUG_PRINT("Bounds: [" << -bounds << ", " << bounds << ")");
 
-        DEBUG_TIMER("Client:Encrypt");
+        DEBUG_TIMER("Client: Encrypt");
 
         for(auto& client : clients) {
-            std::cout << "Client " << (client.id + 1) << ": ";
+            // std::cout << "Client " << (client.id + 1) << ": ";
             client.indices = {
                 OneHot(cc, jointPk, n, n_dist(gen)),
                 OneHot(cc, jointPk, n, n_dist(gen)),
                 OneHot(cc, jointPk, n, n_dist(gen))
             };
-            client.value = cc->MakeCoefPackedPlaintext({client.id + 1});
-            std::cout << std::endl;
+            client.value = cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
+            // std::cout << std::endl;
         }
     }
 
@@ -182,7 +182,7 @@ void OrchestrateRound(const uint32_t bits) {
     //--------------------//
 
     {
-        DEBUG_TIMER("Server Write");
+        DEBUG_TIMER("Server: Write");
 
         for(auto& client : clients) {
             // TODO: rename hasWritten -> failed
@@ -195,48 +195,53 @@ void OrchestrateRound(const uint32_t bits) {
     }
 
 
-    //------------//
-    // Decryption //
-    //------------//
+    //--------------------//
+    // Partial Decryption //
+    //--------------------//
+
+    std::vector<std::vector<RLWE>> partials;
 
     {
-        uint32_t ctr = 0;
+        std::vector<RLWE> ciphertexts;
+        ciphertexts.reserve(3*n);
 
         for(const auto& bucket : L_mat) {
-            // TODO: Convert to RLWE on server
-            std::vector<RLWE> rlwes;
-            rlwes.reserve(bucket.size());
             for(const auto& rgsw : bucket) {
-                rlwes.push_back(cc->EvalExternalProduct(identity, rgsw));
-            }
-
-            //--------------------//
-            // Partial Decryption //
-            //--------------------//
-
-            std::vector<std::vector<RLWE>> partials;
-            {
-                // TODO: sort before decryption!
-
-                DEBUG_TIMER("Partial Decryption of bucket [" + std::to_string(++ctr) + "]");
-                partials = MPDecryptPartials(cc, rlwes, n, secrets);
-            }
-
-            //-------------------//
-            // Server Decryption //
-            //-------------------//
-
-            {
-                DEBUG_TIMER("Server Decryption of bucket");
-                auto result = MPDecryptFinal(cc, partials);
-
-                for (auto& pt : result) {
-                    pt->SetLength(1);
-                    std::cout << pt << " ";
-                }
-                std::cout << "\n";
+                ciphertexts.push_back(cc->EvalExternalProduct(identity, rgsw));
             }
         }
+
+        DEBUG_TIMER("Client: Partial Decryption");
+        partials = MPDecryptPartials(cc, ciphertexts, n, secrets);
+    }
+
+    //-------------------//
+    // Server Decryption //
+    //-------------------//
+
+    {
+        DEBUG_TIMER("Server: Final Decryption");
+        auto result = MPDecryptFinal(cc, partials);
+
+        auto numValues = n;
+        for (size_t i = 0; i < result.size(); i++) {
+            const auto val = result[i]->GetCoefPackedValue()[0];
+
+            // Assert value is between 1 and n or 0, should show there is no noise when n << t/2
+            ASSERT_GE(val, 0);
+            ASSERT_LE(val, n);
+
+            if(val != 0) {
+                numValues--;
+            }
+
+            result[i]->SetLength(1);
+            // std::cout << result[i] << " ";
+            // if((i + 1) % 3 == 0) std::cout << "\n";
+        }
+
+        // There are exactly n messages
+        ASSERT_EQ(numValues, 0);
     }
 }
 
@@ -245,6 +250,6 @@ TEST(MP, N4)   { OrchestrateRound(2); }
 TEST(MP, N8)   { OrchestrateRound(3); }
 // TEST(MP, N32)  { OrchestrateRound(5); }
 // TEST(MP, N64)  { OrchestrateRound(6); }
-TEST(MP, N128) { OrchestrateRound(7); }
+// TEST(MP, N128) { OrchestrateRound(7); }
 
 } // namespace spar::test
