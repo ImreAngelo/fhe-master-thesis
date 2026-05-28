@@ -154,16 +154,17 @@ void FullBench(benchmark::State& s, uint32_t bits) {
         Fixture f = BuildFixture(n);
         s.ResumeTiming();
 
-        // ── Encryption Phase (one-hot, RGSW) ─────────────────────────
         const auto e0 = clock::now();
+
+        // Encryption Phase (one-hot RGSW)
         EncryptOneHot(f);
         const auto e1 = clock::now();
 
-        // ── Server Write Phase ───────────────────────────────────────
+        // Server Write Phase
         ServerWrite(f);
         const auto e2 = clock::now();
 
-        // ── Partial Decryption (clients) ─────────────────────────────
+        // Partial Decryption (clients)
         std::vector<RLWE> cts;
         cts.reserve(K * n);
         for (auto& bucket : f.L_mat) {
@@ -174,7 +175,7 @@ void FullBench(benchmark::State& s, uint32_t bits) {
         auto partials = MPDecryptPartials(f.cc, cts, n, f.secrets);
         const auto e3 = clock::now();
 
-        // ── Final Decryption (server) ────────────────────────────────
+        // Final Decryption (server)
         auto result = MPDecryptFinal(f.cc, partials);
         const auto e4 = clock::now();
 
@@ -186,15 +187,17 @@ void FullBench(benchmark::State& s, uint32_t bits) {
         t_fusion  += ms(e4 - e3).count();
     }
 
+    // Numeric prefix forces execution-order columns under
+    // --benchmark_counters_tabular (which sorts std::map keys alphabetically).
     using benchmark::Counter;
-    s.counters["Encrypt_ms"] = Counter(t_encrypt, Counter::kAvgIterations);
-    s.counters["Write_ms"]   = Counter(t_write,   Counter::kAvgIterations);
-    s.counters["Partial_ms"] = Counter(t_partial, Counter::kAvgIterations);
-    s.counters["Fusion_ms"]  = Counter(t_fusion,  Counter::kAvgIterations);
+    s.counters["1. Encrypt"]        = Counter(t_encrypt, Counter::kAvgIterations);
+    s.counters["2. Write"]          = Counter(t_write,   Counter::kAvgIterations);
+    s.counters["3. Partial Dec."]   = Counter(t_partial, Counter::kAvgIterations);
+    s.counters["4. Final Dec."]     = Counter(t_fusion,  Counter::kAvgIterations);
 }
 
 void RegisterAll() {
-    for (uint32_t bits : {1u, 2u, 3u}) {
+    for (uint32_t bits : {1u, 5u, 6u, 7u}) {
         const uint32_t n = 1u << bits;
         benchmark::RegisterBenchmark(
             "Multiparty/Full/N" + std::to_string(n),
