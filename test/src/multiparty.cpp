@@ -40,19 +40,19 @@ std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const u
 
 /// @brief Client encryption matching bandwidth-optimized scenario from paper
 template<typename T = uint32_t>
-std::vector<RLWE> EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_t l, T idx) {
+RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_t l, T idx) {
     // static_assert(sizeof(T) >= length, "");
     // TODO: Assert idx can be represented by l bits
 
     std::bitset<sizeof(T)> bits;
-    std::vector<RLWE> encrypted(l);
+    std::vector<int64_t> bits_vec(l);
 
     for(uint32_t i = 0; i < l; i++) {
-        const auto bit_pt = cc->MakeCoefPackedPlaintext({ bits[i] });
-        encrypted[i] = cc->Encrypt(pk, bit_pt);
+        bits_vec[i] = bits[i];
     }
 
-    return encrypted;
+    const auto pt = cc->MakeCoefPackedPlaintext(bits_vec);
+    return cc->Encrypt(pk, pt);
 }
 
 /// @brief Partial decryption by all clients

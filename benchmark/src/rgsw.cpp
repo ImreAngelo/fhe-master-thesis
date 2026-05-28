@@ -28,7 +28,7 @@ Fixture BuildFixture(const SchemeCase& sc) {
     Fixture f;
     f.cc = sc.make();
     f.cc->Enable(PKE);
-    f.cc->Enable(LEVELEDSHE);
+    // f.cc->Enable(LEVELEDSHE);
     f.keys    = f.cc->KeyGen();
     f.pt_msg  = f.cc->MakeCoefPackedPlaintext({2});
     f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
