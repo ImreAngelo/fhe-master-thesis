@@ -12,14 +12,11 @@ BUILDDIR ?= $(ROOT)/build
 # is included by `make bench` without touching this Makefile.
 ALL_BENCH_NAMES := $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/benchmark/src/*.cpp))
 
-# Defaults — override per invocation, e.g.
-#   make run BENCH_NAMES=rgsw                 # only one
-#   make run BENCH_FILTER=ExternalProduct
-#   make run BENCH_REPETITIONS=10
+# Defaults
 BENCH_NAMES       ?= $(ALL_BENCH_NAMES)
 BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
-BENCH_REPETITIONS ?= 10
+BENCH_REPETITIONS ?= 1
 
 # TODO: Investigate multi-threaded performance
 BENCH_OMP_THREADS ?= 1

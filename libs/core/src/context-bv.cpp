@@ -203,30 +203,34 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
     const uint64_t offset = m_logB - 1;
 
     // The output is k * \ell fully broadcasted Polys
+    using NativePoly = std::decay_t<decltype(coefs.GetElementAtIndex(0))>;
     std::vector<Poly> result(k * m_ell, Poly(coefs.GetParams(), Format::COEFFICIENT, true));
+
+    // Per-tower moduli are identical for every output Poly (all share coefs' params)
+    std::vector<uint64_t> moduli(k);
+    for (size_t t = 0; t < k; t++) {
+        moduli[t] = coefs.GetElementAtIndex(t).GetModulus().ConvertToInt();
+    }
 
     #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(k))
     for (size_t j = 0; j < k; j++) {
-        
-        const auto& limb = coefs.GetElementAtIndex(j);
-        using NativePoly = std::decay_t<decltype(limb)>;
 
-        // Temporary storage to build the broadcasted Polys for this tower's digits
-        std::vector<std::vector<NativePoly>> broadcast_limbs(m_ell);
+        const auto& limb = coefs.GetElementAtIndex(j);
+
+        // Mutable views into the pre-allocated target limbs for this tower's digits
+        std::vector<std::vector<NativePoly>*> out(m_ell);
         for (size_t i = 0; i < m_ell; i++) {
-            for (size_t t = 0; t < k; t++) {
-                broadcast_limbs[i].emplace_back(coefs.GetElementAtIndex(t).GetParams(), Format::COEFFICIENT, true);
-            }
+            out[i] = &result[j * m_ell + i].GetAllElements();
         }
 
         for (size_t x = 0; x < ring_dim; x++) {
             uint64_t a_prime = limb[x].ConvertToInt();
-            
+
             for (size_t i = 0; i < m_ell; i++) {
                 // If this is the final digit, absorb the remainder completely
                 if (i == m_ell - 1) {
                     for (size_t t = 0; t < k; t++) {
-                        broadcast_limbs[i][t][x] = a_prime;
+                        (*out[i])[t][x] = a_prime;
                     }
                     break;
                 }
@@ -237,27 +241,21 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
                 // Extract true signed integer
                 int64_t d_signed = u;
                 if (carry) d_signed -= B;
-                
+
                 a_prime = (a_prime >> m_logB) + carry;
 
-                // BROADCAST to all towers
+                // Broadcast to all towers
                 for (size_t t = 0; t < k; t++) {
-                    const uint64_t qt = broadcast_limbs[i][t].GetModulus().ConvertToInt();
+                    const uint64_t qt = moduli[t];
                     uint64_t d_mod_qt = (d_signed < 0) ? (qt - (uint64_t)(-d_signed)) : (uint64_t)d_signed;
-                    broadcast_limbs[i][t][x] = d_mod_qt;
+                    (*out[i])[t][x] = d_mod_qt;
                 }
             }
         }
 
-        // Assemble the fully broadcasted limbs into the target Poly
+        // Limbs were written in COEFFICIENT format; convert each result Poly in place
         for (size_t i = 0; i < m_ell; i++) {
-            Poly poly(coefs.GetParams(), Format::COEFFICIENT, true);
-            for (size_t t = 0; t < k; t++) {
-                poly.SetElementAtIndex(t, std::move(broadcast_limbs[i][t]));
-            }
-
-            poly.SetFormat(Format::EVALUATION);
-            result[j * m_ell + i] = std::move(poly);
+            result[j * m_ell + i].SetFormat(Format::EVALUATION);
         }
     }
 
