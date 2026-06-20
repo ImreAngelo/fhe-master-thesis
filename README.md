@@ -84,6 +84,20 @@ make bench
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
 | BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 1                      |
 
+<picture>
+  <!-- <source
+    width="100%"
+    srcset="./docs/img/...avif"
+    media="(prefers-color-scheme: dark)"
+  />
+  <source
+    width="100%"
+    srcset="./docs/img/...avif"
+    media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+  /> -->
+  <img width="100%" src="./docs/img/bench-rgsw.png" alt="RGSW benchmarks"/>
+</picture>
+
 ## TODO
 - [ ] Add/verify support for BFV
 - [ ] Test multi-threaded performance
