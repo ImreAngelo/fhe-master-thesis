@@ -35,10 +35,12 @@ function(register_test name)
     add_executable(${name} ${_src})
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
+    # spar_shared transitively brings in rgsw + spar_client + spar_server, plus
+    # shared/params.h for parameter presets.
     if(ARG_CUSTOM_MAIN)
-        target_link_libraries(${name} PRIVATE GTest::gtest server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest spar_shared)
     else()
-        target_link_libraries(${name} PRIVATE GTest::gtest_main server_lib)
+        target_link_libraries(${name} PRIVATE GTest::gtest_main spar_shared)
     endif()
 
     # Force-include common.h before every translation unit in this target.
@@ -66,6 +68,7 @@ endfunction()
 # register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
 register_test(test-rgsw             SOURCE src/rgsw)
 register_test(test-write            SOURCE src/write)
+register_test(test-multiparty       SOURCE src/multiparty)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)

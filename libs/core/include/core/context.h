@@ -1,15 +1,15 @@
 #pragma once
 
-#include "openfhe.h"
+#include "pke/cryptocontext.h"
 #include "types.h"
 
 
-namespace spar {
+namespace core {
 
 class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     using Base = lbcrypto::CryptoContextImpl<Poly>;
 
-public:
+   public:
     /// @brief Encrypt an RGSW ciphertext of message
     virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&, const bool noisy = true) const = 0;
 
@@ -23,12 +23,12 @@ public:
     virtual RGSW EvalAddRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Subtract an RGSW ciphertext from another (lhs - rhs)
-    virtual RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const = 0;
+    virtual RGSW EvalSubRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Multiply an RGSW ciphertext by a plaintext
     virtual RGSW EvalMultRGSW(const RGSW&, const Plaintext&) const = 0;
 
-protected:
+   protected:
     explicit IExtendedContext(const Base& cc) : Base(cc) {}
 };
 
@@ -42,4 +42,4 @@ using ExtendedContext = std::shared_ptr<IExtendedContext>;
 ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>&, const uint32_t ell = 1);
 ExtendedContext GenContextHybrid(const lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>&);
 
-}  // namespace spar
+}  // namespace core

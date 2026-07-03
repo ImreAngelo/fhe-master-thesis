@@ -3,7 +3,7 @@
 
 
 namespace {
-using namespace spar;
+using namespace core;
 
 //---------------------//
 // Pre-computed values //
@@ -20,26 +20,26 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
     return (max_msb + ell - 1) / ell;
 }
 
-/// @brief Computes B^i mod q_j used in P_q(a)
+/// @brief Computes B^i mod q_j used in the per-limb digit decomposition in P_q(a) for i up to ell
 std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell, const uint64_t logB) {
     const auto& Q = cc.GetCryptoParameters()->GetElementParams()->GetModulus();
     const auto& q = cc.GetCryptoParameters()->GetElementParams()->GetParams();
     const auto k = q.size();
 
     std::vector<NativeInteger> powers(ell * k);
-    
+
     NativeInteger B(uint64_t(1) << logB);
     NativeInteger cnt = 1;
-    
-    for(size_t i = 0; i < ell; i++) {
-        for(size_t j = 0; j < k; j++) {
+
+    for (size_t i = 0; i < ell; i++) {
+        for (size_t j = 0; j < k; j++) {
             const auto qj = q[j]->GetModulus();
-            powers[i + j*ell] = cnt.Mod(qj);
+            powers[i + j * ell] = cnt.Mod(qj);
         }
-        
+
         cnt = cnt.ModMul(B, Q);
     }
-    
+
     return powers;
 }
 
@@ -47,7 +47,7 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
 //---------//
 // Helpers //
 //---------//
-    
+
 bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
     return plaintext->GetEncodingType() == lbcrypto::PlaintextEncodings::COEF_PACKED_ENCODING;
 }
@@ -59,15 +59,13 @@ Poly CloneToCoefficient(const Poly& poly) {
     return clone;
 }
 
-} // namespace
+}  // namespace
 
 
-namespace spar {
+namespace core {
 
 ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
-    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)),
-      m_powers(ComputePowers(cc, m_ell, m_logB))
-    {}
+    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)), m_powers(ComputePowers(cc, m_ell, m_logB)) {}
 
 
 //-----//
@@ -75,10 +73,12 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
 //-----//
 
 RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
+    // clang-format off
     const auto msg = pt->GetElement<Poly>();
     const auto zero = IsCoefPackedPlaintext(pt)
         ? this->MakeCoefPackedPlaintext({0})
         : this->MakePackedPlaintext({0});
+    // clang-format on
 
     std::vector<Poly> digits = PowersOfBase(msg);
 
@@ -90,16 +90,16 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
     // For noiseless mode, encrypt zero once so we can clone its metadata
     RLWE noiseless_template;
-    if(!noisy) {
+    if (!noisy) {
         noiseless_template = this->Encrypt(pk, zero);
     }
 
-    #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(full))
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(full))
     for (size_t row = 0; row < full; row++) {
-        size_t l = row / half;      // 0 for Upper (c_0), 1 for Lower (c_1)
-        size_t rem = row % half;    // The flat index within the current half
-        size_t j = rem / m_ell;     // The target tower [0 to k-1]
-        size_t i = rem % m_ell;     // The base power   [0 to ell-1]
+        size_t l = row / half;    // 0 for Upper (c_0), 1 for Lower (c_1)
+        size_t rem = row % half;  // The flat index within the current half
+        size_t j = rem / m_ell;   // The target tower [0 to k-1]
+        size_t i = rem % m_ell;   // The base power   [0 to ell-1]
 
         RLWE ct;
         if (!noisy) {
@@ -111,7 +111,7 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
             ct = this->Encrypt(pk, zero);
         }
         auto elements = ct->GetElements();
-        
+
         auto target_limb = elements[l].GetElementAtIndex(j);
         target_limb += digits[i].GetElementAtIndex(j);
         elements[l].SetElementAtIndex(j, std::move(target_limb));
@@ -134,12 +134,11 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
     std::vector<Poly> d1 = Decompose(c1);
 
     auto params = c0.GetParams();
-    Poly res_c0(params, Format::EVALUATION, true); 
+    Poly res_c0(params, Format::EVALUATION, true);
     Poly res_c1(params, Format::EVALUATION, true);
 
     // Multiply the k*ell decomposed polynomials against the k*ell RGSW rows
     for (size_t idx = 0; idx < half_size; idx++) {
-
         // --- Upper Half (C_0 interacts strictly with d0) ---
         const auto& C0_row = rgsw[idx]->GetElements();
         res_c0 += d0[idx] * C0_row[0];
@@ -151,15 +150,15 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
         res_c1 += d1[idx] * C1_row[1];
     }
 
-    RLWE result = rlwe->CloneEmpty(); 
-    result->SetElements({ std::move(res_c0), std::move(res_c1) });
-    
+    RLWE result = rlwe->CloneEmpty();
+    result->SetElements({std::move(res_c0), std::move(res_c1)});
+
     return result;
 }
 
 RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
     RGSW result = lhs;
-    for(auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
+    for (auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
     return result;
 }
 
@@ -177,12 +176,12 @@ std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
 
     std::vector<Poly> result(m_ell);
     result[0] = input;
-    
-    #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(m_ell))
-    for(size_t i = 1; i < m_ell; i++) {
+
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(m_ell))
+    for (size_t i = 1; i < m_ell; i++) {
         Poly scaled(input.GetParams(), input.GetFormat(), true);
 
-        for(size_t j = 0; j < n_towers; j++) {
+        for (size_t j = 0; j < n_towers; j++) {
             auto factor = GetPower(i, j);
             auto limb = input.GetElementAtIndex(j).Times(factor);
             scaled.SetElementAtIndex(j, std::move(limb));
@@ -190,7 +189,7 @@ std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
 
         result[i] = std::move(scaled);
     }
-    
+
     return result;
 }
 
@@ -203,30 +202,33 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
     const uint64_t offset = m_logB - 1;
 
     // The output is k * \ell fully broadcasted Polys
+    using NativePoly = std::decay_t<decltype(coefs.GetElementAtIndex(0))>;
     std::vector<Poly> result(k * m_ell, Poly(coefs.GetParams(), Format::COEFFICIENT, true));
 
-    #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(k))
-    for (size_t j = 0; j < k; j++) {
-        
-        const auto& limb = coefs.GetElementAtIndex(j);
-        using NativePoly = std::decay_t<decltype(limb)>;
+    // Per-tower moduli are identical for every output Poly (all share coefs' params)
+    std::vector<uint64_t> moduli(k);
+    for (size_t t = 0; t < k; t++) {
+        moduli[t] = coefs.GetElementAtIndex(t).GetModulus().ConvertToInt();
+    }
 
-        // Temporary storage to build the broadcasted Polys for this tower's digits
-        std::vector<std::vector<NativePoly>> broadcast_limbs(m_ell);
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(k))
+    for (size_t j = 0; j < k; j++) {
+        const auto& limb = coefs.GetElementAtIndex(j);
+
+        // Mutable views into the pre-allocated target limbs for this tower's digits
+        std::vector<std::vector<NativePoly>*> out(m_ell);
         for (size_t i = 0; i < m_ell; i++) {
-            for (size_t t = 0; t < k; t++) {
-                broadcast_limbs[i].emplace_back(coefs.GetElementAtIndex(t).GetParams(), Format::COEFFICIENT, true);
-            }
+            out[i] = &result[j * m_ell + i].GetAllElements();
         }
 
         for (size_t x = 0; x < ring_dim; x++) {
             uint64_t a_prime = limb[x].ConvertToInt();
-            
+
             for (size_t i = 0; i < m_ell; i++) {
                 // If this is the final digit, absorb the remainder completely
                 if (i == m_ell - 1) {
                     for (size_t t = 0; t < k; t++) {
-                        broadcast_limbs[i][t][x] = a_prime;
+                        (*out[i])[t][x] = a_prime;
                     }
                     break;
                 }
@@ -237,27 +239,21 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
                 // Extract true signed integer
                 int64_t d_signed = u;
                 if (carry) d_signed -= B;
-                
+
                 a_prime = (a_prime >> m_logB) + carry;
 
-                // BROADCAST to all towers
+                // Broadcast to all towers
                 for (size_t t = 0; t < k; t++) {
-                    const uint64_t qt = broadcast_limbs[i][t].GetModulus().ConvertToInt();
+                    const uint64_t qt = moduli[t];
                     uint64_t d_mod_qt = (d_signed < 0) ? (qt - (uint64_t)(-d_signed)) : (uint64_t)d_signed;
-                    broadcast_limbs[i][t][x] = d_mod_qt;
+                    (*out[i])[t][x] = d_mod_qt;
                 }
             }
         }
 
-        // Assemble the fully broadcasted limbs into the target Poly
+        // Limbs were written in COEFFICIENT format; convert each result Poly in place
         for (size_t i = 0; i < m_ell; i++) {
-            Poly poly(coefs.GetParams(), Format::COEFFICIENT, true);
-            for (size_t t = 0; t < k; t++) {
-                poly.SetElementAtIndex(t, std::move(broadcast_limbs[i][t]));
-            }
-
-            poly.SetFormat(Format::EVALUATION);
-            result[j * m_ell + i] = std::move(poly);
+            result[j * m_ell + i].SetFormat(Format::EVALUATION);
         }
     }
 
@@ -276,4 +272,4 @@ ExtendedContext GenContextBV(const lbcrypto::CCParams<lbcrypto::CryptoContextBGV
     return ext;
 }
 
-} // namespace spar
+}  // namespace core

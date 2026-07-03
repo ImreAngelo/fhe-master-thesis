@@ -26,7 +26,7 @@ function(register_benchmark name)
     endif()
 
     add_executable(${name} ${_src})
-    target_link_libraries(${name} PRIVATE benchmark::benchmark server_lib)
+    target_link_libraries(${name} PRIVATE benchmark::benchmark spar_shared)
 
     add_custom_target(run-${name}
         COMMAND $<TARGET_FILE:${name}> --benchmark_color=yes
@@ -40,6 +40,7 @@ endfunction()
 # ── Register benchmarks ──────────────────────────────────────────────────────
 register_benchmark(bench-rgsw       SOURCE src/rgsw)
 register_benchmark(bench-write      SOURCE src/write)
+register_benchmark(bench-full       SOURCE src/full)
 
 # ── "make bench-all": build every benchmark binary ───────────────────────────
 get_property(_all_benches GLOBAL PROPERTY ALL_BENCH_TARGETS)

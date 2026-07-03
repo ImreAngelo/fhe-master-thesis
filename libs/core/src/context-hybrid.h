@@ -1,12 +1,12 @@
 #pragma once
 
-#include "scheme/context.h"
+#include "core/context.h"
 
 
-namespace spar {
+namespace core {
 
 class ExtendedContextHybridImpl final : public IExtendedContext {
-public:
+   public:
     explicit ExtendedContextHybridImpl(const lbcrypto::CryptoContextImpl<Poly>& base);
 
     RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy = true) const override;
@@ -17,19 +17,19 @@ public:
     RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const override;
     RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const override;
 
-private:
+   private:
     /// @brief Scale Q -> QP
     Poly Power(const Poly&) const;
 
     /// @brief Decompose QP -> Q
     Poly Decompose(const Poly&) const;
 
-private:
+   private:
     const std::shared_ptr<lbcrypto::CryptoParametersRNS> m_params;
-    const std::vector<std::vector<NativeInteger>> m_qHatModP; // TODO: Flatten
+    const std::vector<std::vector<NativeInteger>> m_qHatModP;  // TODO: Flatten
     const std::vector<NativeInteger> m_qHatInv;
 };
 
 using ExtendedContextHybrid = std::shared_ptr<ExtendedContextHybridImpl>;
 
-} // namespace spar
+}  // namespace core

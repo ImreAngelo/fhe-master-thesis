@@ -1,40 +1,37 @@
-#include "openfhe.h"
-#include "scheme/context.h"
 #include "server/write.h"
-#include "../common.h"
-#include <gtest/gtest.h>
+#include "core/context.h"
 
 namespace spar::test {
 
 using namespace lbcrypto;
 
 class Server : public ::testing::TestWithParam<uint32_t> {
-protected:
+   protected:
     static constexpr uint32_t K = 3;
     static constexpr uint32_t D = 3;
 
     uint32_t N = 0;
 
-    ExtendedContext   cc;
-    KeyPair<Poly>     keys;
+    ExtendedContext cc;
+    KeyPair<DCRTPoly> keys;
 
     Plaintext zero_pt;
     Plaintext one_pt;
 
-    ServerMatrix<RGSW, K> L_mat;
-    ServerMatrix<RGSW, K> I_mat;
+    server::Matrix<K> L_mat;
+    server::Matrix<K> I_mat;
 
     void SetUp() override {
         N = GetParam();
 
-        // cc = GenContextBV(::params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
-        cc = GenContextHybrid(::params::Small());
+        // cc = GenContextBV(params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
+        cc = GenContextHybrid(params::Small());
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
         keys = cc->KeyGen();
 
         zero_pt = cc->MakeCoefPackedPlaintext({0});
-        one_pt  = cc->MakeCoefPackedPlaintext({1});
+        one_pt = cc->MakeCoefPackedPlaintext({1});
 
         L_mat.resize(N);
         I_mat.resize(N);
@@ -56,14 +53,14 @@ protected:
 };
 
 TEST_P(Server, Write) {
-    const auto one      = cc->Encrypt(keys.publicKey, one_pt);
+    const auto one = cc->Encrypt(keys.publicKey, one_pt);
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
     for (uint32_t r = 0; r < N; r++) {
         const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
-        const auto z  = MakeZ(r);
+        const auto z = MakeZ(r);
 
-        const auto nothw  = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z);
+        const auto nothw = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z);
         const auto result = cc->EvalExternalProduct(one, nothw);
 
         Plaintext decrypted;
@@ -84,8 +81,7 @@ TEST_P(Server, Write) {
     // Verify final state
     for (uint32_t i = 0; i < N; i++) {
         for (uint32_t k = 0; k < K; k++) {
-            const auto expected_L = cc->MakeCoefPackedPlaintext(
-                {(k == 0) ? static_cast<int64_t>(i + 1) : 0});
+            const auto expected_L = cc->MakeCoefPackedPlaintext({(k == 0) ? static_cast<int64_t>(i + 1) : 0});
             const auto expected_I = cc->MakeCoefPackedPlaintext({(k == 0) ? 0 : 1});
 
             EXPECT_EQ(decrypt(L_mat[i][k]), expected_L) << "L[" << i << "][" << k << "]";
@@ -94,10 +90,6 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Sizes, Server,
-    ::testing::Values(2u, 4u),
-    [](const auto& info) { return "N" + std::to_string(info.param); }
-);
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u), [](const auto& info) { return "N" + std::to_string(info.param); });
 
-} // namespace spar::test
+}  // namespace spar::test

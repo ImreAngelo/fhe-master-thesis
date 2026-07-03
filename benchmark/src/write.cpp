@@ -1,56 +1,56 @@
+#include "server/write.h"
+#include "core/context.h"
+#include "params.h"
 #include <benchmark/benchmark.h>
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "scheme/context.h"
-#include "server/write.h"
-
 namespace {
 
 using namespace lbcrypto;
-using spar::ExtendedContext;
-using spar::Plaintext;
-using spar::PublicKey;
-using spar::RGSW;
-using spar::ServerMatrix;
+using core::ExtendedContext;
+using core::Plaintext;
+using core::PublicKey;
+using core::RGSW;
+using spar::server::Matrix;
 
 constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
 
-CCParams<CryptoContextBGVRNS> MakeBaseParams() {
-    CCParams<CryptoContextBGVRNS> params;
-    params.SetMultiplicativeDepth(1);
-    params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 11);
-    params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-    params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
-    params.SetNumLargeDigits(1);
-    params.SetStandardDeviation(std::pow(2.0, -55.0));
-    return params;
-}
+// CCParams<CryptoContextBGVRNS> MakeBaseParams() {
+//     CCParams<CryptoContextBGVRNS> params;
+//     params.SetMultiplicativeDepth(1);
+//     params.SetPlaintextModulus(1 << 8);
+//     params.SetRingDim(1 << 11);
+//     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
+//     params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
+//     params.SetNumLargeDigits(1);
+//     params.SetStandardDeviation(std::pow(2.0, -55.0));
+//     return params;
+// }
 
 struct Fixture {
-    uint32_t                N = 0;
-    ExtendedContext         cc;
-    KeyPair<spar::Poly>     keys;
-    Plaintext               zero_pt;
-    Plaintext               one_pt;
-    ServerMatrix<RGSW, K>   L_mat;
-    ServerMatrix<RGSW, K>   I_mat;
+    uint32_t N = 0;
+    ExtendedContext cc;
+    KeyPair<DCRTPoly> keys;
+    Plaintext zero_pt;
+    Plaintext one_pt;
+    Matrix<K> L_mat;
+    Matrix<K> I_mat;
 };
 
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
-    f.N  = N;
-    f.cc = spar::GenContextHybrid(MakeBaseParams());
+    f.N = N;
+    f.cc = core::GenContextHybrid(spar::params::Small());
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
 
     f.zero_pt = f.cc->MakeCoefPackedPlaintext({0});
-    f.one_pt  = f.cc->MakeCoefPackedPlaintext({1});
+    f.one_pt = f.cc->MakeCoefPackedPlaintext({1});
 
     f.L_mat.resize(N);
     f.I_mat.resize(N);
@@ -88,20 +88,19 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 
         // Per user test - The total runtime is this time * N
         // for (uint32_t r = 0; r < N; r++) {
-            auto nothw = spar::server::Write<K, D>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
-            benchmark::DoNotOptimize(nothw);
+        auto nothw = spar::server::Write<3, 3>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
+        benchmark::DoNotOptimize(nothw);
         // }
     }
 }
 
 void RegisterAll() {
-    for (uint32_t N : {2u, 4u, 8u, 16u, 32u}) {
-        benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N),
-            [N](benchmark::State& s) { WriteBench(s, N); });
+    for (uint32_t N : {2u, 32u, 64u, 128u}) {
+        benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     benchmark::Initialize(&argc, argv);
