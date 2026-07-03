@@ -29,7 +29,7 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
     std::vector<NativeInteger> powers(ell * k);
 
     NativeInteger B(uint64_t(1) << logB);
-    NativeInteger cnt = 1;
+    NativeInteger cnt = 1; // current B^i
 
     for (size_t i = 0; i < ell; i++) {
         for (size_t j = 0; j < k; j++) {

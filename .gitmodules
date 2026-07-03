@@ -3,4 +3,4 @@
 	url = https://github.com/openfheorg/openfhe-development
 [submodule "docs/latex"]
 	path = docs/latex
-	url = git@github.com:ImreAngelo/Thesis.git
+	url = https://github.com/ImreAngelo/Thesis.git
