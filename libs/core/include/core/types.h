@@ -25,4 +25,4 @@ template <typename T>
 using CCParams = lbcrypto::CCParams<T>;
 using CryptoContextBGVRNS = lbcrypto::CryptoContextBGVRNS;
 
-} // namespace core
+}  // namespace core

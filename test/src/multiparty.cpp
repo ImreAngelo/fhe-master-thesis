@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
 #include "core/context.h"
 #include "core/types.h"
 #include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
 #include "server/write.h"
+#include <gtest/gtest.h>
 #include <bitset>
 #include <cstdint>
 #include <random>
@@ -27,19 +27,19 @@ struct Client {
 /// @brief Encrypts a one-hot indicator of length `len` with the 1 at position `idx`
 std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
-    const auto one_pt  = cc->MakeCoefPackedPlaintext({1});
+    const auto one_pt = cc->MakeCoefPackedPlaintext({1});
 
     // std::cout << idx << ", ";
 
     std::vector<RGSW> slots(len);
-    for(uint32_t i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         slots[i] = cc->EncryptRGSW(pk, (i == idx) ? one_pt : zero_pt);
     }
     return slots;
 }
 
 /// @brief Client encryption matching bandwidth-optimized scenario from paper
-template<typename T = uint32_t>
+template <typename T = uint32_t>
 RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_t l, T idx) {
     // static_assert(sizeof(T) >= length, "");
     // TODO: Assert idx can be represented by l bits
@@ -47,7 +47,7 @@ RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_
     std::bitset<sizeof(T)> bits;
     std::vector<int64_t> bits_vec(l);
 
-    for(uint32_t i = 0; i < l; i++) {
+    for (uint32_t i = 0; i < l; i++) {
         bits_vec[i] = bits[i];
     }
 
@@ -56,11 +56,12 @@ RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_
 }
 
 /// @brief Partial decryption by all clients
-std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const std::vector<RLWE> &cts, const uint32_t n, const std::vector<PrivateKey>& sks) {
+std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const std::vector<RLWE>& cts, const uint32_t n,
+                                                 const std::vector<PrivateKey>& sks) {
     std::vector<std::vector<RLWE>> partials(n);
 
     partials[0] = cc->MultipartyDecryptLead(cts, sks[0]);
-    for(uint32_t i = 1; i < n; i++) {
+    for (uint32_t i = 1; i < n; i++) {
         partials[i] = cc->MultipartyDecryptMain(cts, sks[i]);
     }
 
@@ -69,22 +70,22 @@ std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const 
 
 /// @brief Final decryption by server
 std::vector<Plaintext> MPDecryptFinal(const CryptoContext& cc, const std::vector<std::vector<RLWE>>& partials) {
-    const uint32_t n = partials.size(); // parties
-    const uint32_t m = partials.empty() ? 0 : partials[0].size(); // ciphertexts
+    const uint32_t n = partials.size();                            // parties
+    const uint32_t m = partials.empty() ? 0 : partials[0].size();  // ciphertexts
 
     std::vector<Plaintext> pts(m);
     for (uint32_t j = 0; j < m; ++j) {
         std::vector<RLWE> shares;
         shares.reserve(n);
-        for (uint32_t i = 0; i < n; ++i)
-            shares.push_back(partials[i][j]);
+        for (uint32_t i = 0; i < n; ++i) shares.push_back(partials[i][j]);
         cc->MultipartyDecryptFusion(shares, &pts[j]);
     }
     return pts;
 }
 
 /// @brief Full decryption of single RGSW (for assertions)
-Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_t n, const PublicKey& jointPk, const std::vector<PrivateKey>& sks) {
+Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_t n, const PublicKey& jointPk,
+                        const std::vector<PrivateKey>& sks) {
     const auto one_pt = cc->MakeCoefPackedPlaintext({1});
     const auto identity = cc->Encrypt(jointPk, one_pt);
     const auto ct_vec = {cc->EvalExternalProduct(identity, ct)};
@@ -97,28 +98,28 @@ Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_
 // (crypto context, chained joint pk, server state matrices, identity ct).
 // Each TEST_P below corresponds to one scoped phase from the original flow.
 class Multiparty : public ::testing::TestWithParam<uint32_t> {
-protected:
+   protected:
     uint32_t bits = 0;
-    uint32_t n    = 0;
+    uint32_t n = 0;
     uint64_t plaintextModulus = 0;
 
     ExtendedContext cc;
 
-    std::vector<Client>       clients;
-    std::vector<PrivateKey>   secrets;  // simulation-only: in practice each sk_i stays with its client
-    PublicKey                 jointPk;
-    server::Matrix<3>         I_mat;
-    server::Matrix<3>         L_mat;
-    RLWE                      identity; // for EvalExternalProduct-based RGSW->RLWE conversion
+    std::vector<Client> clients;
+    std::vector<PrivateKey> secrets;  // simulation-only: in practice each sk_i stays with its client
+    PublicKey jointPk;
+    server::Matrix<3> I_mat;
+    server::Matrix<3> L_mat;
+    RLWE identity;  // for EvalExternalProduct-based RGSW->RLWE conversion
 
     void SetUp() override {
         bits = GetParam();
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams     = spar::params::Small();
-        plaintextModulus  = ccParams.GetPlaintextModulus();
-        cc                = GenContextHybrid(ccParams);
+        auto ccParams = spar::params::Small();
+        plaintextModulus = ccParams.GetPlaintextModulus();
+        cc = GenContextHybrid(ccParams);
 
         cc->Enable(lbcrypto::PKE);
         cc->Enable(lbcrypto::KEYSWITCH);
@@ -132,9 +133,9 @@ protected:
         clients[0] = {0, cc->KeyGen()};
         secrets[0] = clients[0].kpShard.secretKey;
         for (uint32_t i = 1; i < n; ++i) {
-            clients[i].id      = i;
+            clients[i].id = i;
             clients[i].kpShard = cc->MultipartyKeyGen(clients[i - 1].kpShard.publicKey);
-            secrets[i]         = clients[i].kpShard.secretKey;
+            secrets[i] = clients[i].kpShard.secretKey;
         }
         for (const auto& c : clients) {
             ASSERT_TRUE(c.kpShard.good()) << "Client " << c.id << " has invalid key shard";
@@ -154,11 +155,8 @@ protected:
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
         for (auto& client : clients) {
-            client.indices = {
-                OneHot(cc, jointPk, n, n_dist(gen)),
-                OneHot(cc, jointPk, n, n_dist(gen)),
-                OneHot(cc, jointPk, n, n_dist(gen))
-            };
+            client.indices = {OneHot(cc, jointPk, n, n_dist(gen)), OneHot(cc, jointPk, n, n_dist(gen)),
+                              OneHot(cc, jointPk, n, n_dist(gen))};
             client.value = cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
         }
     }
@@ -254,10 +252,7 @@ TEST_P(Multiparty, Decryption) {
     ASSERT_EQ(numValues, 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Bits, Multiparty,
-    ::testing::Values(1u, 2u),
-    [](const auto& info) { return "N" + std::to_string(1u << info.param); }
-);
+INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u),
+                         [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
-} // namespace spar::test
+}  // namespace spar::test

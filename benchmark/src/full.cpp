@@ -1,14 +1,13 @@
+#include "core/context.h"
+#include "params.h"
+#include "server/state.h"
+#include "server/write.h"
 #include <benchmark/benchmark.h>
 #include <chrono>
 #include <cstdint>
 #include <random>
 #include <string>
 #include <vector>
-
-#include "core/context.h"
-#include "server/state.h"
-#include "server/write.h"
-#include "params.h"
 
 namespace {
 
@@ -26,18 +25,17 @@ constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
 
 struct Client {
-    uint32_t                          id;
-    KeyPair<Poly>                     kpShard;
-    std::vector<std::vector<RGSW>>    indices;
-    Plaintext                         value;
-    RGSW                              hasWritten;
+    uint32_t id;
+    KeyPair<Poly> kpShard;
+    std::vector<std::vector<RGSW>> indices;
+    Plaintext value;
+    RGSW hasWritten;
 };
 
 // One-hot indicator of length `len`, with 1 at position `idx`.
-std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk,
-                         uint32_t len, uint32_t idx) {
+std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, uint32_t len, uint32_t idx) {
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
-    const auto one_pt  = cc->MakeCoefPackedPlaintext({1});
+    const auto one_pt = cc->MakeCoefPackedPlaintext({1});
     std::vector<RGSW> slots(len);
     for (uint32_t i = 0; i < len; ++i) {
         slots[i] = cc->EncryptRGSW(pk, (i == idx) ? one_pt : zero_pt);
@@ -45,9 +43,7 @@ std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk,
     return slots;
 }
 
-std::vector<std::vector<RLWE>> MPDecryptPartials(const core::CryptoContext& cc,
-                                                 const std::vector<RLWE>& cts,
-                                                 uint32_t n,
+std::vector<std::vector<RLWE>> MPDecryptPartials(const core::CryptoContext& cc, const std::vector<RLWE>& cts, uint32_t n,
                                                  const std::vector<PrivateKey>& sks) {
     std::vector<std::vector<RLWE>> partials(n);
     partials[0] = cc->MultipartyDecryptLead(cts, sks[0]);
@@ -57,8 +53,7 @@ std::vector<std::vector<RLWE>> MPDecryptPartials(const core::CryptoContext& cc,
     return partials;
 }
 
-std::vector<Plaintext> MPDecryptFinal(const core::CryptoContext& cc,
-                                      const std::vector<std::vector<RLWE>>& partials) {
+std::vector<Plaintext> MPDecryptFinal(const core::CryptoContext& cc, const std::vector<std::vector<RLWE>>& partials) {
     const uint32_t n = partials.size();
     const uint32_t m = partials.empty() ? 0 : partials[0].size();
     std::vector<Plaintext> pts(m);
@@ -72,15 +67,15 @@ std::vector<Plaintext> MPDecryptFinal(const core::CryptoContext& cc,
 }
 
 struct Fixture {
-    uint32_t                n;
-    uint64_t                plaintextModulus;
-    ExtendedContext         cc;
-    std::vector<Client>     clients;
+    uint32_t n;
+    uint64_t plaintextModulus;
+    ExtendedContext cc;
+    std::vector<Client> clients;
     std::vector<PrivateKey> secrets;
-    PublicKey               jointPk;
-    Matrix<K>               I_mat;
-    Matrix<K>               L_mat;
-    RLWE                    identity;
+    PublicKey jointPk;
+    Matrix<K> I_mat;
+    Matrix<K> L_mat;
+    RLWE identity;
 };
 
 // Everything that the unit-test fixture's SetUp() does: context, chained
@@ -89,9 +84,9 @@ Fixture BuildFixture(uint32_t n) {
     Fixture f;
     f.n = n;
 
-    auto ccParams      = spar::params::Small();
+    auto ccParams = spar::params::Small();
     f.plaintextModulus = ccParams.GetPlaintextModulus();
-    f.cc               = core::GenContextHybrid(ccParams);
+    f.cc = core::GenContextHybrid(ccParams);
 
     f.cc->Enable(PKE);
     f.cc->Enable(KEYSWITCH);
@@ -104,9 +99,9 @@ Fixture BuildFixture(uint32_t n) {
     f.clients[0] = {0, f.cc->KeyGen(), {}, {}, {}};
     f.secrets[0] = f.clients[0].kpShard.secretKey;
     for (uint32_t i = 1; i < n; ++i) {
-        f.clients[i].id      = i;
+        f.clients[i].id = i;
         f.clients[i].kpShard = f.cc->MultipartyKeyGen(f.clients[i - 1].kpShard.publicKey);
-        f.secrets[i]         = f.clients[i].kpShard.secretKey;
+        f.secrets[i] = f.clients[i].kpShard.secretKey;
     }
 
     f.jointPk = f.clients[n - 1].kpShard.publicKey;
@@ -123,19 +118,15 @@ void EncryptOneHot(Fixture& f) {
     const auto bounds = static_cast<int64_t>(f.plaintextModulus) / 2;
 
     for (auto& client : f.clients) {
-        client.indices = {
-            OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
-            OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
-            OneHot(f.cc, f.jointPk, f.n, n_dist(gen))
-        };
+        client.indices = {OneHot(f.cc, f.jointPk, f.n, n_dist(gen)), OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
+                          OneHot(f.cc, f.jointPk, f.n, n_dist(gen))};
         client.value = f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
     }
 }
 
 void ServerWrite(Fixture& f) {
     for (auto& client : f.clients) {
-        client.hasWritten = spar::server::Write<K, D>(
-            f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
+        client.hasWritten = spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
     }
 }
 
@@ -145,7 +136,7 @@ void ServerWrite(Fixture& f) {
 void FullBench(benchmark::State& s, uint32_t bits) {
     const uint32_t n = 1u << bits;
     using clock = std::chrono::steady_clock;
-    using ms    = std::chrono::duration<double, std::milli>;
+    using ms = std::chrono::duration<double, std::milli>;
 
     double t_encrypt = 0, t_write = 0, t_partial = 0, t_fusion = 0;
 
@@ -182,31 +173,30 @@ void FullBench(benchmark::State& s, uint32_t bits) {
         benchmark::DoNotOptimize(result);
 
         t_encrypt += ms(e1 - e0).count();
-        t_write   += ms(e2 - e1).count();
+        t_write += ms(e2 - e1).count();
         t_partial += ms(e3 - e2).count();
-        t_fusion  += ms(e4 - e3).count();
+        t_fusion += ms(e4 - e3).count();
     }
 
     // Numeric prefix forces execution-order columns under
     // --benchmark_counters_tabular (which sorts std::map keys alphabetically).
     using benchmark::Counter;
-    s.counters["1. Encrypt"]        = Counter(t_encrypt, Counter::kAvgIterations);
-    s.counters["2. Write"]          = Counter(t_write,   Counter::kAvgIterations);
-    s.counters["3. Partial Dec."]   = Counter(t_partial, Counter::kAvgIterations);
-    s.counters["4. Final Dec."]     = Counter(t_fusion,  Counter::kAvgIterations);
+    s.counters["1. Encrypt"] = Counter(t_encrypt, Counter::kAvgIterations);
+    s.counters["2. Write"] = Counter(t_write, Counter::kAvgIterations);
+    s.counters["3. Partial Dec."] = Counter(t_partial, Counter::kAvgIterations);
+    s.counters["4. Final Dec."] = Counter(t_fusion, Counter::kAvgIterations);
 }
 
 void RegisterAll() {
     for (uint32_t bits : {1u, 5u, 6u, 7u}) {
         const uint32_t n = 1u << bits;
-        benchmark::RegisterBenchmark(
-            "Multiparty/Full/N" + std::to_string(n),
-            [bits](benchmark::State& s) { FullBench(s, bits); })
-            ->Unit(benchmark::kMillisecond);
+        benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits](benchmark::State& s) {
+            FullBench(s, bits);
+        })->Unit(benchmark::kMillisecond);
     }
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     benchmark::Initialize(&argc, argv);

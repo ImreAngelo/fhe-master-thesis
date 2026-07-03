@@ -12,10 +12,10 @@ struct SchemeCase {
 };
 
 class RGSW : public ::testing::TestWithParam<SchemeCase> {
-protected:
+   protected:
     ExtendedContext cc;
-    KeyPair<DCRTPoly>   keys;
-    Plaintext       pt_one;
+    KeyPair<DCRTPoly> keys;
+    Plaintext pt_one;
 
     // Noise scales with message magnitude; assume binary plaintexts
     static constexpr int64_t kVal = 1;
@@ -25,13 +25,11 @@ protected:
         cc->Enable(PKE);
         // cc->Enable(LEVELEDSHE);
 
-        keys   = cc->KeyGen();
+        keys = cc->KeyGen();
         pt_one = cc->MakeCoefPackedPlaintext({kVal});
     }
 
-    int64_t PlaintextModulus() const {
-        return cc->GetCryptoParameters()->GetPlaintextModulus();
-    }
+    int64_t PlaintextModulus() const { return cc->GetCryptoParameters()->GetPlaintextModulus(); }
 
     int64_t FirstCoef(const Plaintext& pt) const {
         const auto& coef = pt->GetCoefPackedValue();
@@ -67,7 +65,7 @@ TEST_P(RGSW, InternalProduct) {
     const auto prod = cc->EvalInternalProduct(rgsw, rgsw);
 
     const auto identity = cc->Encrypt(keys.publicKey, pt_one);
-    const auto result   = cc->EvalExternalProduct(identity, prod);
+    const auto result = cc->EvalExternalProduct(identity, prod);
 
     Plaintext decrypted;
     cc->Decrypt(keys.secretKey, result, &decrypted);
@@ -81,9 +79,9 @@ TEST_P(RGSW, ExternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
 
-    auto current     = cc->Encrypt(keys.publicKey, pt_one);
+    auto current = cc->Encrypt(keys.publicKey, pt_one);
     int64_t expected = 1;
-    int last_ok      = 0;
+    int last_ok = 0;
 
     for (int n = 1; n <= 64; ++n) {
         const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
@@ -104,13 +102,13 @@ TEST_P(RGSW, ExternalProductChains) {
 
 TEST_P(RGSW, InternalProductChains) {
     const int64_t t = PlaintextModulus();
-    const auto mult_pt   = cc->MakeCoefPackedPlaintext({kVal});
+    const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
     const auto rgsw_mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
-    const auto rlwe_one  = cc->Encrypt(keys.publicKey, pt_one);
+    const auto rlwe_one = cc->Encrypt(keys.publicKey, pt_one);
 
-    auto current     = cc->EncryptRGSW(keys.publicKey, pt_one);
+    auto current = cc->EncryptRGSW(keys.publicKey, pt_one);
     int64_t expected = 1;
-    int last_ok      = 0;
+    int last_ok = 0;
 
     for (int n = 1; n <= 64; ++n) {
         current = cc->EvalInternalProduct(rgsw_mult, current);
@@ -129,15 +127,11 @@ TEST_P(RGSW, InternalProductChains) {
     ASSERT_GT(last_ok, 0) << "Could not chain even one internal product";
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Scheme, RGSW,
-    ::testing::Values(
-        SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/ 2); }},
-        SchemeCase{"Hybrid",  [] { return GenContextHybrid(params::Small()); }},
-        SchemeCase{"BV_large", [] { return GenContextBV(params::Large(), /*ell=*/ 2); }},
-        SchemeCase{"Hybrid_large",  [] { return GenContextHybrid(params::Large()); }}
-    ),
-    [](const auto& info) { return info.param.name; }
-);
+INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
+                         ::testing::Values(SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/2); }},
+                                           SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small()); }},
+                                           SchemeCase{"BV_large", [] { return GenContextBV(params::Large(), /*ell=*/2); }},
+                                           SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}),
+                         [](const auto& info) { return info.param.name; });
 
-} // namespace spar::test
+}  // namespace spar::test

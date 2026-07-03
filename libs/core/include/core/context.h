@@ -9,7 +9,7 @@ namespace core {
 class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     using Base = lbcrypto::CryptoContextImpl<Poly>;
 
-public:
+   public:
     /// @brief Encrypt an RGSW ciphertext of message
     virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&, const bool noisy = true) const = 0;
 
@@ -28,7 +28,7 @@ public:
     /// @brief Multiply an RGSW ciphertext by a plaintext
     virtual RGSW EvalMultRGSW(const RGSW&, const Plaintext&) const = 0;
 
-protected:
+   protected:
     explicit IExtendedContext(const Base& cc) : Base(cc) {}
 };
 

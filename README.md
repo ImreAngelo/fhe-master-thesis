@@ -84,15 +84,16 @@ make bench
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
 | BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 1                      |
 
+<!-- TODO: Make smaller and center on page -->
 <picture>
   <!-- <source
     width="100%"
-    srcset="./docs/img/...avif"
+    srcset="./docs/img/..-dark.avif"
     media="(prefers-color-scheme: dark)"
   />
   <source
     width="100%"
-    srcset="./docs/img/...avif"
+    srcset="./docs/img/..-light.avif"
     media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
   /> -->
   <img width="100%" src="./docs/img/bench-rgsw.png" alt="RGSW benchmarks"/>

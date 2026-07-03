@@ -3,5 +3,7 @@
 #define DEBUG_PRINT(text) std::cout << text << std::endl
 #else
 /// Enable printing by defining a DEBUG_LOGGING macro
-#define DEBUG_PRINT(text) do {} while(0);
+#define DEBUG_PRINT(text) \
+    do {                  \
+    } while (0);
 #endif

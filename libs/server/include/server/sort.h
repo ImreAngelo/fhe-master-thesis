@@ -7,4 +7,4 @@ namespace spar::server {
 /// @brief After server::Write, each bucket should be sorted before decryption
 void SortBucket() {};
 
-}
+}  // namespace spar::server

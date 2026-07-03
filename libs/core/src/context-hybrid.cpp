@@ -18,7 +18,7 @@ std::vector<NativeInteger> ComputeQHatInverses(const std::shared_ptr<lbcrypto::C
 
     // Too small to use threads
     // #pragma omp parallel for
-    for(size_t i = 0; i < q.size(); i++) {
+    for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
         BigInteger qHat = Q / BigInteger(qi);
         qHatInv[i] = qHat.ModInverse(qi).ConvertToInt();
@@ -37,11 +37,11 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
 
     // Too small to use threads
     // #pragma omp parallel for
-    for(size_t i = 0; i < q.size(); i++) {
+    for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
         BigInteger qHat = Q / BigInteger(qi);
 
-        for(size_t j = 0; j < p.size(); j++) {
+        for (size_t j = 0; j < p.size(); j++) {
             const auto& pj = p[j]->GetModulus();
             qHatModP[i][j] = qHat.Mod(pj).ConvertToInt();
         }
@@ -52,21 +52,21 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
 
 /// @brief Thin wrapper around OpenFHE's ApproxModDown (QP -> Q)
 Poly ApproxModDown(const std::shared_ptr<lbcrypto::CryptoParametersRNS> params, const Poly& input) {
-    return input.ApproxModDown(params->GetElementParams(), params->GetParamsP(), params->GetPInvModq(),
-        params->GetPInvModqPrecon(), params->GetPHatInvModp(),
-        params->GetPHatInvModpPrecon(), params->GetPHatModq(),
-        params->GetModqBarrettMu(), params->GettInvModp(),
-        params->GettInvModpPrecon(), params->GetPlaintextModulus(), params->GettModqPrecon());
+    return input.ApproxModDown(params->GetElementParams(), params->GetParamsP(), params->GetPInvModq(), params->GetPInvModqPrecon(),
+                               params->GetPHatInvModp(), params->GetPHatInvModpPrecon(), params->GetPHatModq(), params->GetModqBarrettMu(),
+                               params->GettInvModp(), params->GettInvModpPrecon(), params->GetPlaintextModulus(), params->GettModqPrecon());
 };
 
-} // namespace
+}  // namespace
 
 
 namespace core {
 
 ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoContextImpl<Poly>& base)
-  : IExtendedContext(base), m_params(GetRNSParameters(base)), m_qHatModP(ComputeQHatModP(m_params)), m_qHatInv(ComputeQHatInverses(m_params))
-{}
+    : IExtendedContext(base),
+      m_params(GetRNSParameters(base)),
+      m_qHatModP(ComputeQHatModP(m_params)),
+      m_qHatInv(ComputeQHatInverses(m_params)) {}
 
 RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
     const auto paramsQP = m_params->GetParamsQP();
@@ -75,12 +75,11 @@ RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext
     Poly mP = Power(pt->GetElement<Poly>());
 
     // Zero plaintext matching the input's encoding
-    const auto zero = (pt->GetEncodingType() == lbcrypto::COEF_PACKED_ENCODING)
-        ? this->MakeCoefPackedPlaintext({0})
-        : this->MakePackedPlaintext({0});
+    const auto zero =
+        (pt->GetEncodingType() == lbcrypto::COEF_PACKED_ENCODING) ? this->MakeCoefPackedPlaintext({0}) : this->MakePackedPlaintext({0});
 
     RGSW rgsw;
-    for(size_t i = 0; i < 2; i++) {
+    for (size_t i = 0; i < 2; i++) {
         Poly c0(paramsQP, Format::EVALUATION, true);
         Poly c1(paramsQP, Format::EVALUATION, true);
 
@@ -183,8 +182,7 @@ RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW&
 
 // TODO: Do not pass const, modify directly
 // Mod up Q -> QP
-Poly ExtendedContextHybridImpl::Power(const Poly& input) const
-{
+Poly ExtendedContextHybridImpl::Power(const Poly& input) const {
     const auto QP = m_params->GetParamsQP();
     const auto P = m_params->GetParamsP()->GetModulus();
     const auto q = m_params->GetElementParams()->GetParams();
@@ -194,12 +192,12 @@ Poly ExtendedContextHybridImpl::Power(const Poly& input) const
     const auto& inputLimbs = input.GetAllElements();
     auto& mLimbs = m.GetAllElements();
 
-    for(uint32_t k = 0; k < q.size(); k++) {
+    for (uint32_t k = 0; k < q.size(); k++) {
         const auto& qk = q[k]->GetModulus();
         NativeInteger pMod = P.Mod(qk).ConvertToInt();
 
         // Multiply the k-th limb by (P mod qk)
-        for(uint32_t col = 0; col < inputLimbs[k].GetLength(); col++) {
+        for (uint32_t col = 0; col < inputLimbs[k].GetLength(); col++) {
             mLimbs[k][col] = inputLimbs[k][col].ModMul(pMod, qk);
         }
     }
@@ -209,8 +207,7 @@ Poly ExtendedContextHybridImpl::Power(const Poly& input) const
 };
 
 // TODO: Do not pass const, modify directly
-Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const
-{
+Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const {
     const auto QP = m_params->GetParamsQP();
 
     Poly result(QP, Format::COEFFICIENT, true);
@@ -220,30 +217,30 @@ Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const
     const auto& in_limbs = inputCoeff.GetAllElements();
     auto& res_limbs = result.GetAllElements();
 
-    uint32_t numQ =  m_params->GetElementParams()->GetParams().size();
+    uint32_t numQ = m_params->GetElementParams()->GetParams().size();
     uint32_t numP = m_params->GetParamsP()->GetParams().size();
     uint32_t n = m_params->GetElementParams()->GetRingDimension();
 
     // Copy Q-towers (O(L*N)) and pre-scale by qInv (saves cache-accesses)
     std::vector<NativePoly> v(numQ);
-    for(uint32_t i = 0; i < numQ; i++) {
+    for (uint32_t i = 0; i < numQ; i++) {
         res_limbs[i] = in_limbs[i];
         v[i] = in_limbs[i].Times(m_qHatInv[i]);
     }
 
-    // Fast Base Extension (Q -> QP)
-    // TODO: Re-enable multi-threading
-    #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(numP))
-    for(uint32_t j = 0; j < numP; j++) {
+// Fast Base Extension (Q -> QP)
+// TODO: Re-enable multi-threading
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(numP))
+    for (uint32_t j = 0; j < numP; j++) {
         uint32_t target_idx = numQ + j;
         const auto& pj = m_params->GetParamsP()->GetParams()[j]->GetModulus();
         auto& target_poly = res_limbs[target_idx];
 
-        for(uint32_t i = 0; i < numQ; i++) {
+        for (uint32_t i = 0; i < numQ; i++) {
             const auto& qHat = m_qHatModP[i][j];
             const auto& source_poly = v[i];
 
-            for(uint32_t col = 0; col < n; col++) {
+            for (uint32_t col = 0; col < n; col++) {
                 // Fused Multiply-Add: res = (res + source * qHat) mod pj
                 NativeInteger term = source_poly[col].ModMul(qHat, pj);
                 target_poly[col] = target_poly[col].ModAdd(term, pj);
@@ -362,4 +359,4 @@ ExtendedContext GenContextHybrid(const lbcrypto::CCParams<lbcrypto::CryptoContex
     return ext;
 }
 
-} // namespace core
+}  // namespace core

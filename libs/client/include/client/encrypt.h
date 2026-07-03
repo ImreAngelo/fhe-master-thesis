@@ -8,4 +8,4 @@ namespace spar::client {
 
 // };
 
-}
+}  // namespace spar::client

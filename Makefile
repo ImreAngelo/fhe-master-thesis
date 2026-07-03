@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params tune-% latex clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check clean clean-build clean-cmake help
 
 all: build
 
@@ -95,27 +95,23 @@ bench: openfhe
 bench-%: openfhe
 	@$(MAKE) -C benchmark $@ BUILDDIR="$(CURDIR)/$(BUILDDIR)"
 
-#####################
-# Parameter tuning #
-####################
+##############
+# Formatting #
+##############
 
-# Set up a venv with Optuna installed. Always re-checks pip + optuna so this
-# can be re-run whenever requirements change.
-params:
-	@python3 -m venv .venv
-	@.venv/bin/pip install --upgrade pip optuna
-	@touch .venv/.params-stamp
+# All hand-written C++ sources/headers. vendors/ and build/ are excluded by
+# only descending into the project's own source trees.
+CLANG_FORMAT ?= clang-format
+FORMAT_FILES := $(shell find libs benchmark test -type f \( -name '*.cpp' -o -name '*.h' \))
 
-.venv/.params-stamp:
-	@$(MAKE) params
+# Rewrite files in place to match .clang-format.
+format:
+	@echo "Formatting $(words $(FORMAT_FILES)) files..."
+	@$(CLANG_FORMAT) -i $(FORMAT_FILES)
 
-# One-click tuning. Builds the matching test binary, then hands the target
-# name to the search script which decides per-target search space + filter.
-#   make tune-rgsw  →  scripts/parameter-search.py rgsw
-tune-%: openfhe .venv/.params-stamp
-	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target test-$* -j$(shell nproc)
-	@.venv/bin/python scripts/parameter-search.py $*
+# Report files that are not formatted, without modifying them (exit 1 if any).
+format-check:
+	@$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 
 ############
 # Clean-up #
@@ -132,13 +128,6 @@ clean-cmake:
 	@rm -rf $(BUILDDIR)/CMakeCache.txt
 
 ################
-# Latex Thesis #
-################
-
-latex:
-	$(MAKE) -C docs/latex
-
-################
 # Instructions #
 ################
 
@@ -151,6 +140,8 @@ help:
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build a specific benchmark binary"
+	@echo "  format             - Run clang-format -i over libs, benchmark and test"
+	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
 	@echo "  tune-<name>        - Run Optuna against test-<name>"
 	@echo "  clean              - Clean project build artifacts"
