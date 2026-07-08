@@ -13,10 +13,10 @@ class ParamSet:
     """A BGV parameter set (see shared/params.h) as seen by the LWE estimator."""
 
     name: str
-    N: int            # ring dimension -> LWE dimension
-    logQ: int         # bits in the ciphertext modulus Q
-    logP: int = 0     # bits in the GHS key-switching extension modulus P (0 = BV)
-    sigma: float = 3.60   # absolute stddev, 1-to-1 with OpenFHE SetStandardDeviation()
+    N: int              # ring dimension -> LWE dimension
+    logQ: int           # bits in the ciphertext modulus Q
+    logP: int = 0       # bits in the GHS key-switching extension modulus P (0 = BV)
+    sigma: float = 3.19 # absolute stddev, 1-to-1 with OpenFHE SetStandardDeviation()
 
     @property
     def logQP(self) -> int:
@@ -36,8 +36,8 @@ class ParamSet:
 
 PARAM_SETS = [
     # spar::params::Small, 2 x 60-bit limbs
-    ParamSet("small",     N=2**13, logQ=120, sigma=2**(-25)),
-    ParamSet("small-ghs", N=2**14, logQ=120, logP=120, sigma=2**(-50)),
+    ParamSet("small",     N=2**12, logQ=120, sigma=3.19),
+    ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
     # spar::params::Large, 60 + 55-bit limbs
     ParamSet("large",     N=2**14, logQ=115, sigma=2**(-50)),
     ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=2**(-50)),
