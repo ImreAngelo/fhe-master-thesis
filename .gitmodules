@@ -4,3 +4,6 @@
 [submodule "docs/latex"]
 	path = docs/latex
 	url = https://github.com/ImreAngelo/Thesis.git
+[submodule "vendors/lattice-estimator"]
+	path = vendors/lattice-estimator
+	url = https://github.com/malb/lattice-estimator
