@@ -13,18 +13,16 @@ inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
     // params.SetMultiplicativeDepth(depth);
     params.SetPlaintextModulus(65537);
     params.SetRingDim(1 << 14);
-
     params.SetKeySwitchTechnique(lbcrypto::HYBRID);
     params.SetNumLargeDigits(1);
 
-    //
+    // GHS/Hybrid settings
     params.SetFirstModSize(60);
     params.SetScalingModSize(55);
     params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
 
+    // Security level
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_128_classic);
-    // if(depth > 1)
-    //     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
     // From sPAR
     double sigma = std::pow(2.0, -55.0);
@@ -34,11 +32,11 @@ inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
 }
 
 template <typename T = lbcrypto::CryptoContextBGVRNS>
-inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
+inline lbcrypto::CCParams<T> Small() {
     lbcrypto::CCParams<T> params;
-    params.SetMultiplicativeDepth(depth);
+    // params.SetMultiplicativeDepth(depth);
     params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 11);
+    params.SetRingDim(1 << 14);
 
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
@@ -54,8 +52,8 @@ inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
     // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
     // From sPAR
-    double sigma = std::pow(2.0, -55.0);
-    params.SetStandardDeviation(2*sigma);
+    double sigma = std::pow(2.0, -50);
+    params.SetStandardDeviation(sigma);
 
     return params;
 }
