@@ -181,6 +181,7 @@ std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
     for (size_t i = 1; i < m_ell; i++) {
         Poly scaled(input.GetParams(), input.GetFormat(), true);
 
+        // TODO: Test flattened for loop to see if it is faster than the nested loop
         for (size_t j = 0; j < n_towers; j++) {
             auto factor = GetPower(i, j);
             auto limb = input.GetElementAtIndex(j).Times(factor);

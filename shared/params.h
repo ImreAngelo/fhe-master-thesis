@@ -55,7 +55,7 @@ inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
 
     // From sPAR
     double sigma = std::pow(2.0, -55.0);
-    params.SetStandardDeviation(sigma);
+    params.SetStandardDeviation(2*sigma);
 
     return params;
 }
