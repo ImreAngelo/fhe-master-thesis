@@ -25,8 +25,8 @@ inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_128_classic);
 
     // From sPAR
-    double sigma = std::pow(2.0, -55.0);
-    params.SetStandardDeviation(sigma);
+    // double sigma = std::pow(2.0, -55.0);
+    // params.SetStandardDeviation(sigma);
 
     return params;
 }
@@ -52,8 +52,8 @@ inline lbcrypto::CCParams<T> Small() {
     // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
     // From lattice estimator
-    double sigma = std::pow(2.0, -50);
-    params.SetStandardDeviation(sigma);
+    // double sigma = std::pow(2.0, -50);
+    // params.SetStandardDeviation(sigma);
 
     return params;
 }

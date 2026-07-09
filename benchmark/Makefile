@@ -19,7 +19,7 @@ BENCH_TIME_UNIT   ?= ms
 BENCH_REPETITIONS ?= 1
 
 # TODO: Investigate multi-threaded performance
-BENCH_OMP_THREADS ?= 3
+BENCH_OMP_THREADS ?= 2
 
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
