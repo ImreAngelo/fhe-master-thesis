@@ -8,7 +8,7 @@ class ExtendedContextBVImpl final : public IExtendedContext {
    public:
     explicit ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>&, uint32_t ell);
 
-    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy = true) const override;
+    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy = false) const override;
     RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const override;
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const override;
 

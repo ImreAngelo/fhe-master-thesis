@@ -40,8 +40,8 @@ PARAM_SETS = [
     ParamSet("small",     N=2**12, logQ=120, sigma=3.19),
     ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
     # spar::params::Large, 60 + 55-bit limbs
-    ParamSet("large",     N=2**14, logQ=115, sigma=2**(-50)),
-    ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=2**(-50)),
+    ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
+    ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
 ]
 
 
