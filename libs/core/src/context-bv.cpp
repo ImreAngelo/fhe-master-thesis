@@ -10,7 +10,7 @@ using namespace core;
 // Pre-computed values //
 //---------------------//
 
-/// @brief Computes B from ell so that ell digits in base B covers max(q_i)
+/// @brief Computes B from ell so that ell digits in base B covers max(q_i) with one bit of headroom for the decomposition offset
 uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell) {
     const auto& params = cc.GetCryptoParameters()->GetElementParams()->GetParams();
     uint32_t max_msb = 0;
@@ -18,7 +18,17 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
         uint32_t msb = qi->GetModulus().GetMSB();
         if (msb > max_msb) max_msb = msb;
     }
-    return (max_msb + ell - 1) / ell;
+    return (max_msb + ell) / ell;
+}
+
+/// @brief Computes the decomposition offset for parallel signed digit decomposition
+uint64_t ComputeOffset(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell, const uint64_t logB) {
+    const uint64_t halfB = uint64_t(1) << (logB - 1);
+
+    uint64_t offset = 0;
+    for (uint32_t i = 0; i + 1 < ell; i++)  // digits 0 .. ell-2 only
+        offset += halfB << (i * logB);
+    return offset;  // = (B/2)(B^(ell-1) - 1)/(B - 1)
 }
 
 /// @brief Computes B^i mod q_j used in the per-limb digit decomposition in P_q(a) for i up to ell
@@ -44,7 +54,6 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
     return powers;
 }
 
-
 //---------//
 // Helpers //
 //---------//
@@ -66,7 +75,11 @@ Poly CloneToCoefficient(const Poly& poly) {
 namespace core {
 
 ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
-    : IExtendedContext(cc), m_ell(ell), m_logB(ComputeLogB(cc, m_ell)), m_powers(ComputePowers(cc, m_ell, m_logB)) {}
+    : IExtendedContext(cc),
+      m_ell(ell),
+      m_logB(ComputeLogB(cc, m_ell)),
+      m_offset(ComputeOffset(cc, m_ell, m_logB)),
+      m_powers(ComputePowers(cc, m_ell, m_logB)) {}
 
 
 //-----//
@@ -84,24 +97,24 @@ RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext&
     // const size_t k = msg.GetNumOfElements();
     // const size_t l = k * m_ell;
 
-//     RLWE z = this->Encrypt(pk, zero)->CloneEmpty();
-//     z->SetElements({
-//         Poly(this->GetElementParams(), Format::EVALUATION, true),
-//         Poly(this->GetElementParams(), Format::EVALUATION, true)
-//     });
+    //     RLWE z = this->Encrypt(pk, zero)->CloneEmpty();
+    //     z->SetElements({
+    //         Poly(this->GetElementParams(), Format::EVALUATION, true),
+    //         Poly(this->GetElementParams(), Format::EVALUATION, true)
+    //     });
 
-//     RGSW rows(2 * l, z);
+    //     RGSW rows(2 * l, z);
 
-// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
-//     for (size_t r = 0; r < l; r++) {
-//         const size_t i = r % m_ell;  // The target tower [0, ell)
-//         const size_t j = r / m_ell;  // The base power   [0, k)
+    // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+    //     for (size_t r = 0; r < l; r++) {
+    //         const size_t i = r % m_ell;  // The target tower [0, ell)
+    //         const size_t j = r / m_ell;  // The base power   [0, k)
 
-//         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
+    //         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
 
-//         rows[r] += ct0;
-//         rows[r + l] += ct1);
-//     }
+    //         rows[r] += ct0;
+    //         rows[r + l] += ct1);
+    //     }
 
     throw new std::logic_error("Not implemented.");
     // return rows;
@@ -122,8 +135,8 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
-        const size_t i = r % m_ell;  // The target tower [0, ell)
-        const size_t j = r / m_ell;  // The base power   [0, k)
+        const size_t j = r % m_ell;  // The target tower [0, ell)
+        const size_t i = r / m_ell;  // The base power   [0, k)
 
         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
 
@@ -230,6 +243,47 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
 NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
     return m_powers[i + m_ell * j];
 }
+
+// std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
+//     const auto params = x.GetParams();
+//     const size_t k = x.GetNumOfElements();
+//     const size_t n = params->GetRingDimension();
+//     const size_t l = k * m_ell;
+
+//     const uint64_t mask = (uint64_t(1) << m_logB) - 1;
+//     const uint64_t halfB = uint64_t(1) << (m_logB - 1);
+
+//     Poly xCoef = x;
+//     xCoef.SetFormat(Format::COEFFICIENT);
+
+//     std::vector<Poly> digits(l);
+
+// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+//     for (size_t r = 0; r < l; r++) {
+//         const size_t i = r / m_ell;  // tower  -- matches EncryptRGSW
+//         const size_t j = r % m_ell;  // power
+//         const size_t sh = j * m_logB;
+
+//         const auto& limb = xCoef.GetElementAtIndex(i);
+
+//         // Shifted unsigned slice: u = d + B/2, no carries, no centering.
+//         std::vector<uint64_t> u(n);
+//         for (size_t c = 0; c < n; c++) u[c] = ((limb[c].ConvertToInt() + m_offset) >> sh) & mask;
+
+//         Poly d(params, Format::COEFFICIENT, true);
+//         for (size_t t = 0; t < k; t++) {
+//             const auto& tp = params->GetParams()[t];
+//             const uint64_t qt = tp->GetModulus().ConvertToInt();
+//             NativePoly dt(tp, Format::COEFFICIENT, true);
+//             for (size_t c = 0; c < n; c++)  // subtract B/2 during the lift
+//                 dt[c] = (i + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
+//             d.SetElementAtIndex(t, std::move(dt));
+//         }
+//         d.SetFormat(Format::EVALUATION);
+//         digits[r] = std::move(d);
+//     }
+//     return digits;
+// }
 
 std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
     const Poly coefs = ::CloneToCoefficient(input);

@@ -20,6 +20,7 @@ class ExtendedContextBVImpl final : public IExtendedContext {
    private:
     const uint32_t m_ell;
     const uint64_t m_logB;
+    const uint64_t m_offset;
     const std::vector<NativeInteger> m_powers;
 
    private:

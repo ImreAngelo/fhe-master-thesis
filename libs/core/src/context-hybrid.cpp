@@ -84,17 +84,17 @@ RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext
         Poly c1(paramsQP, Format::EVALUATION, true);
 
         // if (noisy) {
-            // 1. Fresh zero-encryption in basis Q via the standard public key.
-            auto z = this->Encrypt(pk, zero);
-            auto& zElems = z->GetElements();
-            zElems[0].SetFormat(Format::EVALUATION);
-            zElems[1].SetFormat(Format::EVALUATION);
+        // 1. Fresh zero-encryption in basis Q via the standard public key.
+        auto z = this->Encrypt(pk, zero);
+        auto& zElems = z->GetElements();
+        zElems[0].SetFormat(Format::EVALUATION);
+        zElems[1].SetFormat(Format::EVALUATION);
 
-            // 2. Lift Q -> QP by scaling each component by P (Q-limbs hold P*z,
-            //    P-limbs are zero). This matches the P-scaling of mP, so the
-            //    factor of P cancels after ApproxModDown in the external product.
-            c0 = Power(zElems[0]);
-            c1 = Power(zElems[1]);
+        // 2. Lift Q -> QP by scaling each component by P (Q-limbs hold P*z,
+        //    P-limbs are zero). This matches the P-scaling of mP, so the
+        //    factor of P cancels after ApproxModDown in the external product.
+        c0 = Power(zElems[0]);
+        c1 = Power(zElems[1]);
         // }
 
         // Keep correct CryptoContext without having a ciphertext to clone

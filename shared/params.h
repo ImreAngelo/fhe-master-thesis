@@ -17,8 +17,8 @@ inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
     params.SetNumLargeDigits(1);
 
     // GHS/Hybrid settings
-    params.SetFirstModSize(60);
-    params.SetScalingModSize(55);
+    // params.SetFirstModSize(60);
+    // params.SetScalingModSize(55);
     params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
 
     // Security level
@@ -52,8 +52,8 @@ inline lbcrypto::CCParams<T> Small() {
     // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
     // From lattice estimator
-    // double sigma = std::pow(2.0, -50);
-    // params.SetStandardDeviation(sigma);
+    double sigma = std::pow(2.0, -50);
+    params.SetStandardDeviation(sigma);
 
     return params;
 }
