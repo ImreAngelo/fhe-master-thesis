@@ -1,5 +1,6 @@
 #include "context-bv.h"
 #include "factory.h"
+#include <stdexcept>
 
 
 namespace {
@@ -29,7 +30,7 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
     std::vector<NativeInteger> powers(ell * k);
 
     NativeInteger B(uint64_t(1) << logB);
-    NativeInteger cnt = 1; // current B^i
+    NativeInteger cnt = 1;  // current B^i
 
     for (size_t i = 0; i < ell; i++) {
         for (size_t j = 0; j < k; j++) {
@@ -72,8 +73,41 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
 // API //
 //-----//
 
-// TODO: remove bool because noisy = true always, use separate function for server "encrypt" that is noiseless
-RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
+RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
+    // // clang-format off
+    // const auto msg = pt->GetElement<Poly>();
+    // const auto zero = IsCoefPackedPlaintext(pt)
+    //     ? this->MakeCoefPackedPlaintext({0})
+    //     : this->MakePackedPlaintext({0});
+    // // clang-format on
+
+    // const size_t k = msg.GetNumOfElements();
+    // const size_t l = k * m_ell;
+
+//     RLWE z = this->Encrypt(pk, zero)->CloneEmpty();
+//     z->SetElements({
+//         Poly(this->GetElementParams(), Format::EVALUATION, true),
+//         Poly(this->GetElementParams(), Format::EVALUATION, true)
+//     });
+
+//     RGSW rows(2 * l, z);
+
+// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+//     for (size_t r = 0; r < l; r++) {
+//         const size_t i = r % m_ell;  // The target tower [0, ell)
+//         const size_t j = r / m_ell;  // The base power   [0, k)
+
+//         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
+
+//         rows[r] += ct0;
+//         rows[r + l] += ct1);
+//     }
+
+    throw new std::logic_error("Not implemented.");
+    // return rows;
+}
+
+RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
     // clang-format off
     const auto msg = pt->GetElement<Poly>();
     const auto zero = IsCoefPackedPlaintext(pt)
@@ -88,17 +122,17 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
-        const size_t i = r / m_ell;  // The target tower [0, k)
-        const size_t j = r % m_ell;  // The base power   [0, ell)
+        const size_t i = r % m_ell;  // The target tower [0, ell)
+        const size_t j = r / m_ell;  // The base power   [0, k)
 
-        const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(j, i));
+        const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
 
         auto ct0 = this->Encrypt(pk, zero);
         auto ct1 = this->Encrypt(pk, zero);
         ct0->GetElements()[0].GetAllElements()[i] += scaled;
         ct1->GetElements()[1].GetAllElements()[i] += scaled;
 
-        rows[r]     = std::move(ct0);
+        rows[r] = std::move(ct0);
         rows[r + l] = std::move(ct1);
     }
 
@@ -113,28 +147,22 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 //         ? this->MakeCoefPackedPlaintext({0})
 //         : this->MakePackedPlaintext({0});
 //     // clang-format on
-
 //     std::vector<Poly> digits = PowersOfBase(msg);
-
 //     const size_t k = msg.GetNumOfElements();
 //     const size_t half = k * m_ell;
 //     const size_t full = 2 * half;
-
 //     RGSW rows(full);
-
 //     // For noiseless mode, encrypt zero once so we can clone its metadata
 //     RLWE noiseless_template;
 //     if (!noisy) {
 //         noiseless_template = this->Encrypt(pk, zero);
 //     }
-
 // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(full))
 //     for (size_t row = 0; row < full; row++) {
 //         size_t l = row / half;    // 0 for Upper (c_0), 1 for Lower (c_1)
 //         size_t rem = row % half;  // The flat index within the current half
 //         size_t j = rem / m_ell;   // The target tower [0 to k-1]
 //         size_t i = rem % m_ell;   // The base power   [0 to ell-1]
-
 //         RLWE ct;
 //         if (!noisy) {
 //             ct = noiseless_template->CloneEmpty();
@@ -145,14 +173,12 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 //             ct = this->Encrypt(pk, zero);
 //         }
 //         auto elements = ct->GetElements();
-
 //         auto target_limb = elements[l].GetElementAtIndex(j);
 //         target_limb += digits[i].GetElementAtIndex(j);
 //         elements[l].SetElementAtIndex(j, std::move(target_limb));
 //         ct->SetElements(std::move(elements));
 //         rows[row] = std::move(ct);
 //     }
-
 //     return rows;
 // }
 
@@ -204,29 +230,6 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
 NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
     return m_powers[i + m_ell * j];
 }
-
-// std::vector<Poly> ExtendedContextBVImpl::PowersOfBase(const Poly& input) const {
-//     const auto n_towers = this->GetElementParams()->GetParams().size();
-
-//     std::vector<Poly> result(m_ell);
-//     result[0] = input;
-
-// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(m_ell))
-//     for (size_t i = 1; i < m_ell; i++) {
-//         Poly scaled(input.GetParams(), input.GetFormat(), true);
-
-//         // TODO: Test flattened for loop to see if it is faster than the nested loop
-//         for (size_t j = 0; j < n_towers; j++) {
-//             auto factor = GetPower(i, j);
-//             auto limb = input.GetElementAtIndex(j).Times(factor);
-//             scaled.SetElementAtIndex(j, std::move(limb));
-//         }
-
-//         result[i] = std::move(scaled);
-//     }
-
-//     return result;
-// }
 
 std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
     const Poly coefs = ::CloneToCoefficient(input);

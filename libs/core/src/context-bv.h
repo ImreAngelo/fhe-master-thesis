@@ -8,7 +8,8 @@ class ExtendedContextBVImpl final : public IExtendedContext {
    public:
     explicit ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>&, uint32_t ell);
 
-    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy = false) const override;
+    RGSW MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const override;
+    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const override;
     RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const override;
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const override;
 
@@ -24,9 +25,6 @@ class ExtendedContextBVImpl final : public IExtendedContext {
    private:
     /// @returns B^i mod q_j
     NativeInteger GetPower(const uint32_t i, const uint32_t j) const;
-
-    /// @returns Input polynomial scaled by B^i as (a, aB, ..., aB^{ell - 1})
-    std::vector<Poly> PowersOfBase(const Poly&) const;
 
     /// @returns Signed digit decomposition of the input polynomial
     std::vector<Poly> Decompose(const Poly&) const;

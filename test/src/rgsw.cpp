@@ -128,11 +128,12 @@ TEST_P(RGSW, InternalProductChains) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
-                         ::testing::Values(SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/2); }}//,
-                                        //    SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small()); }},
-                                        //    SchemeCase{"BV_large", [] { return GenContextBV(params::Large(), /*ell=*/2); }},
-                                        //    SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}
-                        ),
+                         ::testing::Values(SchemeCase{"BV", [] { return GenContextBV(params::Small(), /*ell=*/2); }}
+                                           //,
+                                           //    SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small()); }},
+                                           //    SchemeCase{"BV_large", [] { return GenContextBV(params::Large(), /*ell=*/2); }},
+                                           //    SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}
+                                           ),
                          [](const auto& info) { return info.param.name; });
 
 }  // namespace spar::test

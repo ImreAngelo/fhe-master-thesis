@@ -68,7 +68,7 @@ ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoConte
       m_qHatModP(ComputeQHatModP(m_params)),
       m_qHatInv(ComputeQHatInverses(m_params)) {}
 
-RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy) const {
+RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
     const auto paramsQP = m_params->GetParamsQP();
 
     // mG payload, scaled by P, lives in QP
@@ -83,7 +83,7 @@ RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext
         Poly c0(paramsQP, Format::EVALUATION, true);
         Poly c1(paramsQP, Format::EVALUATION, true);
 
-        if (noisy) {
+        // if (noisy) {
             // 1. Fresh zero-encryption in basis Q via the standard public key.
             auto z = this->Encrypt(pk, zero);
             auto& zElems = z->GetElements();
@@ -95,7 +95,7 @@ RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext
             //    factor of P cancels after ApproxModDown in the external product.
             c0 = Power(zElems[0]);
             c1 = Power(zElems[1]);
-        }
+        // }
 
         // Keep correct CryptoContext without having a ciphertext to clone
         auto ct = std::make_shared<lbcrypto::CiphertextImpl<Poly>>(pk);

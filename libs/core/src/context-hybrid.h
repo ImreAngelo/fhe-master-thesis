@@ -9,7 +9,8 @@ class ExtendedContextHybridImpl final : public IExtendedContext {
    public:
     explicit ExtendedContextHybridImpl(const lbcrypto::CryptoContextImpl<Poly>& base);
 
-    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt, const bool noisy = true) const override;
+    RGSW MakePublicRGSW(const PublicKey&, const Plaintext&) const override { throw new std::logic_error("Not implemented."); }
+    RGSW EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const override;
     RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const override;
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const override;
 
