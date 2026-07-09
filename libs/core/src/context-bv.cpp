@@ -135,8 +135,8 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
-        const size_t j = r % m_ell;  // The target tower [0, ell)
-        const size_t i = r / m_ell;  // The base power   [0, k)
+        const size_t i = r % m_ell;  // The target tower [0, ell)
+        const size_t j = r / m_ell;  // The base power   [0, k)
 
         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
 
