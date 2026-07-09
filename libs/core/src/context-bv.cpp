@@ -135,15 +135,15 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
-        const size_t i = r % m_ell;  // The target tower [0, ell)
-        const size_t j = r / m_ell;  // The base power   [0, k)
+        const size_t i = r % m_ell;  // The base power   [0, ell)
+        const size_t j = r / m_ell;  // The target tower [0, k)
 
-        const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
+        const auto scaled = msg.GetElementAtIndex(j).Times(GetPower(i, j));
 
         auto ct0 = this->Encrypt(pk, zero);
         auto ct1 = this->Encrypt(pk, zero);
-        ct0->GetElements()[0].GetAllElements()[i] += scaled;
-        ct1->GetElements()[1].GetAllElements()[i] += scaled;
+        ct0->GetElements()[0].GetAllElements()[j] += scaled;
+        ct1->GetElements()[1].GetAllElements()[j] += scaled;
 
         rows[r] = std::move(ct0);
         rows[r + l] = std::move(ct1);
