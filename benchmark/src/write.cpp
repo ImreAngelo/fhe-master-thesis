@@ -19,18 +19,6 @@ using spar::server::Matrix;
 constexpr uint32_t K = 3;
 constexpr uint32_t D = 3;
 
-// CCParams<CryptoContextBGVRNS> MakeBaseParams() {
-//     CCParams<CryptoContextBGVRNS> params;
-//     params.SetMultiplicativeDepth(1);
-//     params.SetPlaintextModulus(1 << 8);
-//     params.SetRingDim(1 << 11);
-//     params.SetSecurityLevel(SecurityLevel::HEStd_NotSet);
-//     params.SetKeySwitchTechnique(KeySwitchTechnique::HYBRID);
-//     params.SetNumLargeDigits(1);
-//     params.SetStandardDeviation(std::pow(2.0, -55.0));
-//     return params;
-// }
-
 struct Fixture {
     uint32_t N = 0;
     ExtendedContext cc;

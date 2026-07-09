@@ -2,6 +2,7 @@
 
 #include "core/context.h"
 
+
 namespace core {
 
 class ExtendedContextBVImpl final : public IExtendedContext {

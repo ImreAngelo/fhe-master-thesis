@@ -40,6 +40,12 @@ endif()
 
 set(CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS})
 
+# OpenFHE only defines PARALLEL inside its own build tree and does not export it
+# in OpenFHE_CXX_FLAGS. Without it, OpenFHEParallelControls.GetThreadLimit() is
+# compiled to return 1 in our translation units, silently disabling every
+# num_threads(GetThreadLimit(...)) OpenMP loop in libs/.
+add_compile_definitions(PARALLEL)
+
 include_directories(${OPENMP_INCLUDES})
 include_directories(${OpenFHE_INCLUDE})
 include_directories(${OpenFHE_INCLUDE}/third-party/include)

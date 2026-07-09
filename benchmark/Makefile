@@ -18,8 +18,9 @@ BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
 BENCH_REPETITIONS ?= 1
 
-# TODO: Investigate multi-threaded performance
-BENCH_OMP_THREADS ?= 2
+# Cap OMP at the physical core count: the FHE kernels are memory-bound, so
+# hyperthreads add noise rather than speedup.
+BENCH_OMP_THREADS ?= 6
 
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
@@ -74,4 +75,4 @@ help:
 	@echo "  BENCH_FILTER=<regex>    --benchmark_filter (default: .*)"
 	@echo "  BENCH_TIME_UNIT=<u>     --benchmark_time_unit (default: ms)"
 	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 10)"
-	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 1)"
+	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 6)"
