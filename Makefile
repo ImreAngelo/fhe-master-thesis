@@ -69,6 +69,14 @@ build: openfhe
 	@$(_CONFIGURE)
 	@cmake --build $(BUILDDIR) -j$(shell nproc)
 
+####################
+# Parameter Tuning #
+####################
+
+estimate:
+	@echo "Estimating security parameters with lattice-estimator..."
+	@./.venv/bin/python scripts/estimate-security-param.py --full
+
 #########
 # Tests #
 #########

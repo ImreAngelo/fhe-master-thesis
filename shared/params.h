@@ -36,7 +36,7 @@ inline lbcrypto::CCParams<T> Small() {
     lbcrypto::CCParams<T> params;
     // params.SetMultiplicativeDepth(depth);
     params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 14);
+    params.SetRingDim(1 << 12);
 
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
@@ -51,9 +51,9 @@ inline lbcrypto::CCParams<T> Small() {
     // params.SetStandardDeviation(.0f);
     // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
-    // From sPAR
-    double sigma = std::pow(2.0, -50);
-    params.SetStandardDeviation(sigma);
+    // From lattice estimator
+    // double sigma = std::pow(2.0, -50);
+    // params.SetStandardDeviation(sigma);
 
     return params;
 }

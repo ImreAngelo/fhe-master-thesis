@@ -1,3 +1,4 @@
+# !../.venv/bin/python
 # https://github.com/malb/lattice-estimator
 # setup: ./scripts/setup.sh
 # run:   .venv/bin/python scripts/estimate-security-param.py [--full]

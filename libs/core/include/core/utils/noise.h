@@ -15,22 +15,28 @@ namespace core::utils {
 
         std::vector<DCRTPoly> cv = ct->GetElements();
         DCRTPoly s = sk->GetPrivateElement();
+
+        // This should never happen
         if (cv[0].GetNumOfElements() < s.GetNumOfElements())
             s.DropLastElements(s.GetNumOfElements() - cv[0].GetNumOfElements());
     
         DCRTPoly phase = cv[0];
         phase.SetFormat(Format::EVALUATION);
+
         DCRTPoly sPow = s;
         for (size_t i = 1; i < cv.size(); ++i) {
             cv[i].SetFormat(Format::EVALUATION);
             phase += cv[i] * sPow;
             if (i + 1 < cv.size()) sPow *= s;
         }
+
         phase.SetFormat(Format::COEFFICIENT);
-        Poly b = phase.CRTInterpolate();
+        auto b = phase.CRTInterpolate();
+
         const BigInteger Q = b.GetModulus();
         const BigInteger halfQ = Q >> 1;
     
+        // Decrypt the ciphertext to get the plaintext
         Plaintext pt;
         cc->Decrypt(sk, ct, &pt);
         NativePoly m = pt->GetElement<NativePoly>();
@@ -45,12 +51,15 @@ namespace core::utils {
             if (d > halfQ) d = Q - d;
             if (d > maxE) maxE = d;
         }
-        return maxE;
 
+        return maxE;
     }
 }
+
+
+#include "logging.h"
 
 // Prints ||epsilon||_inf for a ciphertext. Args: crypto context, ciphertext,
 // secret key. Prefixes the ciphertext expression so multiple prints are legible.
 #define PRINT_MAX_NOISE(cc, ct, sk) \
-    (std::cout << "max noise [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)) << std::endl)
+    DEBUG_PRINT("max noise [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)))
