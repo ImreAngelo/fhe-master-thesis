@@ -275,7 +275,7 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
             const uint64_t qt = tp->GetModulus().ConvertToInt();
             NativePoly dt(tp, Format::COEFFICIENT, true);
             for (size_t c = 0; c < n; c++)  // subtract B/2 during the lift
-                dt[c] = (i + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
+                dt[c] = (j + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
             d.SetElementAtIndex(t, std::move(dt));
         }
         d.SetFormat(Format::EVALUATION);
