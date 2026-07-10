@@ -35,7 +35,6 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
 
     std::vector<std::vector<NativeInteger>> qHatModP(q.size(), std::vector<NativeInteger>(p.size()));
 
-    // Too small to use threads
     #pragma omp parallel for
     for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
@@ -68,6 +67,9 @@ ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoConte
       m_qHatModP(ComputeQHatModP(m_params)),
       m_qHatInv(ComputeQHatInverses(m_params)) {}
 
+// RGSW(m): rows row_i = Z_i + (P·m)·g_i at modulus QP, gadget g = (1, s), so
+// phase(row_i) = P·m·g_i + t·e_i with e_i native-small (Z is generated directly
+// in QP, neither lifted nor P-scaled).
 RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
     if (m_pkQP.size() != 2) {
         OPENFHE_THROW("Hybrid EncryptRGSW needs the QP public key; call SetExtendedKey() once after KeyGen.");
@@ -179,14 +181,23 @@ std::vector<Poly> ExtendedContextHybridImpl::EncryptZeroQP() const {
     return {std::move(c0), std::move(c1)};
 }
 
+// RLWE(m_x) ⊠ RGSW(m_y) -> RLWE(m_x·m_y).
+//
+// With d_i = Lift(c_i) = c_i + Q·u_i and rows phase P·m_y·g_i + t·e_i:
+//   phase(out) = P·m_y·(m_x + t·e_c) + P·m_y·Q·(u_0 + u_1·s) + t·(d_0·e_0 + d_1·e_1)
+//              = P·(m_x·m_y) + t·(P·m_y·e_c + d·e)        (mod QP, since P·Q ≡ 0)
+// i.e. RLWE(m_x·m_y·P) in QP. ApproxModDown divides by P:
+//   phase(result) = m_x·m_y + t·(m_y·e_c + d·e/P + r)     (mod Q)
+// The cross term d·e/P is native-small because P ≈ Q — this is why the input is
+// lifted UNSCALED while the RGSW message carries the single factor of P.
 RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
     auto c = rlwe->GetElements();
 
     c[0].SetFormat(Format::EVALUATION);
     c[1].SetFormat(Format::EVALUATION);
 
-    const auto d0 = Decompose(c[0]);
-    const auto d1 = Decompose(c[1]);
+    const auto d0 = Lift(c[0]);
+    const auto d1 = Lift(c[1]);
 
     Poly out0(m_params->GetParamsQP(), Format::EVALUATION, true);
     Poly out1(m_params->GetParamsQP(), Format::EVALUATION, true);
@@ -203,44 +214,11 @@ RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW
     return result;
 }
 
-RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
-    RGSW result;
-    result.reserve(2);
-
-    for (size_t row = 0; row < 2; row++) {
-        auto c = lhs[row]->GetElements();
-
-        // FIX: Modulus switch down from QP to Q FIRST!
-        // This drops the factor of P that 'lhs' currently encrypts.
-        Poly c0_Q = ApproxModDown(m_params, c[0]);
-        Poly c1_Q = ApproxModDown(m_params, c[1]);
-
-        c0_Q.SetFormat(Format::EVALUATION);
-        c1_Q.SetFormat(Format::EVALUATION);
-
-        // Gadget decomposition Q -> QP
-        Poly d0 = Decompose(c0_Q);
-        Poly d1 = Decompose(c1_Q);
-
-        // Output row in QP
-        Poly out0(m_params->GetParamsQP(), Format::EVALUATION, true);
-        Poly out1(m_params->GetParamsQP(), Format::EVALUATION, true);
-
-        // Standard external product
-        out0 += d0 * rhs[0]->GetElements()[0];
-        out1 += d0 * rhs[0]->GetElements()[1];
-
-        out0 += d1 * rhs[1]->GetElements()[0];
-        out1 += d1 * rhs[1]->GetElements()[1];
-
-        // Build new RGSW row directly in QP
-        auto ct = lhs[row]->Clone();
-        ct->SetElements({std::move(out0), std::move(out1)});
-
-        result.push_back(std::move(ct));
-    }
-
-    return result;
+RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW&, const RGSW&) const {
+    // TODO: The straightforward per-row external product does not work here: modding
+    // a row down re-amplifies the rounding by P, and skipping the ModDown leaves the
+    // d·e cross term undivided — both blow the noise budget. Needs a dedicated design.
+    OPENFHE_THROW("EvalInternalProduct is not implemented for the hybrid context yet");
 }
 
 //-----------//
@@ -248,8 +226,11 @@ RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW&
 //-----------//
 
 
-// TODO: Do not pass const, modify directly
-// Mod up Q -> QP
+// Exact multiply-by-P lift Q -> QP: represents P·x mod QP (Q-limbs scaled by
+// P mod q_i, P-limbs ≡ 0). Identity: Power(x) ≡ P·Lift(x) (mod QP) — the Q·u
+// junk of the fast base extension dies because P·Q ≡ 0 (mod QP). So Power is
+// the P-scaled (and cheaper: no base extension, no format change) form of the
+// one conceptual lift.
 Poly ExtendedContextHybridImpl::Power(const Poly& input) const {
     const auto QP = m_params->GetParamsQP();
     const auto P = m_params->GetParamsP()->GetModulus();
@@ -274,8 +255,10 @@ Poly ExtendedContextHybridImpl::Power(const Poly& input) const {
     return m;
 };
 
-// TODO: Do not pass const, modify directly
-Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const {
+// Unscaled lift Q -> QP via fast base extension: represents x + Q·u for a small
+// overflow u (0 ≤ u < #Q-limbs). The Q·u term is harmless in the external product
+// because it is multiplied by the P-scaled RGSW message (P·Q ≡ 0 mod QP).
+Poly ExtendedContextHybridImpl::Lift(const Poly& input) const {
     const auto QP = m_params->GetParamsQP();
 
     Poly result(QP, Format::COEFFICIENT, true);
@@ -297,7 +280,6 @@ Poly ExtendedContextHybridImpl::Decompose(const Poly& input) const {
     }
 
 // Fast Base Extension (Q -> QP)
-// TODO: Re-enable multi-threading
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(numP))
     for (uint32_t j = 0; j < numP; j++) {
         uint32_t target_idx = numQ + j;

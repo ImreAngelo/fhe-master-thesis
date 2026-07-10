@@ -22,11 +22,12 @@ class ExtendedContextHybridImpl final : public IExtendedContext {
     RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const override;
 
    private:
-    /// @brief Scale Q -> QP
+    /// @brief Exact multiply-by-P lift Q -> QP: represents P·x mod QP.
+    ///        Identity: Power(x) ≡ P·Lift(x) (mod QP).
     Poly Power(const Poly&) const;
 
-    /// @brief Decompose QP -> Q
-    Poly Decompose(const Poly&) const;
+    /// @brief Unscaled lift Q -> QP (fast base extension): represents x + Q·u, small u.
+    Poly Lift(const Poly&) const;
 
     /// @brief Fresh native-error RLWE encryption of zero at modulus QP, using m_pkQP.
     ///        The error is NOT scaled by P, which is what lets ApproxModDown suppress
