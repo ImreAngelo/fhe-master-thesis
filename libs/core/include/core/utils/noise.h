@@ -59,3 +59,4 @@ inline lbcrypto::BigInteger MaxNoise(const lbcrypto::CryptoContext<lbcrypto::DCR
 // Prints ||epsilon||_inf for a ciphertext. Args: crypto context, ciphertext,
 // secret key. Prefixes the ciphertext expression so multiple prints are legible.
 #define PRINT_MAX_NOISE(cc, ct, sk) DEBUG_PRINT("max noise [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)))
+#define PRINT_MAX_NOISE_MSB(cc, ct, sk) DEBUG_PRINT("max noise bits [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)).GetMSB())

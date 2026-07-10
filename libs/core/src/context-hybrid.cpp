@@ -9,7 +9,7 @@ std::shared_ptr<lbcrypto::CryptoParametersRNS> GetRNSParameters(const lbcrypto::
     return std::dynamic_pointer_cast<lbcrypto::CryptoParametersRNS>(base.GetCryptoParameters());
 }
 
-/// @brief QHat[i] mod q[i]
+/// @brief QHat[i] invmod q[i]
 std::vector<NativeInteger> ComputeQHatInverses(const std::shared_ptr<lbcrypto::CryptoParametersRNS> params) {
     const auto& Q = params->GetElementParams()->GetModulus();
     const auto& q = params->GetElementParams()->GetParams();
