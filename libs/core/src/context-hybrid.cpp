@@ -36,7 +36,7 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
     std::vector<std::vector<NativeInteger>> qHatModP(q.size(), std::vector<NativeInteger>(p.size()));
 
     // Too small to use threads
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
         BigInteger qHat = Q / BigInteger(qi);

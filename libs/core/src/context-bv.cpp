@@ -86,37 +86,42 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
 //-----//
 
 RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
-    // // clang-format off
-    // const auto msg = pt->GetElement<Poly>();
-    // const auto zero = IsCoefPackedPlaintext(pt)
-    //     ? this->MakeCoefPackedPlaintext({0})
-    //     : this->MakePackedPlaintext({0});
-    // // clang-format on
+    // clang-format off
+    const auto msg = pt->GetElement<Poly>();
+    const auto zero = IsCoefPackedPlaintext(pt)
+        ? this->MakeCoefPackedPlaintext({0})
+        : this->MakePackedPlaintext({0});
+    // clang-format on
 
-    // const size_t k = msg.GetNumOfElements();
-    // const size_t l = k * m_ell;
+    const size_t k = msg.GetNumOfElements();
+    const size_t l = k * m_ell;
 
-    //     RLWE z = this->Encrypt(pk, zero)->CloneEmpty();
-    //     z->SetElements({
-    //         Poly(this->GetElementParams(), Format::EVALUATION, true),
-    //         Poly(this->GetElementParams(), Format::EVALUATION, true)
-    //     });
+    // Noiseless zero row: only the metadata of the encryption is kept
+    RLWE z = this->Encrypt(pk, zero);
+    z->SetElements({
+        Poly(this->GetElementParams(), Format::EVALUATION, true),
+        Poly(this->GetElementParams(), Format::EVALUATION, true),
+    });
 
-    //     RGSW rows(2 * l, z);
+    RGSW rows(2 * l);
 
-    // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
-    //     for (size_t r = 0; r < l; r++) {
-    //         const size_t i = r % m_ell;  // The target tower [0, ell)
-    //         const size_t j = r / m_ell;  // The base power   [0, k)
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+    for (size_t r = 0; r < l; r++) {
+        const size_t i = r % m_ell;  // The base power   [0, ell)
+        const size_t j = r / m_ell;  // The target tower [0, k)
 
-    //         const auto scaled = msg.GetElementAtIndex(i).Times(GetPower(i, j));
+        const auto scaled = msg.GetElementAtIndex(j).Times(GetPower(i, j));
 
-    //         rows[r] += ct0;
-    //         rows[r + l] += ct1);
-    //     }
+        auto ct0 = z->Clone();
+        auto ct1 = z->Clone();
+        ct0->GetElements()[0].GetAllElements()[j] += scaled;
+        ct1->GetElements()[1].GetAllElements()[j] += scaled;
 
-    throw std::logic_error("Not implemented.");
-    // return rows;
+        rows[r] = std::move(ct0);
+        rows[r + l] = std::move(ct1);
+    }
+
+    return rows;
 }
 
 RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
@@ -151,49 +156,7 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
     return rows;
 }
 
-// noisy = false
-// RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
-//     // clang-format off
-//     const auto msg = pt->GetElement<Poly>();
-//     const auto zero = IsCoefPackedPlaintext(pt)
-//         ? this->MakeCoefPackedPlaintext({0})
-//         : this->MakePackedPlaintext({0});
-//     // clang-format on
-//     std::vector<Poly> digits = PowersOfBase(msg);
-//     const size_t k = msg.GetNumOfElements();
-//     const size_t half = k * m_ell;
-//     const size_t full = 2 * half;
-//     RGSW rows(full);
-//     // For noiseless mode, encrypt zero once so we can clone its metadata
-//     RLWE noiseless_template;
-//     if (!noisy) {
-//         noiseless_template = this->Encrypt(pk, zero);
-//     }
-// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(full))
-//     for (size_t row = 0; row < full; row++) {
-//         size_t l = row / half;    // 0 for Upper (c_0), 1 for Lower (c_1)
-//         size_t rem = row % half;  // The flat index within the current half
-//         size_t j = rem / m_ell;   // The target tower [0 to k-1]
-//         size_t i = rem % m_ell;   // The base power   [0 to ell-1]
-//         RLWE ct;
-//         if (!noisy) {
-//             ct = noiseless_template->CloneEmpty();
-//             Poly c0(this->GetElementParams(), Format::EVALUATION, true);
-//             Poly c1(this->GetElementParams(), Format::EVALUATION, true);
-//             ct->SetElements({std::move(c0), std::move(c1)});
-//         } else {
-//             ct = this->Encrypt(pk, zero);
-//         }
-//         auto elements = ct->GetElements();
-//         auto target_limb = elements[l].GetElementAtIndex(j);
-//         target_limb += digits[i].GetElementAtIndex(j);
-//         elements[l].SetElementAtIndex(j, std::move(target_limb));
-//         ct->SetElements(std::move(elements));
-//         rows[row] = std::move(ct);
-//     }
-//     return rows;
-// }
-
+// TODO: Multi-thread this function
 RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
     const size_t k = rlwe->GetElements()[0].GetNumOfElements();
     const size_t half_size = k * m_ell;

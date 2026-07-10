@@ -43,6 +43,21 @@ TEST_P(RGSW, Encrypt) {
     (void)rgsw;
 }
 
+TEST_P(RGSW, PublicExternalProduct) {
+    const auto rgsw = cc->MakePublicRGSW(keys.publicKey, pt_one);
+    const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);
+
+    DEBUG_TIMER("Public External Product");
+    const auto result = cc->EvalExternalProduct(rlwe, rgsw);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    decrypted->SetLength(1);
+
+    const auto expected = cc->MakeCoefPackedPlaintext({kVal * kVal});
+    ASSERT_EQ(decrypted, expected);
+}
+
 TEST_P(RGSW, ExternalProduct) {
     const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
     const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);

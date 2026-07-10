@@ -84,7 +84,7 @@ Fixture BuildFixture(uint32_t n) {
     Fixture f;
     f.n = n;
 
-    auto ccParams = spar::params::Large();
+    auto ccParams = spar::params::Small(); // Large
     f.plaintextModulus = ccParams.GetPlaintextModulus();
     f.cc = core::GenContextHybrid(ccParams);
     // f.cc = core::GenContextBV(ccParams, 2);
