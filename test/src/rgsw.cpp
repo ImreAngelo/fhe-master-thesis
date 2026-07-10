@@ -26,6 +26,7 @@ class RGSW : public ::testing::TestWithParam<SchemeCase> {
         // cc->Enable(LEVELEDSHE);
 
         keys = cc->KeyGen();
+        cc->SetExtendedKey(keys);  // publishes QP key material (no-op for BV)
         pt_one = cc->MakeCoefPackedPlaintext({kVal});
     }
 

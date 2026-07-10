@@ -10,6 +10,10 @@ class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     using Base = lbcrypto::CryptoContextImpl<Poly>;
 
    public:
+    /// @brief Publish extended (QP) key material. Required by the hybrid scheme
+    ///        (call once after KeyGen); a no-op for schemes that don't need it.
+    virtual void SetExtendedKey(const lbcrypto::KeyPair<Poly>&) {}
+
     /// @brief Create a public key (noiseless RGSW)
     virtual RGSW MakePublicRGSW(const PublicKey&, const Plaintext&) const = 0;
 

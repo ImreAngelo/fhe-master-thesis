@@ -69,46 +69,114 @@ ExtendedContextHybridImpl::ExtendedContextHybridImpl(const lbcrypto::CryptoConte
       m_qHatInv(ComputeQHatInverses(m_params)) {}
 
 RGSW ExtendedContextHybridImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
-    const auto paramsQP = m_params->GetParamsQP();
+    if (m_pkQP.size() != 2) {
+        OPENFHE_THROW("Hybrid EncryptRGSW needs the QP public key; call SetExtendedKey() once after KeyGen.");
+    }
 
-    // mG payload, scaled by P, lives in QP
+    // mG payload: the *message* is lifted by P (the P-limbs of mP are zero).
     Poly mP = Power(pt->GetElement<Poly>());
 
-    // Zero plaintext matching the input's encoding
-    const auto zero =
-        (pt->GetEncodingType() == lbcrypto::COEF_PACKED_ENCODING) ? this->MakeCoefPackedPlaintext({0}) : this->MakePackedPlaintext({0});
+    RGSW rgsw;
+    for (size_t i = 0; i < 2; i++) {
+        // Fresh native-error zero-encryption directly at modulus QP. Crucially the
+        // error is NOT scaled by P (unlike the message), so ApproxModDown in the
+        // external product divides the cross-term t*<c,e> down by a factor P. This
+        // is the actual GHS noise reduction; the previous P-scaling of Z cancelled
+        // it. The cost is that Z's `a` is now uniform mod QP -> security is mod QP.
+        auto E = EncryptZeroQP();
+
+        // Keep correct CryptoContext without having a ciphertext to clone
+        auto ct = std::make_shared<lbcrypto::CiphertextImpl<Poly>>(pk);
+        ct->SetEncodingType(pt->GetEncodingType());
+        ct->SetElements({std::move(E[0]), std::move(E[1])});
+        rgsw.push_back(std::move(ct));
+    }
+
+    // Z + mG = Z + P(m): message lifted by P, error left at native scale.
+    rgsw[0]->GetElements()[0] += mP;
+    rgsw[1]->GetElements()[1] += mP;
+
+    return rgsw;
+}
+
+RGSW ExtendedContextHybridImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
+    const auto paramsQP = m_params->GetParamsQP();
+
+    // Noiseless "public" RGSW: the P-lifted message on the gadget diagonal, no Z.
+    Poly mP = Power(pt->GetElement<Poly>());
 
     RGSW rgsw;
     for (size_t i = 0; i < 2; i++) {
         Poly c0(paramsQP, Format::EVALUATION, true);
         Poly c1(paramsQP, Format::EVALUATION, true);
 
-        // if (noisy) {
-        // 1. Fresh zero-encryption in basis Q via the standard public key.
-        auto z = this->Encrypt(pk, zero);
-        auto& zElems = z->GetElements();
-        zElems[0].SetFormat(Format::EVALUATION);
-        zElems[1].SetFormat(Format::EVALUATION);
-
-        // 2. Lift Q -> QP by scaling each component by P (Q-limbs hold P*z,
-        //    P-limbs are zero). This matches the P-scaling of mP, so the
-        //    factor of P cancels after ApproxModDown in the external product.
-        c0 = Power(zElems[0]);
-        c1 = Power(zElems[1]);
-        // }
-
-        // Keep correct CryptoContext without having a ciphertext to clone
         auto ct = std::make_shared<lbcrypto::CiphertextImpl<Poly>>(pk);
         ct->SetEncodingType(pt->GetEncodingType());
         ct->SetElements({std::move(c0), std::move(c1)});
         rgsw.push_back(std::move(ct));
     }
 
-    // 3. Z + mG = Z + P(m) in hybrid
     rgsw[0]->GetElements()[0] += mP;
     rgsw[1]->GetElements()[1] += mP;
 
     return rgsw;
+}
+
+void ExtendedContextHybridImpl::SetExtendedKey(const lbcrypto::KeyPair<Poly>& keys) {
+    const auto paramsQP   = m_params->GetParamsQP();
+    const auto& pparamsQP = paramsQP->GetParams();
+    const auto ns         = m_params->GetNoiseScale();
+    auto dgg              = m_params->GetDiscreteGaussianGenerator();
+
+    const uint32_t sizeQ  = m_params->GetElementParams()->GetParams().size();
+    const uint32_t sizeQP = pparamsQP.size();
+
+    // Extend the secret key s from basis Q to basis QP: copy the Q-limbs, and for
+    // each P-limb re-embed the (small, ternary) coefficients of s mod p_j.
+    const Poly& s = keys.secretKey->GetPrivateElement();
+    Poly sExt(paramsQP, Format::EVALUATION, true);
+
+    NativePoly s0 = s.GetElementAtIndex(0);
+    s0.SetFormat(Format::COEFFICIENT);
+    for (uint32_t i = 0; i < sizeQP; i++) {
+        if (i < sizeQ) {
+            auto tmp = s.GetElementAtIndex(i);
+            tmp.SetFormat(Format::EVALUATION);
+            sExt.SetElementAtIndex(i, std::move(tmp));
+        }
+        else {
+            auto tmp = s0;
+            tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
+            tmp.SetFormat(Format::EVALUATION);
+            sExt.SetElementAtIndex(i, std::move(tmp));
+        }
+    }
+
+    // Genuine RLWE public key at modulus QP: (b = -a*s + t*e, a), a uniform mod QP.
+    Poly::DugType dug;
+    Poly a(dug, paramsQP, Format::EVALUATION);
+    Poly e(dgg, paramsQP, Format::EVALUATION);
+    Poly b = -(a * sExt) + ns * e;
+
+    m_pkQP = {std::move(b), std::move(a)};
+}
+
+std::vector<Poly> ExtendedContextHybridImpl::EncryptZeroQP() const {
+    const auto paramsQP = m_params->GetParamsQP();
+    const auto ns       = m_params->GetNoiseScale();
+    auto dgg            = m_params->GetDiscreteGaussianGenerator();
+
+    // Standard public-key encryption of zero, done directly in QP with pk_QP.
+    // Phase = c0 + c1*s = t*(u*e_pk + e0 + e1*s), i.e. small native error.
+    Poly::TugType tug;
+    Poly u(tug, paramsQP, Format::EVALUATION);
+    Poly e0(dgg, paramsQP, Format::EVALUATION);
+    Poly e1(dgg, paramsQP, Format::EVALUATION);
+
+    Poly c0 = m_pkQP[0] * u + ns * e0;
+    Poly c1 = m_pkQP[1] * u + ns * e1;
+
+    return {std::move(c0), std::move(c1)};
 }
 
 RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
