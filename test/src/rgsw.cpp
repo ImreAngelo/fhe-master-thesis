@@ -32,6 +32,14 @@ class RGSW : public ::testing::TestWithParam<SchemeCase> {
 
     int64_t PlaintextModulus() const { return cc->GetCryptoParameters()->GetPlaintextModulus(); }
 
+    bool IsHybrid() const { return GetParam().name.rfind("Hybrid", 0) == 0; }
+
+    // The single-digit (dnum=1) hybrid gadget spends its one ÷P on the external
+    // product. RGSW×RGSW cannot also produce a native-error QP row from a full-size
+    // decomposition, so the internal-product output is a factor ~Q too noisy and
+    // overflows. A true hybrid RGSW×RGSW needs a multi-digit gadget (digits + P),
+    // which the hybrid context does not yet have. See EvalInternalProduct.
+
     int64_t FirstCoef(const Plaintext& pt) const {
         const auto& coef = pt->GetCoefPackedValue();
         return coef.empty() ? 0 : coef[0];

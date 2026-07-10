@@ -38,7 +38,7 @@ class ParamSet:
 PARAM_SETS = [
     # spar::params::Small, 2 x 60-bit limbs
     ParamSet("small",     N=2**12, logQ=120, sigma=3.19),
-    ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.0),
+    ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
     # spar::params::Large, 60 + 55-bit limbs
     ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
     ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
