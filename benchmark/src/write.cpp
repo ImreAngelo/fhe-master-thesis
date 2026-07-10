@@ -32,7 +32,8 @@ struct Fixture {
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N = N;
-    f.cc = core::GenContextHybrid(spar::params::Small());
+    // f.cc = core::GenContextHybrid(spar::params::Small());
+    // f.cc = core::GenContextBV(spar::params::Small(), 3);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();

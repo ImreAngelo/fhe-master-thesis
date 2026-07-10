@@ -27,7 +27,7 @@ uint64_t ComputeOffset(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32
     uint64_t offset = 0;
     for (uint32_t i = 0; i + 1 < ell; i++)  // the last digit is already [0, B/2)
         offset += halfB << (i * logB);
-    return offset;  // = (B/2)(B^(ell-1) - 1)/(B - 1)
+    return offset;  // (B/2)(B^(ell-1) - 1)/(B - 1)
 }
 
 /// @brief Computes B^i mod q_j used in the per-limb digit decomposition in P_q(a) for i up to ell
@@ -157,37 +157,107 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 }
 
 // TODO: Multi-thread this function
+// RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
+//     const size_t k = rlwe->GetElements()[0].GetNumOfElements();
+//     const size_t l = k * m_ell;
+
+//     const auto& c0 = rlwe->GetElements()[0];
+//     const auto& c1 = rlwe->GetElements()[1];
+
+//     // Decompose into the k*\ell broadcasted format
+//     std::vector<Poly> d0 = Decompose(c0);
+//     std::vector<Poly> d1 = Decompose(c1);
+
+//     auto params = c0.GetParams();
+//     Poly acc0(params, Format::EVALUATION, true);
+//     Poly acc1(params, Format::EVALUATION, true);
+
+//     // Inner product
+//     for (size_t r = 0; r < l; r++) {
+//         const auto& rUpper = rgsw[r]->GetElements();
+//         const auto& rLower = rgsw[l + r]->GetElements();
+//         acc0 += d0[r] * rUpper[0] + d1[r] * rLower[0];
+//         acc1 += d0[r] * rUpper[1] + d1[r] * rLower[1];
+//     }
+
+//     RLWE result = rlwe->CloneEmpty();
+//     result->SetElements({std::move(acc0), std::move(acc1)});
+
+//     return result;
+// }
+
 RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
-    const size_t k = rlwe->GetElements()[0].GetNumOfElements();
-    const size_t half_size = k * m_ell;
+    const auto& cv     = rlwe->GetElements();          // (c0, c1), EVALUATION format
+    const auto  params = cv[0].GetParams();
+    const size_t k     = cv[0].GetNumOfElements();
+    const size_t n     = params->GetRingDimension();
+    const size_t l     = k * m_ell;                    // digits per component
+    const size_t S     = 2 * l;                        // digit slot s = c*l + r matches rgsw row s
 
-    const auto& c0 = rlwe->GetElements()[0];
-    const auto& c1 = rlwe->GetElements()[1];
+    const uint64_t mask  = (uint64_t(1) << m_logB) - 1;
+    const uint64_t halfB = uint64_t(1) << (m_logB - 1);
 
-    // Decompose into the k*\ell broadcasted format
-    std::vector<Poly> d0 = Decompose(c0);
-    std::vector<Poly> d1 = Decompose(c1);
+    // ---------- Stage 1: iNTT, 2k independent tower tasks ----------
+    // coef[c*k + jt] = tower jt of component c, in COEFFICIENT format
+    std::vector<NativePoly> coef(2 * k);
 
-    auto params = c0.GetParams();
-    Poly res_c0(params, Format::EVALUATION, true);
-    Poly res_c1(params, Format::EVALUATION, true);
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
+    for (size_t u = 0; u < 2 * k; u++) {
+        coef[u] = cv[u / k].GetElementAtIndex(u % k);  // per-tower copy
+        coef[u].SetFormat(Format::COEFFICIENT);        // single-tower iNTT
+    }
 
-    // Multiply the k*ell decomposed polynomials against the k*ell RGSW rows
-    for (size_t idx = 0; idx < half_size; idx++) {
-        // --- Upper Half (C_0 interacts strictly with d0) ---
-        const auto& C0_row = rgsw[idx]->GetElements();
-        res_c0 += d0[idx] * C0_row[0];
-        res_c1 += d0[idx] * C0_row[1];
+    // ---------- Stage 2: slice + lift + fNTT, 2*k*ell*k independent tasks ----------
+    // dig[s*k + t] = tower t of digit slot s, in EVALUATION format
+    std::vector<NativePoly> dig(S * k);
 
-        // --- Lower Half (C_1 interacts strictly with d1) ---
-        const auto& C1_row = rgsw[half_size + idx]->GetElements();
-        res_c0 += d1[idx] * C1_row[0];
-        res_c1 += d1[idx] * C1_row[1];
+#pragma omp parallel for collapse(2) \
+        num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(S * k))
+    for (size_t s = 0; s < S; s++) {
+        for (size_t t = 0; t < k; t++) {
+            const size_t r   = s % l;
+            const size_t iT  = r / m_ell;              // source tower -- matches EncryptRGSW
+            const size_t j   = r % m_ell;              // base power
+            const size_t sh  = j * m_logB;
+            const bool   top = (j + 1 == m_ell);       // top digit: unsigned, no B/2 shift
+
+            const auto&    limb = coef[(s / l) * k + iT];
+            const auto&    tp   = params->GetParams()[t];
+            const uint64_t qt   = tp->GetModulus().ConvertToInt();
+
+            NativePoly dt(tp, Format::COEFFICIENT, true);
+            for (size_t x = 0; x < n; x++) {
+                const uint64_t u = ((limb[x].ConvertToInt() + m_offset) >> sh) & mask;
+                dt[x] = top ? NativeInteger(u)
+                            : NativeInteger(u >= halfB ? u - halfB : qt - (halfB - u));
+            }
+
+            dt.SetFormat(Format::EVALUATION);          // single-tower fNTT
+            dig[s * k + t] = std::move(dt);
+        }
+    }
+
+    // ---------- Stage 3: accumulation, separable over (b, t): no reduction ----------
+    Poly acc0(params, Format::EVALUATION, true);
+    Poly acc1(params, Format::EVALUATION, true);
+    Poly* acc[2] = { &acc0, &acc1 };
+
+#pragma omp parallel for collapse(2) \
+        num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
+    for (size_t b = 0; b < 2; b++) {
+        for (size_t t = 0; t < k; t++) {
+            const auto& tp = params->GetParams()[t];
+            NativePoly sum(tp, Format::EVALUATION, true);
+
+            for (size_t s = 0; s < S; s++)             // sequential FMA, contention-free
+                sum += dig[s * k + t] * rgsw[s]->GetElements()[b].GetElementAtIndex(t);
+
+            acc[b]->SetElementAtIndex(t, std::move(sum));
+        }
     }
 
     RLWE result = rlwe->CloneEmpty();
-    result->SetElements({std::move(res_c0), std::move(res_c1)});
-
+    result->SetElements({std::move(acc0), std::move(acc1)});
     return result;
 }
 
@@ -222,8 +292,8 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
-        const size_t i = r / m_ell;  // tower  -- matches EncryptRGSW
-        const size_t j = r % m_ell;  // power
+        const size_t i = r / m_ell;
+        const size_t j = r % m_ell;
         const size_t sh = j * m_logB;
 
         const auto& limb = xCoef.GetElementAtIndex(i);
