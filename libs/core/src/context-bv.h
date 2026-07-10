@@ -14,9 +14,9 @@ class ExtendedContextBVImpl final : public IExtendedContext {
     RLWE EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const override;
     RGSW EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const override;
 
-    RGSW EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const override { throw new std::logic_error("Not implemented."); };
-    RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const override { throw new std::logic_error("Not implemented."); };
-    RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const override { throw new std::logic_error("Not implemented."); };
+    RGSW EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const override;
+    RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const override;
+    RGSW EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const override;
 
    private:
     const uint32_t m_ell;

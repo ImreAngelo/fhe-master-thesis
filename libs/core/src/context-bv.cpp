@@ -267,6 +267,32 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
     return result;
 }
 
+RGSW ExtendedContextBVImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const {
+    RGSW result;
+    result.reserve(2);
+
+    for (size_t row = 0; row < 2; row++) {
+        // Clone exactly copies the correct embedded CryptoContext pointer
+        auto out = lhs[row]->Clone();
+
+        auto cL = lhs[row]->GetElements();
+        auto cR = rhs[row]->GetElements();
+
+        // Direct polynomial addition
+        out->SetElements({cL[0] + cR[0], cL[1] + cR[1]});
+        result.push_back(std::move(out));
+    }
+
+    return result;
+}
+
+RGSW ExtendedContextBVImpl::EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const {
+    throw new std::logic_error("Not implemented.");
+}
+
+RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const {
+    throw new std::logic_error("Not implemented.");
+}
 
 //-----------//
 // Internals //
@@ -298,7 +324,7 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
 
         const auto& limb = xCoef.GetElementAtIndex(i);
 
-        // Shifted unsigned slice: u = d + B/2, no carries, no centering.
+        // Center digit
         std::vector<uint64_t> u(n);
         for (size_t c = 0; c < n; c++) u[c] = ((limb[c].ConvertToInt() + m_offset) >> sh) & mask;
 
@@ -307,7 +333,7 @@ std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
             const auto& tp = params->GetParams()[t];
             const uint64_t qt = tp->GetModulus().ConvertToInt();
             NativePoly dt(tp, Format::COEFFICIENT, true);
-            for (size_t c = 0; c < n; c++)  // subtract B/2 during the lift
+            for (size_t c = 0; c < n; c++)
                 dt[c] = (j + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
             d.SetElementAtIndex(t, std::move(dt));
         }
