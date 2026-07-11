@@ -64,7 +64,7 @@ _CONFIGURE = cmake -S . -B $(BUILDDIR) \
 	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native" \
 	$(_DEBUG_FLAGS)
 
-# Build whatever production binaries are registered in CMakeLists.txt.
+# Build whatever production binaries are registered in CMakeLists.txt
 build: openfhe
 	@$(_CONFIGURE)
 	@cmake --build $(BUILDDIR) -j$(shell nproc)
@@ -81,7 +81,7 @@ estimate:
 # Tests #
 #########
 
-# Build and run all tests against the optimized OpenFHE.
+# Build and run all tests against the optimized OpenFHE build
 test: openfhe
 	@$(_CONFIGURE)
 	@cmake --build $(BUILDDIR) --target check -j$(shell nproc)
@@ -95,11 +95,11 @@ test-%: openfhe
 # Benchmarks #
 ##############
 
-# Delegated to benchmark/Makefile, which uses the same $(BUILDDIR) and depends
-# on the openfhe target above. See `make -C benchmark help`.
+# Run all benchmarks
 bench: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
 
+# Run specific benchmark:  make bench-rgsw
 bench-%: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
 
@@ -107,17 +107,16 @@ bench-%: openfhe
 # Formatting #
 ##############
 
-# All hand-written C++ sources/headers. vendors/ and build/ are excluded by
-# only descending into the project's own source trees.
+# All hand-written C++ sources/headers. vendors/ and build/ are excluded
 CLANG_FORMAT ?= clang-format
 FORMAT_FILES := $(shell find libs benchmark test -type f \( -name '*.cpp' -o -name '*.h' \))
 
-# Rewrite files in place to match .clang-format.
+# Rewrite files in place to match .clang-format
 format:
 	@echo "Formatting $(words $(FORMAT_FILES)) files..."
 	@$(CLANG_FORMAT) -i $(FORMAT_FILES)
 
-# Report files that are not formatted, without modifying them (exit 1 if any).
+# Report files that are not formatted, without modifying them (exit 1 if any)
 format-check:
 	@$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 

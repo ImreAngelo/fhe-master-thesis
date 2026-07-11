@@ -18,7 +18,6 @@ __Research Questions:__
     <!-- <li><a href="#project-layout">Project Layout</a></li> -->
     <li><a href="#unit-tests">Unit Tests</a></li>
     <li><a href="#benchmarks">Benchmarks</a></li>
-    <!-- <li><a href="#results">Benchmarks</a></li> -->
 </ul>
 
 
@@ -33,10 +32,12 @@ __Research Questions:__
 <!-- TODO: -->
 > [!NOTE] 
 > The project will statically link OpenFHE by default. 
-> To build the project using a version of OpenFHE already installed on the system, ... <!-- run `make build-dynamic` -->
+> To build the project using a version of OpenFHE already installed on the system... <!-- run `make build-dynamic` -->
 
-<!-- ## Project Layout
-TBD... -->
+## Project Layout
+Split into 3 distinct libraries + helpers for unit testing etc.
+- Main directories inside `lib`: `libs/core`, `libs/client`, `libs/server`
+- Auxiliary directories: `benchmark`, `test`, `scripts`
 
 
 ## Unit Tests
@@ -71,10 +72,11 @@ make bench
 ```
 
 > [!TIP]
-> Single benchmarks can be ran by overriding the `BENCH_NAMES` flag
-> ``sh
-> make -C benchmark run BENCH_NAMES=rgsw
-> ``
+> Single benchmarks can be ran by overriding the `BENCH_NAMES` flag in `make -C benchmark run`
+> ```sh
+> make -C benchmark run BENCH_NAMES=rgsw   # benchmark RGSW operations
+> make bench-rgsw                          # same but does not take more flags
+> ```
 
 | **Flag**          | **Description**                                                                                                 | **Default**            |
 |-------------------|-----------------------------------------------------------------------------------------------------------------|------------------------|
@@ -82,9 +84,9 @@ make bench
 | BENCH_NAMES       | Specify benchmark files to run                                                                                  | All in `benchmark/src` |
 | BENCH_FILTER      | Run only the benchmarks that match this filter                                                                  | .*                     |
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
-| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 1                      |
+| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 6                      |
 
-<!-- TODO: Make smaller and center on page -->
+<!-- TODO: Make smaller and center on page + bright and dark versions -->
 <picture>
   <!-- <source
     width="100%"
@@ -99,6 +101,7 @@ make bench
   <img width="100%" src="./docs/img/bench-rgsw.png" alt="RGSW benchmarks"/>
 </picture>
 
+
 ## TODO
 - [ ] Add/verify support for BFV
-- [ ] Test multi-threaded performance
+- [ ] Pass parameters via CLI

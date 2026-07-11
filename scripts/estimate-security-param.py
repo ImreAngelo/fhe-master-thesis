@@ -1,7 +1,7 @@
 # !../.venv/bin/python
-# https://github.com/malb/lattice-estimator
+# Estimate security parameters for the main code using https://github.com/malb/lattice-estimator
 # setup: ./scripts/setup.sh
-# run:   .venv/bin/python scripts/estimate-security-param.py [--full]
+# run:   make estimate
 import argparse
 from dataclasses import dataclass
 from math import isinf, log2
@@ -36,12 +36,13 @@ class ParamSet:
 
 
 PARAM_SETS = [
-    # spar::params::Small, 2 x 60-bit limbs
+    # 123.9 bits of security
+    ParamSet("ideal",     N=2**12, logQ=110, sigma=3.19),
     ParamSet("small",     N=2**11, logQ=120, sigma=3.19),
-    ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
-    # spar::params::Large, 60 + 55-bit limbs
-    ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
-    ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
+    # ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
+    # # spar::params::Large, 60 + 55-bit limbs
+    # ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
+    # ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
 ]
 
 
