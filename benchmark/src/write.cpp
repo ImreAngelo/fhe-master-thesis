@@ -32,8 +32,9 @@ struct Fixture {
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N = N;
+    // WARN: Hybrid does not support internal product yet
     // f.cc = core::GenContextHybrid(spar::params::Small());
-    // f.cc = core::GenContextBV(spar::params::Small(), 3);
+    f.cc = core::GenContextBV(spar::params::Large(), 3);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
@@ -52,6 +53,7 @@ Fixture BuildFixture(uint32_t N) {
     return f;
 }
 
+// TODO: Generate this on demand; requires quadratic memory for large N
 std::vector<std::vector<RGSW>> MakeZ(const Fixture& f, uint32_t target) {
     std::vector<RGSW> hot(f.N);
     for (uint32_t i = 0; i < f.N; i++) {
@@ -84,7 +86,8 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 }
 
 void RegisterAll() {
-    for (uint32_t N : {2u, 32u, 64u, 128u}) {
+    for (uint32_t N : {2u, 32u, 64u, // 128u
+    }) {
         benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }

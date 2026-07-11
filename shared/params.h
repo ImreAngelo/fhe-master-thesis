@@ -15,14 +15,18 @@ inline lbcrypto::CCParams<T> Large() {
     params.SetPlaintextModulus(1 << 8);
     params.SetRingDim(1 << 14);
 
-    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_128_classic);
+    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+
+    // Q = 120 bits
+    params.SetFirstModSize(60);
+    params.SetScalingModSize(60);
 
     // For GHS
     params.SetKeySwitchTechnique(lbcrypto::HYBRID);
     params.SetNumLargeDigits(1);
 
-    // From sPAR
+    // Debugging
     // double sigma = std::pow(2.0, -55.0);
     // params.SetStandardDeviation(sigma);
 
@@ -30,28 +34,26 @@ inline lbcrypto::CCParams<T> Large() {
 }
 
 template <typename T = lbcrypto::CryptoContextBGVRNS>
-inline lbcrypto::CCParams<T> Small() {
+inline lbcrypto::CCParams<T> Small(const bool hybrid = false) {
     lbcrypto::CCParams<T> params;
 
-    params.SetPlaintextModulus(1 << 7);
+    params.SetPlaintextModulus(1 << 8);
     params.SetRingDim(1 << 12);
 
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
+
+    // Q = 120 bits
+    params.SetFirstModSize(60);
+    params.SetScalingModSize(60);
     params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
 
-    // Hybrid should be default
+    if(!hybrid) return params;
+
+    // Hybrid should be default anyways
     params.SetKeySwitchTechnique(lbcrypto::HYBRID);
     params.SetNumLargeDigits(1);  // |P| ~= |Q|
-
-    // Debugging
-    // params.SetFirstModSize(60);
-    // params.SetScalingModSize(55);
-    // params.SetStandardDeviation(.0f);
-    // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
-
-    // Debugging
-    // params.SetStandardDeviation(0.2);
+    params.SetRingDim(1 << 13);
 
     return params;
 }
-}  // namespace spar::params|
+}  // namespace spar::params

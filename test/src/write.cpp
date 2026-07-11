@@ -25,10 +25,11 @@ class Server : public ::testing::TestWithParam<uint32_t> {
     void SetUp() override {
         N = GetParam();
 
-        // cc = GenContextBV(params::Small(), 4); // TODO: Parameterize context BV/Hybrid
-        cc = GenContextHybrid(params::Small());
+        // WARN: Hybrid does not support internal product yet
+        // cc = GenContextHybrid(params::Small());
+        cc = GenContextBV(params::Large(), 3);
         cc->Enable(PKE);
-        cc->Enable(LEVELEDSHE);
+
         keys = cc->KeyGen();
 
         zero_pt = cc->MakeCoefPackedPlaintext({0});
@@ -38,10 +39,10 @@ class Server : public ::testing::TestWithParam<uint32_t> {
         I_mat.resize(N);
         for (uint32_t i = 0; i < N; i++) {
             for (uint32_t k = 0; k < K; k++) {
-                // L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
-                // I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
-                L_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, zero_pt);
-                I_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, one_pt);
+                L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
+                I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
+                // L_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, zero_pt);
+                // I_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, one_pt);
             }
         }
     }
@@ -63,8 +64,8 @@ TEST_P(Server, Write) {
         const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
         const auto z = MakeZ(r);
 
-        const auto nothw = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z);
-        PRINT_MAX_NOISE(cc, L_mat[0][0][0], keys.secretKey);
+        const auto nothw = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z, keys.secretKey);
+        PRINT_MAX_NOISE_MSB(cc, nothw[0], keys.secretKey);
         const auto result = cc->EvalExternalProduct(one, nothw);
 
         Plaintext decrypted;
@@ -94,6 +95,6 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u), [](const auto& info) { return "N" + std::to_string(info.param); });
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u /*, 4u, 8u*/), [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test

@@ -1,6 +1,6 @@
 #include "context-bv.h"
 #include "factory.h"
-
+#include "core/utils/logging.h"
 
 namespace {
 using namespace core;
@@ -77,7 +77,15 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
       m_ell(ell),
       m_logB(ComputeLogB(cc, m_ell)),
       m_offset(ComputeOffset(cc, m_ell, m_logB)),
-      m_powers(ComputePowers(cc, m_ell, m_logB)) {}
+      m_powers(ComputePowers(cc, m_ell, m_logB)) {
+        DEBUG_PRINT("Q: " << cc.GetCryptoParameters()->GetElementParams()->GetModulus());
+
+        int i = 0;
+        for(const auto& qi : cc.GetCryptoParameters()->GetElementParams()->GetParams()) {
+            DEBUG_PRINT("q[" << i << "]: " << qi->GetModulus());
+            i++;
+        }
+      }
 
 
 //-----//

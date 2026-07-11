@@ -29,6 +29,7 @@ Fixture BuildFixture(const SchemeCase& sc) {
     f.cc->Enable(PKE);
     // f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
+    // f.cc->SetExtendedKey(f.keys);  // publishes QP key material (no-op for BV)
     f.pt_msg = f.cc->MakeCoefPackedPlaintext({2});
     f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
     f.rgsw_ct = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
@@ -68,9 +69,9 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
 
 const std::vector<SchemeCase> kSchemes = {
     {"BV_Small", [] { return core::GenContextBV(spar::params::Small(), /*ell=*/2); }},
-    // {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Small()); }},
-    {"BV_Large", [] { return core::GenContextBV(spar::params::Large(), /*ell=*/3); }},
-    // {"Hybrid_Large", [] { return core::GenContextHybrid(spar::params::Large()); }},
+    {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Small()); }},
+    {"BV_Large", [] { return core::GenContextBV(spar::params::Large(), /*ell=*/2); }},
+    {"Hybrid_Large", [] { return core::GenContextHybrid(spar::params::Large()); }},
 };
 
 void RegisterAll() {

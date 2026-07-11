@@ -90,6 +90,8 @@ TEST_P(RGSW, InternalProduct) {
     cc->Decrypt(keys.secretKey, result, &decrypted);
     decrypted->SetLength(1);
 
+    PRINT_MAX_NOISE(cc, result, keys.secretKey);
+
     const auto expected = cc->MakeCoefPackedPlaintext({kVal * kVal});
     ASSERT_EQ(decrypted, expected);
 }
@@ -187,7 +189,7 @@ TEST_P(RGSW, InternalProductChains) {
         const auto res = cc->EvalExternalProduct(rlwe_one, current);
 
         RECORD_MAX_NOISE(n, cc, res, keys.secretKey);
-        // PRINT_MAX_NOISE(cc, res, keys.secretKey);
+        PRINT_MAX_NOISE(cc, res, keys.secretKey);
 
         expected = (expected * kVal) % t;
         if (expected > t / 2) expected -= t;
@@ -206,7 +208,7 @@ TEST_P(RGSW, InternalProductChains) {
 
 INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
                          ::testing::Values(SchemeCase{"BV_Small", [] { return GenContextBV(params::Small(), /*ell=*/2); }},
-                                           SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small()); }},
+                                           SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small(true)); }},
                                            SchemeCase{"BV_Large", [] { return GenContextBV(params::Large(), /*ell=*/3); }},
                                            SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}
                                            ),
