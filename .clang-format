@@ -11,7 +11,7 @@ IncludeBlocks: Merge
 IncludeCategories:
   - Regex: '^"openfhe'           # OpenFHE
     Priority: 2
-  - Regex: '^"'                  # your project headers first
+  - Regex: '^"'                  # Project headers first
     Priority: 1
   - Regex: '^<.*\.h>'            # C headers
     Priority: 3

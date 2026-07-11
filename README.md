@@ -1,4 +1,4 @@
-# (Somewhat) Practical Anonymous Routing with Homomorphic Encryption
+# (Somewhat) Practical Anonymous Router
 
 Many anonymous communication systems have been proposed and implemented with the goal of allowing users to exchange messages over a network without revealing who is communicating with whom. Most of these designs (e.g., Tor, I2P, mixnets) rely on the _threshold model_ to provide anonymity, wherein some components of their infrastructure must be behaving honestly. Systems with stronger anonymity guarantees (e.g., DC-nets) generally suffer from poor scalability or are impractical to instantiate.
 
