@@ -1,0 +1,9 @@
+CompileFlags:
+  # clangd parses with its bundled clang, which does not search g++'s resource
+  # include dir where omp.h lives. The project builds with g++ -fopenmp, so add
+  # that dir to fix "'omp.h' file not found". Use -idirafter (searched last) so
+  # clang's own intrinsics headers still win — a plain -I would pull in GCC's
+  # xmmintrin.h and clash with clang builtins (e.g. _mm_getcsr).
+  Add:
+    - -idirafter
+    - /usr/lib/gcc/x86_64-linux-gnu/13/include

@@ -69,6 +69,14 @@ build: openfhe
 	@$(_CONFIGURE)
 	@cmake --build $(BUILDDIR) -j$(shell nproc)
 
+####################
+# Parameter Tuning #
+####################
+
+estimate:
+	@echo "Estimating security parameters with lattice-estimator..."
+	@./.venv/bin/python scripts/estimate-security-param.py --full
+
 #########
 # Tests #
 #########
@@ -93,7 +101,7 @@ bench: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
 
 bench-%: openfhe
-	@$(MAKE) -C benchmark $@ BUILDDIR="$(CURDIR)/$(BUILDDIR)"
+	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
 
 ##############
 # Formatting #
@@ -139,7 +147,7 @@ help:
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
-	@echo "  bench-<name>       - Build a specific benchmark binary"
+	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"

@@ -8,54 +8,51 @@ namespace spar::params {
 /// @brief Create parameters shared by all tests
 /// @todo More complex construction, and store common parameter sets
 template <typename T = lbcrypto::CryptoContextBGVRNS>
-inline lbcrypto::CCParams<T> Large(const uint32_t depth = 1) {
+inline lbcrypto::CCParams<T> Large() {
     lbcrypto::CCParams<T> params;
-    // params.SetMultiplicativeDepth(depth);
-    params.SetPlaintextModulus(65537);
+
+    // params.SetPlaintextModulus(65537);
+    params.SetPlaintextModulus(1 << 8);
     params.SetRingDim(1 << 14);
 
+    params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_128_classic);
+    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+
+    // Q = 120 bits
+    params.SetFirstModSize(60);
+    params.SetScalingModSize(60);
+
+    // For GHS
     params.SetKeySwitchTechnique(lbcrypto::HYBRID);
     params.SetNumLargeDigits(1);
 
-    //
-    params.SetFirstModSize(60);
-    params.SetScalingModSize(55);
-    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
-
-    params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_128_classic);
-    // if(depth > 1)
-    //     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
-
-    // From sPAR
-    double sigma = std::pow(2.0, -55.0);
-    params.SetStandardDeviation(sigma);
+    // Debugging
+    // double sigma = std::pow(2.0, -55.0);
+    // params.SetStandardDeviation(sigma);
 
     return params;
 }
 
 template <typename T = lbcrypto::CryptoContextBGVRNS>
-inline lbcrypto::CCParams<T> Small(const uint32_t depth = 1) {
+inline lbcrypto::CCParams<T> Small(const bool hybrid = false) {
     lbcrypto::CCParams<T> params;
-    params.SetMultiplicativeDepth(depth);
+
     params.SetPlaintextModulus(1 << 8);
-    params.SetRingDim(1 << 11);
+    params.SetRingDim(1 << 12);
 
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
 
-    // Hybrid should be default
+    // Q = 120 bits
+    params.SetFirstModSize(60);
+    params.SetScalingModSize(60);
+    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
+
+    if(!hybrid) return params;
+
+    // Hybrid should be default anyways
     params.SetKeySwitchTechnique(lbcrypto::HYBRID);
     params.SetNumLargeDigits(1);  // |P| ~= |Q|
-
-    // Debugging
-    // params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);
-    // params.SetFirstModSize(60);
-    // params.SetScalingModSize(55);
-    // params.SetStandardDeviation(.0f);
-    // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
-
-    // From sPAR
-    double sigma = std::pow(2.0, -55.0);
-    params.SetStandardDeviation(sigma);
+    params.SetRingDim(1 << 13);
 
     return params;
 }

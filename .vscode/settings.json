@@ -1,4 +1,8 @@
 {
     "C_Cpp.errorSquiggles": "disabled",
-    "C_Cpp.default.compilerPath": "/usr/bin/clang"
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "clangd.arguments": [
+        "--query-driver=/usr/bin/g++",
+        "--compile-commands-dir=${workspaceFolder}/build"
+    ]
 }

@@ -1,5 +1,6 @@
 #include "core/context.h"
 #include "core/types.h"
+#include "core/utils/noise.h"
 #include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
@@ -108,6 +109,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
     std::vector<Client> clients;
     std::vector<PrivateKey> secrets;  // simulation-only: in practice each sk_i stays with its client
     PublicKey jointPk;
+    PrivateKey jointSk;  // simulation-only: sum of shards, for noise inspection via PRINT_MAX_NOISE
     server::Matrix<3> I_mat;
     server::Matrix<3> L_mat;
     RLWE identity;  // for EvalExternalProduct-based RGSW->RLWE conversion
@@ -142,6 +144,14 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         }
 
         jointPk = clients[n - 1].kpShard.publicKey;
+
+        // Aggregate secret key (sum of shards) so PRINT_MAX_NOISE can inspect
+        // ciphertexts encrypted under the joint public key.
+        jointSk = std::make_shared<lbcrypto::PrivateKeyImpl<Poly>>(cc);
+        Poly s = secrets[0]->GetPrivateElement();
+        for (uint32_t i = 1; i < n; ++i) s += secrets[i]->GetPrivateElement();
+        jointSk->SetPrivateElement(std::move(s));
+
         std::tie(I_mat, L_mat) = server::InitializeStateMatrices(cc, jointPk, n);
 
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
@@ -205,6 +215,11 @@ TEST_P(Multiparty, ServerWrite) {
     for (auto& client : clients) {
         // TODO: rename hasWritten -> failed
         client.hasWritten = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+
+        // Track noise growth in the write matrix (L) as each user writes.
+        // L holds RGSW ciphertexts, so convert to RLWE via external product with rlwe(1).
+        const auto L_slot = cc->EvalExternalProduct(identity, L_mat[0][0]);
+        PRINT_MAX_NOISE(cc, L_slot, jointSk);
 
         // Verify (not)HasWritten = 0
         Plaintext dec = MPDecryptFull(cc, client.hasWritten, n, jointPk, secrets);
