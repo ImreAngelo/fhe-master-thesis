@@ -210,8 +210,7 @@ INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
                          ::testing::Values(SchemeCase{"BV_Small", [] { return GenContextBV(params::Small(), /*ell=*/2); }},
                                            SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small(true)); }},
                                            SchemeCase{"BV_Large", [] { return GenContextBV(params::Large(), /*ell=*/3); }},
-                                           SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}
-                                           ),
+                                           SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}),
                          [](const auto& info) { return info.param.name; });
 
 }  // namespace spar::test

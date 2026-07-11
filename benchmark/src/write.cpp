@@ -34,7 +34,7 @@ Fixture BuildFixture(uint32_t N) {
     f.N = N;
     // WARN: Hybrid does not support internal product yet
     // f.cc = core::GenContextHybrid(spar::params::Small());
-    f.cc = core::GenContextBV(spar::params::Large(), 3);
+    f.cc = core::GenContextBV(spar::params::Small(), 8);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
@@ -86,8 +86,9 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 }
 
 void RegisterAll() {
-    for (uint32_t N : {2u, 32u, 64u, // 128u
-    }) {
+    for (uint32_t N : {
+             2u, 32u, 64u,  // 128u
+         }) {
         benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }
