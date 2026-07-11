@@ -1,6 +1,6 @@
 #include "context-bv.h"
-#include "factory.h"
 #include "core/utils/logging.h"
+#include "factory.h"
 
 namespace {
 using namespace core;
@@ -77,15 +77,7 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
       m_ell(ell),
       m_logB(ComputeLogB(cc, m_ell)),
       m_offset(ComputeOffset(cc, m_ell, m_logB)),
-      m_powers(ComputePowers(cc, m_ell, m_logB)) {
-        DEBUG_PRINT("Q: " << cc.GetCryptoParameters()->GetElementParams()->GetModulus());
-
-        int i = 0;
-        for(const auto& qi : cc.GetCryptoParameters()->GetElementParams()->GetParams()) {
-            DEBUG_PRINT("q[" << i << "]: " << qi->GetModulus());
-            i++;
-        }
-      }
+      m_powers(ComputePowers(cc, m_ell, m_logB)) {}
 
 
 //-----//
@@ -194,14 +186,14 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 // }
 
 RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
-    const auto& cv     = rlwe->GetElements();          // (c0, c1), EVALUATION format
-    const auto  params = cv[0].GetParams();
-    const size_t k     = cv[0].GetNumOfElements();
-    const size_t n     = params->GetRingDimension();
-    const size_t l     = k * m_ell;                    // digits per component
-    const size_t S     = 2 * l;                        // digit slot s = c*l + r matches rgsw row s
+    const auto& cv = rlwe->GetElements();  // (c0, c1), EVALUATION format
+    const auto params = cv[0].GetParams();
+    const size_t k = cv[0].GetNumOfElements();
+    const size_t n = params->GetRingDimension();
+    const size_t l = k * m_ell;  // digits per component
+    const size_t S = 2 * l;      // digit slot s = c*l + r matches rgsw row s
 
-    const uint64_t mask  = (uint64_t(1) << m_logB) - 1;
+    const uint64_t mask = (uint64_t(1) << m_logB) - 1;
     const uint64_t halfB = uint64_t(1) << (m_logB - 1);
 
     // ---------- Stage 1: iNTT, 2k independent tower tasks ----------
@@ -218,28 +210,26 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
     // dig[s*k + t] = tower t of digit slot s, in EVALUATION format
     std::vector<NativePoly> dig(S * k);
 
-#pragma omp parallel for collapse(2) \
-        num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(S * k))
+#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(S* k))
     for (size_t s = 0; s < S; s++) {
         for (size_t t = 0; t < k; t++) {
-            const size_t r   = s % l;
-            const size_t iT  = r / m_ell;              // source tower -- matches EncryptRGSW
-            const size_t j   = r % m_ell;              // base power
-            const size_t sh  = j * m_logB;
-            const bool   top = (j + 1 == m_ell);       // top digit: unsigned, no B/2 shift
+            const size_t r = s % l;
+            const size_t iT = r / m_ell;  // source tower -- matches EncryptRGSW
+            const size_t j = r % m_ell;   // base power
+            const size_t sh = j * m_logB;
+            const bool top = (j + 1 == m_ell);  // top digit: unsigned, no B/2 shift
 
-            const auto&    limb = coef[(s / l) * k + iT];
-            const auto&    tp   = params->GetParams()[t];
-            const uint64_t qt   = tp->GetModulus().ConvertToInt();
+            const auto& limb = coef[(s / l) * k + iT];
+            const auto& tp = params->GetParams()[t];
+            const uint64_t qt = tp->GetModulus().ConvertToInt();
 
             NativePoly dt(tp, Format::COEFFICIENT, true);
             for (size_t x = 0; x < n; x++) {
                 const uint64_t u = ((limb[x].ConvertToInt() + m_offset) >> sh) & mask;
-                dt[x] = top ? NativeInteger(u)
-                            : NativeInteger(u >= halfB ? u - halfB : qt - (halfB - u));
+                dt[x] = top ? NativeInteger(u) : NativeInteger(u >= halfB ? u - halfB : qt - (halfB - u));
             }
 
-            dt.SetFormat(Format::EVALUATION);          // single-tower fNTT
+            dt.SetFormat(Format::EVALUATION);  // single-tower fNTT
             dig[s * k + t] = std::move(dt);
         }
     }
@@ -247,16 +237,15 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
     // ---------- Stage 3: accumulation, separable over (b, t): no reduction ----------
     Poly acc0(params, Format::EVALUATION, true);
     Poly acc1(params, Format::EVALUATION, true);
-    Poly* acc[2] = { &acc0, &acc1 };
+    Poly* acc[2] = {&acc0, &acc1};
 
-#pragma omp parallel for collapse(2) \
-        num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
+#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
     for (size_t b = 0; b < 2; b++) {
         for (size_t t = 0; t < k; t++) {
             const auto& tp = params->GetParams()[t];
             NativePoly sum(tp, Format::EVALUATION, true);
 
-            for (size_t s = 0; s < S; s++)             // sequential FMA, contention-free
+            for (size_t s = 0; s < S; s++)  // sequential FMA, contention-free
                 sum += dig[s * k + t] * rgsw[s]->GetElements()[b].GetElementAtIndex(t);
 
             acc[b]->SetElementAtIndex(t, std::move(sum));
@@ -317,12 +306,10 @@ RGSW ExtendedContextBVImpl::EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const 
 }
 
 RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const {
-    // The gadget encoding lives per-tower, so multiplying every limb by the
-    // plaintext polynomial commutes with the gadget: G(m) * p = G(m*p).
     Poly p = pt->GetElement<Poly>();
     p.SetFormat(Format::EVALUATION);
 
-    RGSW result(rgsw.size());
+    RGSW result(rgsw.size()); // 2 * m_ell
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
     for (size_t r = 0; r < rgsw.size(); r++) {
@@ -345,46 +332,46 @@ NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j
     return m_powers[i + m_ell * j];
 }
 
-std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
-    const auto params = x.GetParams();
-    const size_t k = x.GetNumOfElements();
-    const size_t n = params->GetRingDimension();
-    const size_t l = k * m_ell;
+// std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& x) const {
+//     const auto params = x.GetParams();
+//     const size_t k = x.GetNumOfElements();
+//     const size_t n = params->GetRingDimension();
+//     const size_t l = k * m_ell;
 
-    const uint64_t mask = (uint64_t(1) << m_logB) - 1;
-    const uint64_t halfB = uint64_t(1) << (m_logB - 1);
+//     const uint64_t mask = (uint64_t(1) << m_logB) - 1;
+//     const uint64_t halfB = uint64_t(1) << (m_logB - 1);
 
-    Poly xCoef = x;
-    xCoef.SetFormat(Format::COEFFICIENT);
+//     Poly xCoef = x;
+//     xCoef.SetFormat(Format::COEFFICIENT);
 
-    std::vector<Poly> digits(l);
+//     std::vector<Poly> digits(l);
 
-#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
-    for (size_t r = 0; r < l; r++) {
-        const size_t i = r / m_ell;
-        const size_t j = r % m_ell;
-        const size_t sh = j * m_logB;
+// #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+//     for (size_t r = 0; r < l; r++) {
+//         const size_t i = r / m_ell;
+//         const size_t j = r % m_ell;
+//         const size_t sh = j * m_logB;
 
-        const auto& limb = xCoef.GetElementAtIndex(i);
+//         const auto& limb = xCoef.GetElementAtIndex(i);
 
-        // Center digit
-        std::vector<uint64_t> u(n);
-        for (size_t c = 0; c < n; c++) u[c] = ((limb[c].ConvertToInt() + m_offset) >> sh) & mask;
+//         // Center digit
+//         std::vector<uint64_t> u(n);
+//         for (size_t c = 0; c < n; c++) u[c] = ((limb[c].ConvertToInt() + m_offset) >> sh) & mask;
 
-        Poly d(params, Format::COEFFICIENT, true);
-        for (size_t t = 0; t < k; t++) {
-            const auto& tp = params->GetParams()[t];
-            const uint64_t qt = tp->GetModulus().ConvertToInt();
-            NativePoly dt(tp, Format::COEFFICIENT, true);
-            for (size_t c = 0; c < n; c++)
-                dt[c] = (j + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
-            d.SetElementAtIndex(t, std::move(dt));
-        }
-        d.SetFormat(Format::EVALUATION);
-        digits[r] = std::move(d);
-    }
-    return digits;
-}
+//         Poly d(params, Format::COEFFICIENT, true);
+//         for (size_t t = 0; t < k; t++) {
+//             const auto& tp = params->GetParams()[t];
+//             const uint64_t qt = tp->GetModulus().ConvertToInt();
+//             NativePoly dt(tp, Format::COEFFICIENT, true);
+//             for (size_t c = 0; c < n; c++)
+//                 dt[c] = (j + 1 < m_ell) ? NativeInteger(u[c] >= halfB ? u[c] - halfB : qt - (halfB - u[c])) : NativeInteger(u[c]);
+//             d.SetElementAtIndex(t, std::move(dt));
+//         }
+//         d.SetFormat(Format::EVALUATION);
+//         digits[r] = std::move(d);
+//     }
+//     return digits;
+// }
 
 // std::vector<Poly> ExtendedContextBVImpl::Decompose(const Poly& input) const {
 //     const Poly coefs = ::CloneToCoefficient(input);

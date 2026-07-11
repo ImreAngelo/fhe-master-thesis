@@ -39,7 +39,9 @@ void RecordRow(const First& first, const Rest&... rest) {
     os << '\n';
 }
 
-inline void RecordEnd() { RecordStream().close(); }
+inline void RecordEnd() {
+    RecordStream().close();
+}
 
 }  // namespace core::utils
 

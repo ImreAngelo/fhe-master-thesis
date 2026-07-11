@@ -86,8 +86,9 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 }
 
 void RegisterAll() {
-    for (uint32_t N : {2u, 32u, 64u, // 128u
-    }) {
+    for (uint32_t N : {
+             2u, 32u, 64u,  // 128u
+         }) {
         benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }

@@ -35,7 +35,7 @@ std::vector<std::vector<NativeInteger>> ComputeQHatModP(const std::shared_ptr<lb
 
     std::vector<std::vector<NativeInteger>> qHatModP(q.size(), std::vector<NativeInteger>(p.size()));
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
         BigInteger qHat = Q / BigInteger(qi);
@@ -125,12 +125,12 @@ RGSW ExtendedContextHybridImpl::MakePublicRGSW(const PublicKey& pk, const Plaint
 }
 
 void ExtendedContextHybridImpl::SetExtendedKey(const lbcrypto::KeyPair<Poly>& keys) {
-    const auto paramsQP   = m_params->GetParamsQP();
+    const auto paramsQP = m_params->GetParamsQP();
     const auto& pparamsQP = paramsQP->GetParams();
-    const auto ns         = m_params->GetNoiseScale();
-    auto dgg              = m_params->GetDiscreteGaussianGenerator();
+    const auto ns = m_params->GetNoiseScale();
+    auto dgg = m_params->GetDiscreteGaussianGenerator();
 
-    const uint32_t sizeQ  = m_params->GetElementParams()->GetParams().size();
+    const uint32_t sizeQ = m_params->GetElementParams()->GetParams().size();
     const uint32_t sizeQP = pparamsQP.size();
 
     // Extend the secret key s from basis Q to basis QP: copy the Q-limbs, and for
@@ -145,8 +145,7 @@ void ExtendedContextHybridImpl::SetExtendedKey(const lbcrypto::KeyPair<Poly>& ke
             auto tmp = s.GetElementAtIndex(i);
             tmp.SetFormat(Format::EVALUATION);
             sExt.SetElementAtIndex(i, std::move(tmp));
-        }
-        else {
+        } else {
             auto tmp = s0;
             tmp.SwitchModulus(pparamsQP[i]->GetModulus(), pparamsQP[i]->GetRootOfUnity(), 0, 0);
             tmp.SetFormat(Format::EVALUATION);
@@ -165,8 +164,8 @@ void ExtendedContextHybridImpl::SetExtendedKey(const lbcrypto::KeyPair<Poly>& ke
 
 std::vector<Poly> ExtendedContextHybridImpl::EncryptZeroQP() const {
     const auto paramsQP = m_params->GetParamsQP();
-    const auto ns       = m_params->GetNoiseScale();
-    auto dgg            = m_params->GetDiscreteGaussianGenerator();
+    const auto ns = m_params->GetNoiseScale();
+    auto dgg = m_params->GetDiscreteGaussianGenerator();
 
     // Standard public-key encryption of zero, done directly in QP with pk_QP.
     // Phase = c0 + c1*s = t*(u*e_pk + e0 + e1*s), i.e. small native error.
