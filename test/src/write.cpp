@@ -1,5 +1,6 @@
 #include "server/write.h"
 #include "core/context.h"
+#include "core/utils/noise.h"
 
 namespace spar::test {
 
@@ -24,7 +25,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
     void SetUp() override {
         N = GetParam();
 
-        // cc = GenContextBV(params::Small(), 2); // TODO: Implement the Add/Sub/Mult RGSW
+        // cc = GenContextBV(params::Small(), 4); // TODO: Parameterize context BV/Hybrid
         cc = GenContextHybrid(params::Small());
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE);
@@ -37,8 +38,10 @@ class Server : public ::testing::TestWithParam<uint32_t> {
         I_mat.resize(N);
         for (uint32_t i = 0; i < N; i++) {
             for (uint32_t k = 0; k < K; k++) {
-                L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
-                I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
+                // L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
+                // I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
+                L_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, zero_pt);
+                I_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, one_pt);
             }
         }
     }
@@ -61,6 +64,7 @@ TEST_P(Server, Write) {
         const auto z = MakeZ(r);
 
         const auto nothw = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z);
+        PRINT_MAX_NOISE(cc, L_mat[0][0][0], keys.secretKey);
         const auto result = cc->EvalExternalProduct(one, nothw);
 
         Plaintext decrypted;

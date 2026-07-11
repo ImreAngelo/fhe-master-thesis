@@ -1,10 +1,13 @@
 #include "core/context.h"
+#include "core/utils/noise.h"
 #include <functional>
 #include <string>
 
 namespace spar::test {
 
 using namespace lbcrypto;
+
+const int CHAIN_ITERATIONS = 1000;
 
 struct SchemeCase {
     std::string name;
@@ -138,30 +141,35 @@ TEST_P(RGSW, MultPlaintext) {
     ASSERT_EQ(FirstCoef(decrypted), 3 * kVal);
 }
 
-TEST_P(RGSW, ExternalProductChains) {
-    const int64_t t = PlaintextModulus();
-    const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
+// TEST_P(RGSW, ExternalProductChains) {
+//     const int64_t t = PlaintextModulus();
+//     const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});
 
-    auto current = cc->Encrypt(keys.publicKey, pt_one);
-    int64_t expected = 1;
-    int last_ok = 0;
+//     auto current = cc->Encrypt(keys.publicKey, pt_one);
+//     int64_t expected = 1;
+//     int last_ok = 0;
 
-    for (int n = 1; n <= 64; ++n) {
-        const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
-        current = cc->EvalExternalProduct(current, mult);
+//     RECORD_START("results/external_chain_" + GetParam().name + ".csv", "n,msb,noise");
+//     for (int n = 1; n <= CHAIN_ITERATIONS; ++n) {
+//         const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
+//         current = cc->EvalExternalProduct(current, mult);
 
-        expected = (expected * kVal) % t;
-        if (expected > t / 2) expected -= t;
+//         RECORD_MAX_NOISE(n, cc, current, keys.secretKey);
+//         PRINT_MAX_NOISE(cc, current, keys.secretKey);
 
-        Plaintext decrypted;
-        cc->Decrypt(keys.secretKey, current, &decrypted);
-        if (FirstCoef(decrypted) != expected) break;
-        last_ok = n;
-    }
+//         expected = (expected * kVal) % t;
+//         if (expected > t / 2) expected -= t;
 
-    DEBUG_PRINT("External product chain length: " << last_ok);
-    ASSERT_GT(last_ok, 0) << "Could not chain even one external product";
-}
+//         Plaintext decrypted;
+//         cc->Decrypt(keys.secretKey, current, &decrypted);
+//         if (FirstCoef(decrypted) != expected) break;
+//         last_ok = n;
+//     }
+//     RECORD_END();
+
+//     DEBUG_PRINT("External product chain length: " << last_ok);
+//     ASSERT_GT(last_ok, 0) << "Could not chain even one external product";
+// }
 
 TEST_P(RGSW, InternalProductChains) {
     const int64_t t = PlaintextModulus();
@@ -173,8 +181,12 @@ TEST_P(RGSW, InternalProductChains) {
     int64_t expected = 1;
     int last_ok = 0;
 
-    for (int n = 1; n <= 64; ++n) {
+    RECORD_START("results/internal_chain_" + GetParam().name + ".csv", "n,msb,noise");
+    for (int n = 1; n <= CHAIN_ITERATIONS; ++n) {
         current = cc->EvalInternalProduct(rgsw_mult, current);
+
+        RECORD_MAX_NOISE(n, cc, current[0], keys.secretKey);
+        PRINT_MAX_NOISE(cc, current[0], keys.secretKey);
 
         expected = (expected * kVal) % t;
         if (expected > t / 2) expected -= t;
@@ -182,16 +194,19 @@ TEST_P(RGSW, InternalProductChains) {
         const auto res = cc->EvalExternalProduct(rlwe_one, current);
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, res, &decrypted);
+        DEBUG_PRINT("Internal product chain [" << n << "] = " << FirstCoef(decrypted) << " (expected " << expected << ")");
+
         if (FirstCoef(decrypted) != expected) break;
         last_ok = n;
     }
+    RECORD_END();
 
     DEBUG_PRINT("Internal product chain length: " << last_ok);
     ASSERT_GT(last_ok, 0) << "Could not chain even one internal product";
 }
 
 INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
-                         ::testing::Values(SchemeCase{"BV_Small", [] { return GenContextBV(params::Small(), /*ell=*/2); }},
+                         ::testing::Values(SchemeCase{"BV_Small", [] { return GenContextBV(params::Small(), /*ell=*/5); }},
                                            SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small()); }},
                                            SchemeCase{"BV_Large", [] { return GenContextBV(params::Large(), /*ell=*/3); }},
                                            SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}

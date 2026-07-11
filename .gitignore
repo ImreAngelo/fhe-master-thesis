@@ -9,6 +9,9 @@ CMakeCache.txt
 .cache
 .trunk
 
+# Recorded measurements (RECORD_START/RECORD csv output)
+test/results
+
 # Scripts
 .venv
 

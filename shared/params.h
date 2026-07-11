@@ -33,7 +33,7 @@ template <typename T = lbcrypto::CryptoContextBGVRNS>
 inline lbcrypto::CCParams<T> Small() {
     lbcrypto::CCParams<T> params;
 
-    params.SetPlaintextModulus(1 << 8);
+    params.SetPlaintextModulus(1 << 7);
     params.SetRingDim(1 << 12);
 
     params.SetSecurityLevel(lbcrypto::SecurityLevel::HEStd_NotSet);
@@ -49,10 +49,9 @@ inline lbcrypto::CCParams<T> Small() {
     // params.SetStandardDeviation(.0f);
     // params.SetSecretKeyDist(lbcrypto::SecretKeyDist::UNIFORM_TERNARY);
 
-    // From lattice estimator
-    // double sigma = std::pow(2.0, -50);
-    // params.SetStandardDeviation(sigma);
+    // Debugging
+    // params.SetStandardDeviation(0.2);
 
     return params;
 }
-}  // namespace spar::params
+}  // namespace spar::params|
