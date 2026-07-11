@@ -91,6 +91,53 @@ TEST_P(RGSW, InternalProduct) {
     ASSERT_EQ(decrypted, expected);
 }
 
+TEST_P(RGSW, Add) {
+    const auto a = cc->EncryptRGSW(keys.publicKey, pt_one);
+    const auto b = cc->EncryptRGSW(keys.publicKey, pt_one);
+
+    DEBUG_TIMER("Add");
+    const auto sum = cc->EvalAddRGSW(a, b);
+
+    // The sum must still act as a valid RGSW(2) in an external product
+    const auto rlwe_one = cc->Encrypt(keys.publicKey, pt_one);
+    const auto result = cc->EvalExternalProduct(rlwe_one, sum);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    ASSERT_EQ(FirstCoef(decrypted), 2 * kVal);
+}
+
+TEST_P(RGSW, Sub) {
+    const auto zero = cc->EncryptRGSW(keys.publicKey, cc->MakeCoefPackedPlaintext({0}));
+    const auto one = cc->EncryptRGSW(keys.publicKey, pt_one);
+
+    DEBUG_TIMER("Sub");
+    const auto diff = cc->EvalSubRGSW(zero, one);
+
+    // 0 - 1 = -1 catches sign errors that a symmetric difference would hide
+    const auto rlwe_one = cc->Encrypt(keys.publicKey, pt_one);
+    const auto result = cc->EvalExternalProduct(rlwe_one, diff);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    ASSERT_EQ(FirstCoef(decrypted), -kVal);
+}
+
+TEST_P(RGSW, MultPlaintext) {
+    const auto rgsw = cc->EncryptRGSW(keys.publicKey, pt_one);
+    const auto pt_three = cc->MakeCoefPackedPlaintext({3});
+
+    DEBUG_TIMER("Mult Plaintext");
+    const auto prod = cc->EvalMultRGSW(rgsw, pt_three);
+
+    const auto rlwe_one = cc->Encrypt(keys.publicKey, pt_one);
+    const auto result = cc->EvalExternalProduct(rlwe_one, prod);
+
+    Plaintext decrypted;
+    cc->Decrypt(keys.secretKey, result, &decrypted);
+    ASSERT_EQ(FirstCoef(decrypted), 3 * kVal);
+}
+
 TEST_P(RGSW, ExternalProductChains) {
     const int64_t t = PlaintextModulus();
     const auto mult_pt = cc->MakeCoefPackedPlaintext({kVal});

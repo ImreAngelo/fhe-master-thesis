@@ -1,6 +1,5 @@
 #include "context-bv.h"
 #include "factory.h"
-#include <stdexcept>
 
 
 namespace {
@@ -268,30 +267,66 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
 }
 
 RGSW ExtendedContextBVImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const {
-    RGSW result;
-    result.reserve(2);
+    if (lhs.size() != rhs.size()) {
+        OPENFHE_THROW("EvalAddRGSW expects RGSW ciphertexts with the same number of rows");
+    }
 
-    for (size_t row = 0; row < 2; row++) {
-        // Clone exactly copies the correct embedded CryptoContext pointer
-        auto out = lhs[row]->Clone();
+    RGSW result(lhs.size());
 
-        auto cL = lhs[row]->GetElements();
-        auto cR = rhs[row]->GetElements();
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
+    for (size_t r = 0; r < lhs.size(); r++) {
+        auto out = lhs[r]->Clone();
 
-        // Direct polynomial addition
+        const auto& cL = lhs[r]->GetElements();
+        const auto& cR = rhs[r]->GetElements();
+
         out->SetElements({cL[0] + cR[0], cL[1] + cR[1]});
-        result.push_back(std::move(out));
+        result[r] = std::move(out);
     }
 
     return result;
 }
 
 RGSW ExtendedContextBVImpl::EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const {
-    throw new std::logic_error("Not implemented.");
+    if (lhs.size() != rhs.size()) {
+        OPENFHE_THROW("EvalSubRGSW expects RGSW ciphertexts with the same number of rows");
+    }
+
+    RGSW result(lhs.size());
+
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
+    for (size_t r = 0; r < lhs.size(); r++) {
+        auto out = lhs[r]->Clone();
+
+        const auto& cL = lhs[r]->GetElements();
+        const auto& cR = rhs[r]->GetElements();
+
+        out->SetElements({cL[0] - cR[0], cL[1] - cR[1]});
+        result[r] = std::move(out);
+    }
+
+    return result;
 }
 
 RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) const {
-    throw new std::logic_error("Not implemented.");
+    // The gadget encoding lives per-tower, so multiplying every limb by the
+    // plaintext polynomial commutes with the gadget: G(m) * p = G(m*p).
+    Poly p = pt->GetElement<Poly>();
+    p.SetFormat(Format::EVALUATION);
+
+    RGSW result(rgsw.size());
+
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
+    for (size_t r = 0; r < rgsw.size(); r++) {
+        auto out = rgsw[r]->Clone();
+
+        const auto& c = rgsw[r]->GetElements();
+
+        out->SetElements({c[0] * p, c[1] * p});
+        result[r] = std::move(out);
+    }
+
+    return result;
 }
 
 //-----------//
