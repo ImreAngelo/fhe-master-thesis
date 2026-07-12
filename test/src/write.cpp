@@ -28,7 +28,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product yet
         // cc = GenContextHybrid(params::Small());
-        cc = GenContextBV(params::Small(), 2);
+        cc = GenContextBV(params::Small(), 7);
         cc->Enable(PKE);
 
         keys = cc->KeyGen();
@@ -88,7 +88,7 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u, 16u, 32u),
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u, 16u, 32u, 64u),
                          [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test

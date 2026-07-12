@@ -36,13 +36,16 @@ class ParamSet:
 
 
 PARAM_SETS = [
-    ParamSet("bv",     N=2**12, logQ=155, sigma=3.19),
+    # 120.0 bits
+    ParamSet("spar",   N=2**11, logQ=64,  sigma=2**(64-55)),
+    ParamSet("near",   N=2**11, logQ=64,  sigma=3.19),
+    # 112.0 bits
+    ParamSet("bv",     N=2**12, logQ=120, sigma=1.5),
     ParamSet("hybrid", N=2**13, logQ=155, logP=155, sigma=3.19),
-    # 123.9 bits of security
-    ParamSet("ideal",     N=2**12, logQ=105, sigma=3.19),
-    # # spar::params::Large, 60 + 55-bit limbs
-    # ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
-    # ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
+    # 183.0 bits
+    ParamSet("ghs-lg", N=2**14, logQ=155, logP=155, sigma=3.19),
+    # 130.2 bits
+    ParamSet("ideal",  N=2**12, logQ=106, sigma=3.19),
 ]
 
 
@@ -65,15 +68,3 @@ if __name__ == "__main__":
         bits, attack = security(ps, full=args.full)
         cost = "out of estimator range" if isinf(bits) else f"{bits:6.1f} bits  ({attack})"
         print(f"{ps.name:10}  N=2^{log2(ps.N):<3.0f} logQP={ps.logQP:<4}  ->  {cost}")
-
-
-
-
-# N     = 2**(12)         # ring dimension -> LWE dimension
-# k     = 2               # number of RNS moduli
-# bits  = 60              # bitlength of each RNS modulus
-
-# logQ  = k*bits
-# Q     = 2**logQ
-
-# sigma = 2**(-56)*Q      # absolute standard deviation
