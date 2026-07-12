@@ -1,6 +1,7 @@
 #include "server/write.h"
 #include "core/context.h"
 #include "core/utils/noise.h"
+#include "server/state.h"
 
 namespace spar::test {
 
@@ -27,7 +28,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product yet
         // cc = GenContextHybrid(params::Small());
-        cc = GenContextBV(params::Small(), 8);
+        cc = GenContextBV(params::Small(), 2);
         cc->Enable(PKE);
 
         keys = cc->KeyGen();
@@ -35,16 +36,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
         zero_pt = cc->MakeCoefPackedPlaintext({0});
         one_pt = cc->MakeCoefPackedPlaintext({1});
 
-        L_mat.resize(N);
-        I_mat.resize(N);
-        for (uint32_t i = 0; i < N; i++) {
-            for (uint32_t k = 0; k < K; k++) {
-                // L_mat[i][k] = cc->EncryptRGSW(keys.publicKey, zero_pt);
-                // I_mat[i][k] = cc->EncryptRGSW(keys.publicKey, one_pt);
-                L_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, zero_pt);
-                I_mat[i][k] = cc->MakePublicRGSW(keys.publicKey, one_pt);
-            }
-        }
+        std::tie(I_mat, L_mat) = spar::server::InitializeStateMatrices<K>(cc, keys.publicKey, N);
     }
 
     std::vector<std::vector<RGSW>> MakeZ(uint32_t target) {
@@ -57,7 +49,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 };
 
 TEST_P(Server, Write) {
-    const auto one = cc->Encrypt(keys.publicKey, one_pt);
+    const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
     for (uint32_t r = 0; r < N; r++) {
@@ -96,7 +88,7 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u),
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u, 16u, 32u),
                          [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test

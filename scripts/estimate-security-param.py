@@ -36,10 +36,10 @@ class ParamSet:
 
 
 PARAM_SETS = [
+    ParamSet("bv",     N=2**12, logQ=155, sigma=3.19),
+    ParamSet("hybrid", N=2**13, logQ=155, logP=155, sigma=3.19),
     # 123.9 bits of security
-    ParamSet("ideal",     N=2**12, logQ=110, sigma=3.19),
-    ParamSet("small",     N=2**11, logQ=120, sigma=3.19),
-    # ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
+    ParamSet("ideal",     N=2**12, logQ=105, sigma=3.19),
     # # spar::params::Large, 60 + 55-bit limbs
     # ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
     # ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
