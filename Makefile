@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check data clean clean-build clean-cmake help
 
 all: build
 
@@ -103,6 +103,46 @@ bench: openfhe
 bench-%: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
 
+###############
+# Thesis data #
+###############
+
+# Move fresh results into the thesis:
+#   build/results-<name>.json  -> docs/latex/Data/<name>.json
+#   test/results/<chain>.csv   -> docs/latex/Data/{External,Internal}Product/<impl>.csv
+# Sources are gitignored run outputs; destinations are tracked by git, so
+# missing sources are skipped silently (nothing new to publish).
+DATADIR := docs/latex/Data
+
+# test/results/<src>.csv -> $(DATADIR)/<dst>.csv (names match the plot inputs
+# under Figures/Plots/, hence Hybrid -> ghs)
+CSV_MAP := \
+	external_chain_BV_Small:ExternalProduct/bv-small \
+	external_chain_BV_Large:ExternalProduct/bv-large \
+	external_chain_Hybrid:ExternalProduct/ghs-small \
+	external_chain_Hybrid_large:ExternalProduct/ghs-large \
+	internal_chain_BV_Small:InternalProduct/bv-small \
+	internal_chain_BV_Large:InternalProduct/bv-large \
+	internal_chain_Hybrid:InternalProduct/ghs-small \
+	internal_chain_Hybrid_large:InternalProduct/ghs-large
+
+data:
+	@moved=0; \
+	for f in $(BUILDDIR)/results-*.json; do \
+		[ -f "$$f" ] || continue; \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		dst="$(DATADIR)/$$(basename $$f | sed 's/^results-//')"; \
+		mv "$$f" "$$dst" && echo "  $$f -> $$dst" && moved=$$((moved+1)); \
+	done; \
+	for m in $(CSV_MAP); do \
+		src="test/results/$${m%%:*}.csv"; dst="$(DATADIR)/$${m##*:}.csv"; \
+		[ -f "$$src" ] || continue; \
+		[ -s "$$src" ] || { echo "  SKIP $$src (empty)"; continue; }; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		mv "$$src" "$$dst" && echo "  $$src -> $$dst" && moved=$$((moved+1)); \
+	done; \
+	echo "Moved $$moved file(s) into $(DATADIR)"
+
 ##############
 # Formatting #
 ##############
@@ -147,6 +187,7 @@ help:
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
+	@echo "  data               - Move benchmark JSONs + test CSVs into docs/latex/Data"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
