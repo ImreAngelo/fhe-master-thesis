@@ -35,26 +35,29 @@ class ParamSet:
         )
 
 
-PARAM_SETS = [
-    # 120.0 bits
-    ParamSet("spar",   N=2**11, logQ=64,  sigma=2**(64-55)),
-    ParamSet("near",   N=2**11, logQ=64,  sigma=3.19),
-    # 112.0 bits
-    ParamSet("bv",     N=2**12, logQ=120, sigma=1.5),
-    ParamSet("hybrid", N=2**13, logQ=155, logP=155, sigma=3.19),
-    # 183.0 bits
-    ParamSet("ghs-lg", N=2**14, logQ=155, logP=155, sigma=3.19),
-    # 130.2 bits
-    ParamSet("ideal",  N=2**12, logQ=106, sigma=3.19),
-]
-
-
 def security(ps: ParamSet, full: bool = False) -> tuple[float, str]:
     """Cost in bits of the cheapest attack, and which attack it is."""
     estimate = LWE.estimate if full else LWE.estimate.rough
-    results = estimate(ps.lwe(), quiet=True)
+    skip_attacks = ("arora-gb", "bkw", "bdd_mitm_hybrid") # These are slow and never win
+    results = estimate(ps.lwe(), quiet=True, jobs=6, deny_list=skip_attacks)
     attack, cost = min(results.items(), key=lambda kv: kv[1]["rop"])
     return log2(float(cost["rop"])), attack
+
+
+PARAM_SETS = [
+    # 128.0 bits
+    ParamSet("standard", N=2**14, logQ=120, sigma=3.19)
+    # # 120.0 bits
+    # ParamSet("spar",   N=2**11, logQ=64,  sigma=2**(64-55)),
+    # ParamSet("near",   N=2**11, logQ=64,  sigma=3.19),
+    # # 112.0 bits
+    # ParamSet("bv",     N=2**12, logQ=120, sigma=1.5),
+    # ParamSet("hybrid", N=2**13, logQ=155, logP=155, sigma=3.19),
+    # # 183.0 bits
+    # ParamSet("ghs-lg", N=2**14, logQ=155, logP=155, sigma=3.19),
+    # # 130.2 bits
+    # ParamSet("ideal",  N=2**12, logQ=106, sigma=3.19),
+]
 
 
 if __name__ == "__main__":
