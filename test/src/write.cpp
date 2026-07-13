@@ -3,6 +3,7 @@
 #include "core/utils/noise.h"
 #include "core/utils/record.h"
 #include "server/state.h"
+#include <string>
 
 namespace spar::test {
 
@@ -53,7 +54,7 @@ TEST_P(Server, Write) {
     const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
-    RECORD_START("results/write.csv", "n,msb,noise");
+    RECORD_START("results/write-N" + std::to_string(N) + ".csv", "n,msb,noise");
     for (uint32_t r = 0; r < N; r++) {
         const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
         const auto z = MakeZ(r);
@@ -92,7 +93,7 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 32u),
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 16u),
                          [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test

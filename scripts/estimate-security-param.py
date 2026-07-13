@@ -37,8 +37,9 @@ class ParamSet:
 
 def security(ps: ParamSet, full: bool = False) -> tuple[float, str]:
     """Cost in bits of the cheapest attack, and which attack it is."""
+    # These are slow and never win unless sigma is << 3.19
+    skip_attacks = ("arora-gb", "bkw", "bdd_mitm_hybrid")
     estimate = LWE.estimate if full else LWE.estimate.rough
-    skip_attacks = ("arora-gb", "bkw", "bdd_mitm_hybrid") # These are slow and never win
     results = estimate(ps.lwe(), quiet=True, jobs=6, deny_list=skip_attacks)
     attack, cost = min(results.items(), key=lambda kv: kv[1]["rop"])
     return log2(float(cost["rop"])), attack
@@ -48,7 +49,8 @@ PARAM_SETS = [
     # 339.6 bits
     # ParamSet("standard", N=2**14, logQ=180, sigma=3.19)
 
-    # Tests
+    # 131.5 bits
+    ParamSet("standard", N=2**14, logQ=420, sigma=3.19)
 
     # Old sets
     # # 120.0 bits

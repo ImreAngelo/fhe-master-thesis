@@ -110,41 +110,33 @@ bench-%: openfhe
 # Thesis data #
 ###############
 
-# Move fresh results into the thesis:
-#   build/results-<name>.json  -> docs/latex/Data/<name>.json
-#   test/results/<chain>.csv   -> docs/latex/Data/{External,Internal}Product/<impl>.csv
-# Sources are gitignored run outputs; destinations are tracked by git, so
-# missing sources are skipped silently (nothing new to publish).
+# Copy fresh results into the thesis, preserving any subdirectory structure:
+#   test/results/<path>.csv        -> docs/latex/Data/Noise/<path>.csv
+#   build/results-<path>.json      -> docs/latex/Data/Times/<path>.json
+# Sources are gitignored run outputs and are left in place; destinations are
+# tracked by git, so missing sources are skipped silently (nothing to publish).
 DATADIR := docs/latex/Data
-
-# test/results/<src>.csv -> $(DATADIR)/<dst>.csv (names match the plot inputs
-# under Figures/Plots/, hence Hybrid -> ghs)
-CSV_MAP := \
-	external_chain_BV_Small:ExternalProduct/bv-small \
-	external_chain_BV_Large:ExternalProduct/bv-large \
-	external_chain_Hybrid:ExternalProduct/ghs-small \
-	external_chain_Hybrid_large:ExternalProduct/ghs-large \
-	internal_chain_BV_Small:InternalProduct/bv-small \
-	internal_chain_BV_Large:InternalProduct/bv-large \
-	internal_chain_Hybrid:InternalProduct/ghs-small \
-	internal_chain_Hybrid_large:InternalProduct/ghs-large
+NOISEDIR := $(DATADIR)/Noise
+TIMESDIR := $(DATADIR)/Times
 
 data:
-	@moved=0; \
-	for f in $(BUILDDIR)/results-*.json; do \
-		[ -f "$$f" ] || continue; \
+	@copied=0; \
+	mkdir -p "$(NOISEDIR)" "$(TIMESDIR)"; \
+	for f in $$(find test/results -type f -name '*.csv' 2>/dev/null); do \
 		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
-		dst="$(DATADIR)/$$(basename $$f | sed 's/^results-//')"; \
-		mv "$$f" "$$dst" && echo "  $$f -> $$dst" && moved=$$((moved+1)); \
-	done; \
-	for m in $(CSV_MAP); do \
-		src="test/results/$${m%%:*}.csv"; dst="$(DATADIR)/$${m##*:}.csv"; \
-		[ -f "$$src" ] || continue; \
-		[ -s "$$src" ] || { echo "  SKIP $$src (empty)"; continue; }; \
+		dst="$(NOISEDIR)/$${f#test/results/}"; \
 		mkdir -p "$$(dirname "$$dst")"; \
-		mv "$$src" "$$dst" && echo "  $$src -> $$dst" && moved=$$((moved+1)); \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
 	done; \
-	echo "Moved $$moved file(s) into $(DATADIR)"
+	for f in $$(find $(BUILDDIR) -type f -name 'results-*.json' 2>/dev/null); do \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		rel="$${f#$(BUILDDIR)/}"; \
+		dst="$(TIMESDIR)/$$(dirname "$$rel")/$$(basename "$$rel" | sed 's/^results-//')"; \
+		dst="$$(echo "$$dst" | sed 's#/\./#/#')"; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
+	done; \
+	echo "Copied $$copied file(s) into $(DATADIR)"
 
 ##############
 # Formatting #
@@ -191,7 +183,7 @@ help:
 	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
-	@echo "  data               - Move benchmark JSONs + test CSVs into docs/latex/Data"
+	@echo "  data               - Copy test CSVs into Data/Noise, benchmark JSONs into Data/Times"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
