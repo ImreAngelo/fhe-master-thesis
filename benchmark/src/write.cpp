@@ -33,8 +33,8 @@ Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N = N;
     // WARN: Hybrid does not support internal product yet
-    // f.cc = core::GenContextHybrid(spar::params::Small());
-    f.cc = core::GenContextBV(spar::params::Small(), 7);
+    // f.cc = core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid));
+    f.cc = core::GenContextBV(spar::params::Make(spar::params::Set::Small), 7);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
@@ -66,7 +66,7 @@ void WriteBench(benchmark::State& s, uint32_t N) {
         s.PauseTiming();
         Fixture f = BuildFixture(N);
 
-        Plaintext Vr = f.cc->MakeCoefPackedPlaintext({1});
+        Plaintext Vr = f.cc->MakeCoefPackedPlaintext({2});
         auto z = MakeZ(f);
         s.ResumeTiming();
 

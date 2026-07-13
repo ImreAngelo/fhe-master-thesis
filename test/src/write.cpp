@@ -26,9 +26,9 @@ class Server : public ::testing::TestWithParam<uint32_t> {
     void SetUp() override {
         N = GetParam();
 
-        // WARN: Hybrid does not support internal product yet
-        // cc = GenContextHybrid(params::Small());
-        cc = GenContextBV(params::Small(), 7);
+        // WARN: Hybrid does not support internal product atm
+        // cc = GenContextHybrid(params::Make(params::Set::Standard));
+        cc = GenContextBV(params::Make(params::Set::Standard), 7);
         cc->Enable(PKE);
 
         keys = cc->KeyGen();
