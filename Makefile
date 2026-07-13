@@ -81,15 +81,18 @@ estimate:
 # Tests #
 #########
 
+# DEBUG=1 make test-% TEST_OMP_THREADS=X
+TEST_OMP_THREADS ?= 12
+
 # Build and run all tests against the optimized OpenFHE build
 test: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target check -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target check -j$(shell nproc)
 
 # Build and run a specific test:  make test-rgsw
 test-%: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
 
 ##############
 # Benchmarks #
@@ -185,6 +188,7 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
+	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
 	@echo "  data               - Move benchmark JSONs + test CSVs into docs/latex/Data"
