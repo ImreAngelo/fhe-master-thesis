@@ -7,7 +7,7 @@ namespace spar::test {
 
 using namespace lbcrypto;
 
-const int CHAIN_ITERATIONS = 250;
+const int CHAIN_ITERATIONS = 1000;
 
 struct SchemeCase {
     std::string name;
@@ -207,10 +207,10 @@ TEST_P(RGSW, InternalProductChains) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
-                         ::testing::Values(SchemeCase{"bv-small", [] { return GenContextBV(params::Make(params::Set::Small), 9); }},
-                                           SchemeCase{"hybrid-small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
-                                           SchemeCase{"BV", [] { return GenContextBV(params::Make(params::Set::Standard), 6); }},
-                                           SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}),
+                         ::testing::Values(SchemeCase{"bv_small", [] { return GenContextBV(params::Make(params::Set::Small), 9); }},
+                                           SchemeCase{"hybrid_small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
+                                           SchemeCase{"bv", [] { return GenContextBV(params::Make(params::Set::Standard), 6); }},
+                                           SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}),
                          [](const auto& info) { return info.param.name; });
 
 }  // namespace spar::test

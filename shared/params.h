@@ -39,7 +39,7 @@ inline constexpr Values kStandard{
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
     /*multiplicativeDepth*/ 3,
     /*firstModSize*/ 60,
-    /*scalingModSize*/ 60,
+    /*scalingModSize*/ 59,
     /*standardDeviation*/ 3.19,
     /*keySwitchTechnique*/ lbcrypto::HYBRID,  // For GHS
     /*numLargeDigits*/ 1,
