@@ -45,8 +45,12 @@ def security(ps: ParamSet, full: bool = False) -> tuple[float, str]:
 
 
 PARAM_SETS = [
-    # 128.0 bits
-    ParamSet("standard", N=2**14, logQ=120, sigma=3.19)
+    # 339.6 bits
+    # ParamSet("standard", N=2**14, logQ=180, sigma=3.19)
+
+    # Tests
+
+    # Old sets
     # # 120.0 bits
     # ParamSet("spar",   N=2**11, logQ=64,  sigma=2**(64-55)),
     # ParamSet("near",   N=2**11, logQ=64,  sigma=3.19),

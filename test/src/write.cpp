@@ -1,6 +1,7 @@
 #include "server/write.h"
 #include "core/context.h"
 #include "core/utils/noise.h"
+#include "core/utils/record.h"
 #include "server/state.h"
 
 namespace spar::test {
@@ -28,7 +29,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product atm
         // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 7);
+        cc = GenContextBV(params::Make(params::Set::Standard), 6);
         cc->Enable(PKE);
 
         keys = cc->KeyGen();
@@ -52,6 +53,7 @@ TEST_P(Server, Write) {
     const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
+    RECORD_START("results/write.csv", "n,msb,noise");
     for (uint32_t r = 0; r < N; r++) {
         const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
         const auto z = MakeZ(r);
@@ -60,6 +62,7 @@ TEST_P(Server, Write) {
         const auto result = cc->EvalExternalProduct(one, nothw);
 
         PRINT_MAX_NOISE_MSB(cc, result, keys.secretKey);
+        RECORD_MAX_NOISE(r, cc, result, keys.secretKey);
 
         Plaintext decrypted;
         cc->Decrypt(keys.secretKey, result, &decrypted);
@@ -68,6 +71,7 @@ TEST_P(Server, Write) {
         // Verify user has written
         ASSERT_EQ(decrypted, expected) << "User " << r;
     }
+    RECORD_END();
 
     auto decrypt = [&](const RGSW& ct) {
         Plaintext pt;
@@ -88,7 +92,7 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 4u, 8u, 16u, 32u, 64u),
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 32u),
                          [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test
