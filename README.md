@@ -24,7 +24,7 @@ __Research Questions:__
 
 ## Build Instructions
 
-1. Clone the repo `git clone git@github.com:ImreAngelo/fhe-master-thesis.git` 
+1. Clone the repo `git clone git@github.com:ImreAngelo/sPAR.git`
 2. Initialize submodules recursively `git submodule update --init --recursive`
 3. Run `make build` to build OpenFHE and the project
 4. Profit
