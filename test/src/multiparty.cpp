@@ -119,7 +119,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams = spar::params::Small();
+        auto ccParams = spar::params::Make(spar::params::Set::Standard);
         plaintextModulus = ccParams.GetPlaintextModulus();
         cc = GenContextHybrid(ccParams);
 

@@ -35,23 +35,35 @@ class ParamSet:
         )
 
 
-PARAM_SETS = [
-    # 123.9 bits of security
-    ParamSet("ideal",     N=2**12, logQ=110, sigma=3.19),
-    ParamSet("small",     N=2**11, logQ=120, sigma=3.19),
-    # ParamSet("small-ghs", N=2**13, logQ=120, logP=120, sigma=3.19),
-    # # spar::params::Large, 60 + 55-bit limbs
-    # ParamSet("large",     N=2**14, logQ=115, sigma=3.19),
-    # ParamSet("large-ghs", N=2**14, logQ=115, logP=115, sigma=3.19),
-]
-
-
 def security(ps: ParamSet, full: bool = False) -> tuple[float, str]:
     """Cost in bits of the cheapest attack, and which attack it is."""
+    # These are slow and never win unless sigma is << 3.19
+    skip_attacks = ("arora-gb", "bkw", "bdd_mitm_hybrid")
     estimate = LWE.estimate if full else LWE.estimate.rough
-    results = estimate(ps.lwe(), quiet=True)
+    results = estimate(ps.lwe(), quiet=True, jobs=6, deny_list=skip_attacks)
     attack, cost = min(results.items(), key=lambda kv: kv[1]["rop"])
     return log2(float(cost["rop"])), attack
+
+
+PARAM_SETS = [
+    # 339.6 bits
+    # ParamSet("standard", N=2**14, logQ=180, sigma=3.19)
+
+    # 131.5 bits
+    ParamSet("standard", N=2**14, logQ=420, sigma=3.19)
+
+    # Old sets
+    # # 120.0 bits
+    # ParamSet("spar",   N=2**11, logQ=64,  sigma=2**(64-55)),
+    # ParamSet("near",   N=2**11, logQ=64,  sigma=3.19),
+    # # 112.0 bits
+    # ParamSet("bv",     N=2**12, logQ=120, sigma=1.5),
+    # ParamSet("hybrid", N=2**13, logQ=155, logP=155, sigma=3.19),
+    # # 183.0 bits
+    # ParamSet("ghs-lg", N=2**14, logQ=155, logP=155, sigma=3.19),
+    # # 130.2 bits
+    # ParamSet("ideal",  N=2**12, logQ=106, sigma=3.19),
+]
 
 
 if __name__ == "__main__":
@@ -65,15 +77,3 @@ if __name__ == "__main__":
         bits, attack = security(ps, full=args.full)
         cost = "out of estimator range" if isinf(bits) else f"{bits:6.1f} bits  ({attack})"
         print(f"{ps.name:10}  N=2^{log2(ps.N):<3.0f} logQP={ps.logQP:<4}  ->  {cost}")
-
-
-
-
-# N     = 2**(12)         # ring dimension -> LWE dimension
-# k     = 2               # number of RNS moduli
-# bits  = 60              # bitlength of each RNS modulus
-
-# logQ  = k*bits
-# Q     = 2**logQ
-
-# sigma = 2**(-56)*Q      # absolute standard deviation

@@ -213,11 +213,36 @@ RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW
     return result;
 }
 
-RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW&, const RGSW&) const {
+RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
     // TODO: The straightforward per-row external product does not work here: modding
     // a row down re-amplifies the rounding by P, and skipping the ModDown leaves the
     // d·e cross term undivided — both blow the noise budget. Needs a dedicated design.
     OPENFHE_THROW("EvalInternalProduct is not implemented for the hybrid context yet");
+    // RGSW result;
+    // for(auto& rlwe :  lhs) {
+    //     auto c = rlwe->GetElements();
+
+    //     c[0].SetFormat(Format::EVALUATION);
+    //     c[1].SetFormat(Format::EVALUATION);
+
+    //     const auto d0 = Lift(c[0]);
+    //     const auto d1 = Lift(c[1]);
+
+    //     Poly out0(m_params->GetParamsQP(), Format::EVALUATION, true);
+    //     Poly out1(m_params->GetParamsQP(), Format::EVALUATION, true);
+
+    //     out0 += (d0 * rgsw[0]->GetElements()[0]);
+    //     out1 += (d0 * rgsw[0]->GetElements()[1]);
+    //     out0 += (d1 * rgsw[1]->GetElements()[0]);
+    //     out1 += (d1 * rgsw[1]->GetElements()[1]);
+
+    //     auto result = rlwe->Clone();
+    //     result->GetElements()[0] = ApproxModDown(m_params, out0);
+    //     result->GetElements()[1] = ApproxModDown(m_params, out1);
+
+    //     return result;
+    // }
+    // return result;
 }
 
 //-----------//

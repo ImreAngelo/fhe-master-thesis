@@ -68,10 +68,10 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
 }
 
 const std::vector<SchemeCase> kSchemes = {
-    {"BV_Small", [] { return core::GenContextBV(spar::params::Small(), /*ell=*/2); }},
-    {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Small()); }},
-    {"BV_Large", [] { return core::GenContextBV(spar::params::Large(), /*ell=*/2); }},
-    {"Hybrid_Large", [] { return core::GenContextHybrid(spar::params::Large()); }},
+    {"BV_Small", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Small), /*ell=*/2); }},
+    {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Small)); }},
+    {"BV_Large", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), /*ell=*/2); }},
+    {"Hybrid_Large", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }},
 };
 
 void RegisterAll() {

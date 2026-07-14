@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check data clean clean-build clean-cmake help
 
 all: build
 
@@ -81,15 +81,18 @@ estimate:
 # Tests #
 #########
 
+# DEBUG=1 make test-% TEST_OMP_THREADS=X
+TEST_OMP_THREADS ?= 12
+
 # Build and run all tests against the optimized OpenFHE build
 test: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target check -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target check -j$(shell nproc)
 
 # Build and run a specific test:  make test-rgsw
 test-%: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
 
 ##############
 # Benchmarks #
@@ -102,6 +105,38 @@ bench: openfhe
 # Run specific benchmark:  make bench-rgsw
 bench-%: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
+
+###############
+# Thesis data #
+###############
+
+# Copy fresh results into the thesis, preserving any subdirectory structure:
+#   test/results/<path>.csv        -> docs/latex/Data/Noise/<path>.csv
+#   build/results-<path>.json      -> docs/latex/Data/Times/<path>.json
+# Sources are gitignored run outputs and are left in place; destinations are
+# tracked by git, so missing sources are skipped silently (nothing to publish).
+DATADIR := docs/latex/Data
+NOISEDIR := $(DATADIR)/Noise
+TIMESDIR := $(DATADIR)/Times
+
+data:
+	@copied=0; \
+	mkdir -p "$(NOISEDIR)" "$(TIMESDIR)"; \
+	for f in $$(find test/results -type f -name '*.csv' 2>/dev/null); do \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		dst="$(NOISEDIR)/$${f#test/results/}"; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
+	done; \
+	for f in $$(find $(BUILDDIR) -type f -name 'results-*.json' 2>/dev/null); do \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		rel="$${f#$(BUILDDIR)/}"; \
+		dst="$(TIMESDIR)/$$(dirname "$$rel")/$$(basename "$$rel" | sed 's/^results-//')"; \
+		dst="$$(echo "$$dst" | sed 's#/\./#/#')"; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
+	done; \
+	echo "Copied $$copied file(s) into $(DATADIR)"
 
 ##############
 # Formatting #
@@ -145,8 +180,10 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
+	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
+	@echo "  data               - Copy test CSVs into Data/Noise, benchmark JSONs into Data/Times"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"

@@ -17,6 +17,8 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
         uint32_t msb = qi->GetModulus().GetMSB();
         if (msb > max_msb) max_msb = msb;
     }
+
+    DEBUG_PRINT("B: " << (max_msb + ell)/ell);
     return (max_msb + ell) / ell;
 }
 

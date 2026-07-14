@@ -33,8 +33,8 @@ Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N = N;
     // WARN: Hybrid does not support internal product yet
-    // f.cc = core::GenContextHybrid(spar::params::Small());
-    f.cc = core::GenContextBV(spar::params::Small(), 8);
+    // f.cc = core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid));
+    f.cc = core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 6);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
@@ -53,8 +53,7 @@ Fixture BuildFixture(uint32_t N) {
     return f;
 }
 
-// TODO: Generate this on demand; requires quadratic memory for large N
-std::vector<std::vector<RGSW>> MakeZ(const Fixture& f, uint32_t target) {
+std::vector<std::vector<RGSW>> MakeZ(const Fixture& f, uint32_t target = 4) {
     std::vector<RGSW> hot(f.N);
     for (uint32_t i = 0; i < f.N; i++) {
         hot[i] = f.cc->EncryptRGSW(f.keys.publicKey, (i == target) ? f.one_pt : f.zero_pt);
@@ -67,28 +66,20 @@ void WriteBench(benchmark::State& s, uint32_t N) {
         s.PauseTiming();
         Fixture f = BuildFixture(N);
 
-        std::vector<Plaintext> Vrs;
-        std::vector<std::vector<std::vector<RGSW>>> zs;
-        Vrs.reserve(N);
-        zs.reserve(N);
-        for (uint32_t r = 0; r < N; r++) {
-            Vrs.push_back(f.cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)}));
-            zs.push_back(MakeZ(f, r));
-        }
+        Plaintext Vr = f.cc->MakeCoefPackedPlaintext({2});
+        auto z = MakeZ(f);
         s.ResumeTiming();
 
         // Per user test - The total runtime is this time * N
-        // for (uint32_t r = 0; r < N; r++) {
-        auto nothw = spar::server::Write<3, 3>(f.cc, f.keys.publicKey, Vrs[0], N, f.L_mat, f.I_mat, zs[0]);
+        auto nothw = spar::server::Write<3, 3>(f.cc, f.keys.publicKey, Vr, N, f.L_mat, f.I_mat, z);
         benchmark::DoNotOptimize(nothw);
-        // }
     }
 }
 
 void RegisterAll() {
     for (uint32_t N : {
-             2u, 32u, 64u,  // 128u
-         }) {
+            2u, 4u, 8u, 16u, 32u, 64u,  // 128u
+        }) {
         benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }

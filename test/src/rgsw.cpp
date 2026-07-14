@@ -151,7 +151,7 @@ TEST_P(RGSW, ExternalProductChains) {
     int64_t expected = 1;
     int last_ok = 0;
 
-    RECORD_START("results/external_chain_" + GetParam().name + ".csv", "n,msb,noise");
+    RECORD_START("results/ExternalProd/" + GetParam().name + ".csv", "n,msb,noise");
     for (int n = 1; n <= CHAIN_ITERATIONS; ++n) {
         const auto mult = cc->EncryptRGSW(keys.publicKey, mult_pt);
         current = cc->EvalExternalProduct(current, mult);
@@ -183,7 +183,7 @@ TEST_P(RGSW, InternalProductChains) {
     int64_t expected = 1;
     int last_ok = 0;
 
-    RECORD_START("results/internal_chain_" + GetParam().name + ".csv", "n,msb,noise");
+    RECORD_START("results/InternalProd/" + GetParam().name + ".csv", "n,msb,noise");
     for (int n = 1; n <= CHAIN_ITERATIONS; ++n) {
         current = cc->EvalInternalProduct(current, rgsw_mult);
         const auto res = cc->EvalExternalProduct(rlwe_one, current);
@@ -207,10 +207,10 @@ TEST_P(RGSW, InternalProductChains) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
-                         ::testing::Values(SchemeCase{"BV_Small", [] { return GenContextBV(params::Small(), /*ell=*/2); }},
-                                           SchemeCase{"Hybrid", [] { return GenContextHybrid(params::Small(true)); }},
-                                           SchemeCase{"BV_Large", [] { return GenContextBV(params::Large(), /*ell=*/3); }},
-                                           SchemeCase{"Hybrid_large", [] { return GenContextHybrid(params::Large()); }}),
+                         ::testing::Values(SchemeCase{"bv_small", [] { return GenContextBV(params::Make(params::Set::Small), 9); }},
+                                           SchemeCase{"hybrid_small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
+                                           SchemeCase{"bv", [] { return GenContextBV(params::Make(params::Set::Standard), 6); }},
+                                           SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}),
                          [](const auto& info) { return info.param.name; });
 
 }  // namespace spar::test

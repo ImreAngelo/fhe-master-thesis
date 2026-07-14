@@ -84,10 +84,10 @@ Fixture BuildFixture(uint32_t n) {
     Fixture f;
     f.n = n;
 
-    auto ccParams = spar::params::Small();  // Large
+    auto ccParams = spar::params::Make(spar::params::Set::Standard);
     f.plaintextModulus = ccParams.GetPlaintextModulus();
-    f.cc = core::GenContextHybrid(ccParams);
-    // f.cc = core::GenContextBV(ccParams, 2);
+    // f.cc = core::GenContextHybrid(ccParams);
+    f.cc = core::GenContextBV(ccParams, 6);
 
     f.cc->Enable(PKE);
     f.cc->Enable(KEYSWITCH);
@@ -189,7 +189,7 @@ void FullBench(benchmark::State& s, uint32_t bits) {
 }
 
 void RegisterAll() {
-    for (uint32_t bits : {1u, 5u, 6u, 7u}) {
+    for (uint32_t bits : {1u, 2u, 3u, 4u}) {
         const uint32_t n = 1u << bits;
         benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits](benchmark::State& s) {
             FullBench(s, bits);
