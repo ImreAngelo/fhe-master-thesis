@@ -5,6 +5,8 @@
 #include <benchmark/benchmark.h>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <random>
 #include <string>
 #include <vector>
@@ -112,29 +114,28 @@ Fixture BuildFixture(uint32_t n) {
     return f;
 }
 
-void EncryptOneHot(Fixture& f) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+// One client's write payload: D one-hot index vectors plus the value.
+void EncryptClient(Fixture& f, Client& client, std::mt19937& gen) {
     std::uniform_int_distribution<uint32_t> n_dist(0, f.n - 1);
     const auto bounds = static_cast<int64_t>(f.plaintextModulus) / 2;
-
-    for (auto& client : f.clients) {
-        client.indices = {OneHot(f.cc, f.jointPk, f.n, n_dist(gen)), OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
-                          OneHot(f.cc, f.jointPk, f.n, n_dist(gen))};
-        client.value = f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
-    }
+    client.indices = {OneHot(f.cc, f.jointPk, f.n, n_dist(gen)), OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
+                      OneHot(f.cc, f.jointPk, f.n, n_dist(gen))};
+    client.value = f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
 }
 
-void ServerWrite(Fixture& f) {
-    for (auto& client : f.clients) {
-        client.hasWritten = spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
-    }
+// Every write touches the same n-sized matrices, so each of the n writes
+// costs the same; the default mode times a single write and leaves the
+// extrapolation to n to the reader. FULL_WRITE=1 runs all n writes for real.
+bool FullWriteMode() {
+    const char* v = std::getenv("FULL_WRITE");
+    return v != nullptr && std::string(v) != "0";
 }
 
 // Runs the full pipeline once per iteration; reports per-phase wall time as
-// counters. real_time = sum of the four phase totals; each counter is the
-// per-iteration average for that phase.
-void FullBench(benchmark::State& s, uint32_t bits) {
+// counters (per-iteration averages). real_time = sum of the four phase
+// totals. In the default mode the Write counter covers a single write;
+// multiply by n to compare against FULL_WRITE=1 runs.
+void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
     const uint32_t n = 1u << bits;
     using clock = std::chrono::steady_clock;
     using ms = std::chrono::duration<double, std::milli>;
@@ -144,16 +145,28 @@ void FullBench(benchmark::State& s, uint32_t bits) {
     for (auto _ : s) {
         s.PauseTiming();
         Fixture f = BuildFixture(n);
+        std::random_device rd;
+        std::mt19937 gen(rd());
         s.ResumeTiming();
 
-        const auto e0 = clock::now();
+        // Encryption and Write Phases, interleaved per client so only one
+        // client's D*n index RGSWs are live at a time — all n clients at once
+        // is 3n^2 RGSW (~20 GB at n = 16). The phase counters are unaffected:
+        // each phase's time is summed across clients.
+        for (auto& client : f.clients) {
+            const auto w0 = clock::now();
+            EncryptClient(f, client, gen);
+            const auto w1 = clock::now();
+            if (fullWrite || client.id == 0) {
+                client.hasWritten =
+                    spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
+            }
+            const auto w2 = clock::now();
+            client.indices.clear();
 
-        // Encryption Phase (one-hot RGSW)
-        EncryptOneHot(f);
-        const auto e1 = clock::now();
-
-        // Server Write Phase
-        ServerWrite(f);
+            t_encrypt += ms(w1 - w0).count();
+            t_write += ms(w2 - w1).count();
+        }
         const auto e2 = clock::now();
 
         // Partial Decryption (clients)
@@ -173,8 +186,6 @@ void FullBench(benchmark::State& s, uint32_t bits) {
 
         benchmark::DoNotOptimize(result);
 
-        t_encrypt += ms(e1 - e0).count();
-        t_write += ms(e2 - e1).count();
         t_partial += ms(e3 - e2).count();
         t_fusion += ms(e4 - e3).count();
     }
@@ -188,11 +199,11 @@ void FullBench(benchmark::State& s, uint32_t bits) {
     s.counters["4. Final Dec."] = Counter(t_fusion, Counter::kAvgIterations);
 }
 
-void RegisterAll() {
+void RegisterAll(bool fullWrite) {
     for (uint32_t bits : {1u, 2u, 3u, 4u}) {
         const uint32_t n = 1u << bits;
-        benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits](benchmark::State& s) {
-            FullBench(s, bits);
+        benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits, fullWrite](benchmark::State& s) {
+            FullBench(s, bits, fullWrite);
         })->Unit(benchmark::kMillisecond);
     }
 }
@@ -201,7 +212,11 @@ void RegisterAll() {
 
 int main(int argc, char** argv) {
     benchmark::Initialize(&argc, argv);
-    RegisterAll();
+    const bool fullWrite = FullWriteMode();
+    if (!fullWrite) {
+        std::fprintf(stderr, "Write phase: 1 write per iteration; counter shows that single write (set FULL_WRITE=1 to run all N)\n");
+    }
+    RegisterAll(fullWrite);
     benchmark::RunSpecifiedBenchmarks();
     benchmark::Shutdown();
     return 0;

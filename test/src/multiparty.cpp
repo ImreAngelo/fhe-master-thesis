@@ -121,7 +121,8 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
 
         auto ccParams = spar::params::Make(spar::params::Set::Standard);
         plaintextModulus = ccParams.GetPlaintextModulus();
-        cc = GenContextHybrid(ccParams);
+        // cc = GenContextHybrid(ccParams);
+        cc = GenContextBV(ccParams, 2);
 
         cc->Enable(lbcrypto::PKE);
         cc->Enable(lbcrypto::KEYSWITCH);

@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params format format-check data clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% bench-full-write params format format-check data clean clean-build clean-cmake help
 
 all: build
 
@@ -102,6 +102,11 @@ test-%: openfhe
 bench: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
 
+# Full-pipeline benchmark with all N server writes per iteration. The default
+# bench-full does a single write and reports its actual time.
+bench-full-write: openfhe
+	@FULL_WRITE=1 $(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='full' BENCH_FILTER='$(BENCH_FILTER)'
+
 # Run specific benchmark:  make bench-rgsw
 bench-%: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
@@ -183,6 +188,8 @@ help:
 	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
+	@echo "                       bench-full does 1 server write and reports its actual time"
+	@echo "  bench-full-write   - bench-full with all N server writes run for real"
 	@echo "  data               - Copy test CSVs into Data/Noise, benchmark JSONs into Data/Times"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
