@@ -87,7 +87,7 @@ Fixture BuildFixture(uint32_t n) {
     auto ccParams = spar::params::Make(spar::params::Set::Standard);
     f.plaintextModulus = ccParams.GetPlaintextModulus();
     // f.cc = core::GenContextHybrid(ccParams);
-    f.cc = core::GenContextBV(ccParams, 6);
+    f.cc = core::GenContextBV(ccParams, 2);
 
     f.cc->Enable(PKE);
     f.cc->Enable(KEYSWITCH);

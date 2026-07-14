@@ -30,7 +30,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product atm
         // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 6);
+        cc = GenContextBV(params::Make(params::Set::Standard), 2);
         cc->Enable(PKE);
 
         keys = cc->KeyGen();

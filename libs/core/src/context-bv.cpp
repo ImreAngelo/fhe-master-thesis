@@ -15,9 +15,11 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
     uint32_t max_msb = 0;
     for (const auto& qi : params) {
         uint32_t msb = qi->GetModulus().GetMSB();
+        DEBUG_PRINT("log q[i]: " << msb);
         if (msb > max_msb) max_msb = msb;
     }
 
+    DEBUG_PRINT("log Q: " << cc.GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB());
     DEBUG_PRINT("B: " << (max_msb + ell)/ell);
     return (max_msb + ell) / ell;
 }

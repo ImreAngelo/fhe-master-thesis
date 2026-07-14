@@ -34,7 +34,7 @@ Fixture BuildFixture(uint32_t N) {
     f.N = N;
     // WARN: Hybrid does not support internal product yet
     // f.cc = core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid));
-    f.cc = core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 6);
+    f.cc = core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2);
     f.cc->Enable(PKE);
     f.cc->Enable(LEVELEDSHE);
     f.keys = f.cc->KeyGen();
