@@ -68,7 +68,8 @@ void WriteBench(benchmark::State& s, uint32_t N) {
         s.PauseTiming();
         Fixture f = BuildFixture(N);
 
-        Plaintext Vr = f.cc->MakeCoefPackedPlaintext({2});
+        auto val = f.cc->MakeCoefPackedPlaintext({2});
+        auto Vr = f.cc->Encrypt(f.keys.publicKey, val);
         auto z = MakeZ(f);
         s.ResumeTiming();
 
