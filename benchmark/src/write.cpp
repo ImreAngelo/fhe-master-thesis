@@ -1,5 +1,6 @@
 #include "server/write.h"
 #include "core/context.h"
+#include "core/types.h"
 #include "params.h"
 #include <benchmark/benchmark.h>
 #include <cmath>
@@ -13,6 +14,7 @@ using namespace lbcrypto;
 using core::ExtendedContext;
 using core::Plaintext;
 using core::PublicKey;
+using core::RLWE;
 using core::RGSW;
 using spar::server::Matrix;
 
@@ -25,8 +27,8 @@ struct Fixture {
     KeyPair<DCRTPoly> keys;
     Plaintext zero_pt;
     Plaintext one_pt;
-    Matrix<K> L_mat;
-    Matrix<K> I_mat;
+    Matrix<RLWE, K> L_mat;
+    Matrix<RGSW, K> I_mat;
 };
 
 Fixture BuildFixture(uint32_t N) {
@@ -46,7 +48,7 @@ Fixture BuildFixture(uint32_t N) {
     f.I_mat.resize(N);
     for (uint32_t i = 0; i < N; i++) {
         for (uint32_t k = 0; k < K; k++) {
-            f.L_mat[i][k] = f.cc->EncryptRGSW(f.keys.publicKey, f.zero_pt);
+            f.L_mat[i][k] = f.cc->Encrypt(f.keys.publicKey, f.zero_pt);
             f.I_mat[i][k] = f.cc->EncryptRGSW(f.keys.publicKey, f.one_pt);
         }
     }
