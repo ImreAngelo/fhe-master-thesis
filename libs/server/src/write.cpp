@@ -19,9 +19,14 @@ RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const RLWE& Vr, const
     for (uint32_t d = 0; d < D; d++) {
         for (uint32_t k = 0; k < K; k++) {
             for (uint32_t i = 0; i < n; i++) {
-                auto lhs = cc->EvalInternalProduct(I[i][k], notHasWritten);
-                auto h = cc->EvalInternalProduct(lhs, z[d][i]);
-                auto w = cc->EvalExternalProduct(Vr, h);
+                // // Orginal formulation
+                // const auto zI = cc->EvalInternalProduct(z[d][i], I[i][k]);
+                // const auto h = cc->EvalInternalProduct(zI, notHasWritten);
+
+                // Best so far: 148, 180
+                const auto zI = cc->EvalInternalProduct(notHasWritten, I[i][k]);
+                const auto h = cc->EvalInternalProduct(zI, z[d][i]);
+                const auto w = cc->EvalExternalProduct(Vr, h);
 
                 // Update states
                 L[i][k] = cc->EvalAdd(L[i][k], w);

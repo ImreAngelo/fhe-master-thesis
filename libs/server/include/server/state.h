@@ -9,8 +9,13 @@ namespace spar::server {
 /// @brief Returns a new
 template <uint32_t K = 3>
 std::pair<Matrix<RGSW, K>, Matrix<RLWE, K>> InitializeState(const core::ExtendedContext& cc, const core::PublicKey& pk, const uint32_t n) {
-    const auto zero = cc->Encrypt(pk, cc->MakeCoefPackedPlaintext({0})); // TODO: Make noiseless
     const auto one = cc->MakePublicRGSW(pk, cc->MakeCoefPackedPlaintext({1}));
+    // Noiseless zero: keep only the encryption metadata, wipe the polynomials.
+    RLWE zero = cc->Encrypt(pk, cc->MakeCoefPackedPlaintext({0}));
+    zero->SetElements({
+        Poly(cc->GetElementParams(), Format::EVALUATION, true),
+        Poly(cc->GetElementParams(), Format::EVALUATION, true),
+    });
 
     // I = "slot available" indicator: starts at 1, decremented when slot is taken.
     // L = value accumulator at slot: starts at 0, written values added in.

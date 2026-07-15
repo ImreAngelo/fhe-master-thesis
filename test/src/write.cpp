@@ -31,7 +31,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product atm
         // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 2);
+        cc = GenContextBV(params::Make(params::Set::Standard), 3);
         cc->Enable(PKE);
         cc->Enable(LEVELEDSHE); // Required for EvalAdd
 
@@ -92,6 +92,7 @@ TEST_P(Server, Write) {
 
             Plaintext actual_L;
             cc->Decrypt(L_mat[i][k], keys.secretKey, &actual_L);
+            actual_L->SetLength(1);
 
             EXPECT_EQ(actual_L, expected_L) << "L[" << i << "][" << k << "]";
             EXPECT_EQ(decrypt(I_mat[i][k]), expected_I) << "I[" << i << "][" << k << "]";
