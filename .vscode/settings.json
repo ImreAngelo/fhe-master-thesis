@@ -4,5 +4,32 @@
     "clangd.arguments": [
         "--query-driver=/usr/bin/g++",
         "--compile-commands-dir=${workspaceFolder}/build"
-    ]
+    ],
+    "latex-workshop.latex.tools": [
+        {
+            "name": "latexmk-force",
+            "command": "latexmk",
+            "args": [
+                "-f",
+                "-pdf",
+                "-shell-escape",
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-e",
+                "$makeindex = q/makeglossaries %B/",
+                "%DOC%"
+            ],
+            "cwd": "%DIR%",
+            "env": {}
+        }
+    ],
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "latexmk (force)",
+            "tools": [
+                "latexmk-force"
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipe.default": "first"
 }
