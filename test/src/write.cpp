@@ -1,4 +1,5 @@
 #include "server/write.h"
+#include "constants-defs.h"
 #include "core/context.h"
 #include "core/utils/noise.h"
 #include "core/utils/record.h"
@@ -22,23 +23,24 @@ class Server : public ::testing::TestWithParam<uint32_t> {
     Plaintext zero_pt;
     Plaintext one_pt;
 
-    server::Matrix<K> L_mat;
-    server::Matrix<K> I_mat;
+    server::Matrix<RLWE, K> L_mat;
+    server::Matrix<RGSW, K> I_mat;
 
     void SetUp() override {
         N = GetParam();
 
         // WARN: Hybrid does not support internal product atm
         // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 6);
+        cc = GenContextBV(params::Make(params::Set::Standard), 3);
         cc->Enable(PKE);
+        cc->Enable(LEVELEDSHE); // Required for EvalAdd
 
         keys = cc->KeyGen();
 
         zero_pt = cc->MakeCoefPackedPlaintext({0});
         one_pt = cc->MakeCoefPackedPlaintext({1});
 
-        std::tie(I_mat, L_mat) = spar::server::InitializeStateMatrices<K>(cc, keys.publicKey, N);
+        std::tie(I_mat, L_mat) = spar::server::InitializeState<K>(cc, keys.publicKey, N);
     }
 
     std::vector<std::vector<RGSW>> MakeZ(uint32_t target) {
@@ -51,12 +53,13 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 };
 
 TEST_P(Server, Write) {
-    const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE
+    const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE, one should have no error
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
     RECORD_START("results/write-N" + std::to_string(N) + ".csv", "n,msb,noise");
     for (uint32_t r = 0; r < N; r++) {
-        const auto Vr = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
+        const auto val = cc->MakeCoefPackedPlaintext({static_cast<int64_t>(r + 1)});
+        const auto Vr = cc->Encrypt(keys.publicKey, val);
         const auto z = MakeZ(r);
 
         const auto nothw = server::Write<K, D>(cc, keys.publicKey, Vr, N, L_mat, I_mat, z, keys.secretKey);
@@ -87,7 +90,11 @@ TEST_P(Server, Write) {
             const auto expected_L = cc->MakeCoefPackedPlaintext({(k == 0) ? static_cast<int64_t>(i + 1) : 0});
             const auto expected_I = cc->MakeCoefPackedPlaintext({(k == 0) ? 0 : 1});
 
-            EXPECT_EQ(decrypt(L_mat[i][k]), expected_L) << "L[" << i << "][" << k << "]";
+            Plaintext actual_L;
+            cc->Decrypt(L_mat[i][k], keys.secretKey, &actual_L);
+            actual_L->SetLength(1);
+
+            EXPECT_EQ(actual_L, expected_L) << "L[" << i << "][" << k << "]";
             EXPECT_EQ(decrypt(I_mat[i][k]), expected_I) << "I[" << i << "][" << k << "]";
         }
     }

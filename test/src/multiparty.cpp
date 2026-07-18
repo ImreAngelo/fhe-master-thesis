@@ -21,8 +21,8 @@ struct Client {
     uint32_t id;
     lbcrypto::KeyPair<Poly> kpShard;  // (joint pk after i's contribution, sk_i)
     std::vector<std::vector<RGSW>> indices;
-    Plaintext value;
-    RGSW hasWritten;
+    RLWE value;
+    RGSW failed;
 };
 
 /// @brief Encrypts a one-hot indicator of length `len` with the 1 at position `idx`
@@ -110,8 +110,8 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
     std::vector<PrivateKey> secrets;  // simulation-only: in practice each sk_i stays with its client
     PublicKey jointPk;
     PrivateKey jointSk;  // simulation-only: sum of shards, for noise inspection via PRINT_MAX_NOISE
-    server::Matrix<3> I_mat;
-    server::Matrix<3> L_mat;
+    server::Matrix<RGSW, 3> I_mat;
+    server::Matrix<RLWE, 3> L_mat;
     RLWE identity;  // for EvalExternalProduct-based RGSW->RLWE conversion
 
     void SetUp() override {
@@ -121,12 +121,10 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
 
         auto ccParams = spar::params::Make(spar::params::Set::Standard);
         plaintextModulus = ccParams.GetPlaintextModulus();
-        cc = GenContextHybrid(ccParams);
 
+        cc = GenContextBV(ccParams, 2);
         cc->Enable(lbcrypto::PKE);
-        cc->Enable(lbcrypto::KEYSWITCH);
         cc->Enable(lbcrypto::LEVELEDSHE);
-        cc->Enable(lbcrypto::ADVANCEDSHE);
         cc->Enable(lbcrypto::MULTIPARTY);
 
         // Chained joint pk generation
@@ -152,7 +150,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         for (uint32_t i = 1; i < n; ++i) s += secrets[i]->GetPrivateElement();
         jointSk->SetPrivateElement(std::move(s));
 
-        std::tie(I_mat, L_mat) = server::InitializeStateMatrices(cc, jointPk, n);
+        std::tie(I_mat, L_mat) = server::InitializeState(cc, jointPk, n);
 
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
     }
@@ -167,13 +165,13 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         for (auto& client : clients) {
             client.indices = {OneHot(cc, jointPk, n, n_dist(gen)), OneHot(cc, jointPk, n, n_dist(gen)),
                               OneHot(cc, jointPk, n, n_dist(gen))};
-            client.value = cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
+            client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
         }
     }
 
     void RunServerWrite() {
         for (auto& client : clients) {
-            client.hasWritten = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+            client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
         }
     }
 };
@@ -213,16 +211,16 @@ TEST_P(Multiparty, ServerWrite) {
 
     DEBUG_TIMER("Server: Write");
     for (auto& client : clients) {
-        // TODO: rename hasWritten -> failed
-        client.hasWritten = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+        // TODO: rename failed -> failed
+        client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
 
         // Track noise growth in the write matrix (L) as each user writes.
         // L holds RGSW ciphertexts, so convert to RLWE via external product with rlwe(1).
-        const auto L_slot = cc->EvalExternalProduct(identity, L_mat[0][0]);
+        const auto L_slot = L_mat[0][0];
         PRINT_MAX_NOISE(cc, L_slot, jointSk);
 
-        // Verify (not)HasWritten = 0
-        Plaintext dec = MPDecryptFull(cc, client.hasWritten, n, jointPk, secrets);
+        // Verify (not)failed = 0
+        Plaintext dec = MPDecryptFull(cc, client.failed, n, jointPk, secrets);
         ASSERT_EQ(dec->GetCoefPackedValue()[0], 0);
     }
 }
@@ -240,8 +238,8 @@ TEST_P(Multiparty, Decryption) {
         std::vector<RLWE> ciphertexts;
         ciphertexts.reserve(3 * n);
         for (const auto& bucket : L_mat) {
-            for (const auto& rgsw : bucket) {
-                ciphertexts.push_back(cc->EvalExternalProduct(identity, rgsw));
+            for (const auto& rlwe : bucket) {
+                ciphertexts.push_back(rlwe);
             }
         }
 
