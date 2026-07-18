@@ -93,7 +93,7 @@ Fixture BuildFixture(uint32_t n) {
     // scheme lacks an internal product, so Write cannot run there.
     auto ccParams = spar::params::Make(spar::params::Set::Standard);
     f.plaintextModulus = ccParams.GetPlaintextModulus();
-    f.cc = core::GenContextBV(ccParams, 3);
+    f.cc = core::GenContextBV(ccParams, 2);
 
     f.cc->Enable(PKE);
     f.cc->Enable(KEYSWITCH);
