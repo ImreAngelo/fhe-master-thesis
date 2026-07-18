@@ -249,8 +249,15 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
             const auto& tp = params->GetParams()[t];
             NativePoly sum(tp, Format::EVALUATION, true);
 
-            for (size_t s = 0; s < S; s++)  // sequential FMA, contention-free
-                sum += dig[s * k + t] * rgsw[s]->GetElements()[b].GetElementAtIndex(t);
+            // Fused mod-FMA: accumulate in place, no per-term poly temporaries
+            const NativeInteger& qt = tp->GetModulus();
+            const NativeInteger mu = qt.ComputeMu();
+
+            for (size_t s = 0; s < S; s++) {  // sequential FMA, contention-free
+                const NativePoly& d = dig[s * k + t];
+                const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
+                for (size_t x = 0; x < n; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
+            }
 
             acc[b]->SetElementAtIndex(t, std::move(sum));
         }
@@ -263,7 +270,16 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
 
 RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
     RGSW result = lhs;
-    for (auto& rlwe : result) rlwe = EvalExternalProduct(rlwe, rhs);
+
+    // Each of the 2l rows is an independent external product. OMP nesting is
+    // disabled, so the pragmas inside EvalExternalProduct collapse to a team
+    // of one here; standalone EvalExternalProduct calls keep their inner
+    // parallelism.
+#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(result.size()))
+    for (size_t r = 0; r < result.size(); r++) {
+        result[r] = EvalExternalProduct(result[r], rhs);
+    }
+
     return result;
 }
 
@@ -276,7 +292,7 @@ RGSW ExtendedContextBVImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const 
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
     for (size_t r = 0; r < lhs.size(); r++) {
-        auto out = lhs[r]->Clone();
+        auto out = lhs[r]->CloneEmpty();
 
         const auto& cL = lhs[r]->GetElements();
         const auto& cR = rhs[r]->GetElements();
@@ -297,7 +313,7 @@ RGSW ExtendedContextBVImpl::EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const 
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
     for (size_t r = 0; r < lhs.size(); r++) {
-        auto out = lhs[r]->Clone();
+        auto out = lhs[r]->CloneEmpty();
 
         const auto& cL = lhs[r]->GetElements();
         const auto& cR = rhs[r]->GetElements();
@@ -317,7 +333,7 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
     for (size_t r = 0; r < rgsw.size(); r++) {
-        auto out = rgsw[r]->Clone();
+        auto out = rgsw[r]->CloneEmpty();
 
         const auto& c = rgsw[r]->GetElements();
 

@@ -185,7 +185,7 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
-	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
+	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 12)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
 	@echo "                       bench-full does 1 server write and reports its actual time"

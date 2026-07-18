@@ -22,6 +22,13 @@ BENCH_REPETITIONS ?= 1
 # hyperthreads add noise rather than speedup.
 BENCH_OMP_THREADS ?= 6
 
+# One thread per physical core, spread across cores; WSL2 exposes the SMT
+# sibling topology, so "cores" forms 6 places and <=6 threads never share a
+# core. OMP_MAX_ACTIVE_LEVELS=1 pins the no-nesting behavior the row-level
+# EvalInternalProduct loop relies on.
+BENCH_OMP_PROC_BIND ?= spread
+BENCH_OMP_PLACES    ?= cores
+
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
 	--benchmark_filter="$(BENCH_FILTER)" \
@@ -41,7 +48,7 @@ run: build
 	@for name in $(BENCH_NAMES); do \
 		echo ""; \
 		echo "▶ bench-$$name (filter=$(BENCH_FILTER), OMP_NUM_THREADS=$(BENCH_OMP_THREADS))"; \
-		OMP_NUM_THREADS=$(BENCH_OMP_THREADS) $(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
+		OMP_NUM_THREADS=$(BENCH_OMP_THREADS) OMP_PROC_BIND=$(BENCH_OMP_PROC_BIND) OMP_PLACES=$(BENCH_OMP_PLACES) OMP_MAX_ACTIVE_LEVELS=1 $(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
 		echo "  JSON: $(BUILDDIR)/results-$$name.json"; \
 	done
 
@@ -74,5 +81,7 @@ help:
 	@echo "                          currently auto-discovered: $(ALL_BENCH_NAMES)"
 	@echo "  BENCH_FILTER=<regex>    --benchmark_filter (default: .*)"
 	@echo "  BENCH_TIME_UNIT=<u>     --benchmark_time_unit (default: ms)"
-	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 10)"
+	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 1)"
 	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 6)"
+	@echo "  BENCH_OMP_PROC_BIND=<p> OMP_PROC_BIND for the run (default: spread)"
+	@echo "  BENCH_OMP_PLACES=<p>    OMP_PLACES for the run (default: cores)"

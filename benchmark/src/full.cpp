@@ -1,5 +1,9 @@
 #include "core/context.h"
 #include "params.h"
+// server/state.h references core types (RGSW, RLWE, Poly, Format) unqualified,
+// matching the convention in the server sources and the tests (common.h). Bring
+// namespace core into scope before including it, as those translation units do.
+using namespace core;
 #include "server/state.h"
 #include "server/write.h"
 #include <benchmark/benchmark.h>
@@ -30,7 +34,7 @@ struct Client {
     uint32_t id;
     KeyPair<Poly> kpShard;
     std::vector<std::vector<RGSW>> indices;
-    Plaintext value;
+    RLWE value;
     RGSW hasWritten;
 };
 
@@ -75,9 +79,8 @@ struct Fixture {
     std::vector<Client> clients;
     std::vector<PrivateKey> secrets;
     PublicKey jointPk;
-    Matrix<K> I_mat;
-    Matrix<K> L_mat;
-    RLWE identity;
+    Matrix<RGSW, K> I_mat;
+    Matrix<RLWE, K> L_mat;
 };
 
 // Everything that the unit-test fixture's SetUp() does: context, chained
@@ -86,10 +89,11 @@ Fixture BuildFixture(uint32_t n) {
     Fixture f;
     f.n = n;
 
+    // Full protocol runs on BV with the Standard parameter set only; the hybrid
+    // scheme lacks an internal product, so Write cannot run there.
     auto ccParams = spar::params::Make(spar::params::Set::Standard);
     f.plaintextModulus = ccParams.GetPlaintextModulus();
-    // f.cc = core::GenContextHybrid(ccParams);
-    f.cc = core::GenContextBV(ccParams, 2);
+    f.cc = core::GenContextBV(ccParams, 3);
 
     f.cc->Enable(PKE);
     f.cc->Enable(KEYSWITCH);
@@ -108,8 +112,7 @@ Fixture BuildFixture(uint32_t n) {
     }
 
     f.jointPk = f.clients[n - 1].kpShard.publicKey;
-    std::tie(f.I_mat, f.L_mat) = spar::server::InitializeStateMatrices(f.cc, f.jointPk, n);
-    f.identity = f.cc->Encrypt(f.jointPk, f.cc->MakeCoefPackedPlaintext({1}));
+    std::tie(f.I_mat, f.L_mat) = spar::server::InitializeState<K>(f.cc, f.jointPk, n);
 
     return f;
 }
@@ -120,7 +123,7 @@ void EncryptClient(Fixture& f, Client& client, std::mt19937& gen) {
     const auto bounds = static_cast<int64_t>(f.plaintextModulus) / 2;
     client.indices = {OneHot(f.cc, f.jointPk, f.n, n_dist(gen)), OneHot(f.cc, f.jointPk, f.n, n_dist(gen)),
                       OneHot(f.cc, f.jointPk, f.n, n_dist(gen))};
-    client.value = f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds});
+    client.value = f.cc->Encrypt(f.jointPk, f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
 }
 
 // Every write touches the same n-sized matrices, so each of the n writes
@@ -169,12 +172,13 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
         }
         const auto e2 = clock::now();
 
-        // Partial Decryption (clients)
+        // Partial Decryption (clients). L now holds RLWE accumulators directly,
+        // so the slots are decrypted as-is (no RGSW->RLWE conversion needed).
         std::vector<RLWE> cts;
         cts.reserve(K * n);
         for (auto& bucket : f.L_mat) {
-            for (auto& rgsw : bucket) {
-                cts.push_back(f.cc->EvalExternalProduct(f.identity, rgsw));
+            for (auto& rlwe : bucket) {
+                cts.push_back(rlwe);
             }
         }
         auto partials = MPDecryptPartials(f.cc, cts, n, f.secrets);
