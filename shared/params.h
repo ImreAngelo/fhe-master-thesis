@@ -12,6 +12,7 @@ namespace spar::params {
 /// @brief Named parameter sets for the factory
 enum class Set {
     Standard,     ///< Large parameters, supports SIMD (N = 2^14, Q = 180 bits)
+    MultiParty,   ///< OpenFHE multiparty adds two 60-bit primes
     Small,        ///< sPAR paper parameters (N = 2^12, Q = 64 bits)
     SmallHybrid,  ///< Small with HYBRID key switching (N = 2^13)
 };
@@ -32,12 +33,26 @@ struct Values {
     std::optional<uint32_t> numLargeDigits;
 };
 
+// Without multi-party enabled
 inline constexpr Values kStandard{
     /*plaintextModulus*/ 65537,
     /*ringDim*/ 1u << 14,
     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
     /*multiplicativeDepth*/ 4,
+    /*firstModSize*/ 60,
+    /*scalingModSize*/ 59,
+    /*standardDeviation*/ 3.19,
+    /*keySwitchTechnique*/ lbcrypto::HYBRID,  // For GHS
+    /*numLargeDigits*/ 1,
+};
+
+inline constexpr Values kStandardMP{
+    /*plaintextModulus*/ 65537,
+    /*ringDim*/ 1u << 14,
+    /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
+    /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
+    /*multiplicativeDepth*/ 2,
     /*firstModSize*/ 60,
     /*scalingModSize*/ 59,
     /*standardDeviation*/ 3.19,
@@ -74,6 +89,7 @@ inline constexpr Values kSmallHybrid{
 inline constexpr const Values& Get(const Set set) {
     switch(set) {
         case Set::Standard: return kStandard;
+        case Set::MultiParty: return kStandardMP;
         case Set::Small: return kSmall;
         case Set::SmallHybrid: return kSmallHybrid;
     }

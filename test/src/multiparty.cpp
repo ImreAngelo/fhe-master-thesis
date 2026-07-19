@@ -1,3 +1,4 @@
+#include "constants-defs.h"
 #include "core/context.h"
 #include "core/types.h"
 #include "core/utils/noise.h"
@@ -119,7 +120,9 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams = spar::params::Make(spar::params::Set::Standard);
+        auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
+        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
+
         plaintextModulus = ccParams.GetPlaintextModulus();
 
         cc = GenContextBV(ccParams, 2);
