@@ -20,8 +20,8 @@ namespace spar::server {
 ///
 /// @return
 template <uint32_t K = 3, uint32_t D = 3>
-core::RGSW Write(const core::ExtendedContext& cc, const core::PublicKey& pk, const core::RLWE& Vr, const uint32_t n, Matrix<core::RLWE, K>& L,
-                 Matrix<core::RGSW, K>& I, const std::vector<std::vector<core::RGSW>>& z,
+core::RGSW Write(const core::ExtendedContext& cc, const core::PublicKey& pk, const core::RLWE& Vr, const uint32_t n,
+                 Matrix<core::RLWE, K>& L, Matrix<core::RGSW, K>& I, const std::vector<std::vector<core::RGSW>>& z,
                  // Debugging
                  const core::PrivateKey& debug_sk = nullptr);
 

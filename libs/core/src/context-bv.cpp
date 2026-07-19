@@ -20,7 +20,7 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
     }
 
     DEBUG_PRINT("log Q: " << cc.GetCryptoParameters()->GetElementParams()->GetModulus().GetMSB());
-    DEBUG_PRINT("B: " << (max_msb + ell)/ell);
+    DEBUG_PRINT("B: " << (max_msb + ell) / ell);
     return (max_msb + ell) / ell;
 }
 
@@ -329,7 +329,7 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
     Poly p = pt->GetElement<Poly>();
     p.SetFormat(Format::EVALUATION);
 
-    RGSW result(rgsw.size()); // 2 * m_ell
+    RGSW result(rgsw.size());  // 2 * m_ell
 
 #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
     for (size_t r = 0; r < rgsw.size(); r++) {

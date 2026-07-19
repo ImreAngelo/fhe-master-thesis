@@ -14,8 +14,8 @@ using namespace lbcrypto;
 using core::ExtendedContext;
 using core::Plaintext;
 using core::PublicKey;
-using core::RLWE;
 using core::RGSW;
+using core::RLWE;
 using spar::server::Matrix;
 
 constexpr uint32_t K = 3;
@@ -81,8 +81,8 @@ void WriteBench(benchmark::State& s, uint32_t N) {
 
 void RegisterAll() {
     for (uint32_t N : {
-            2u, 4u, 8u, 16u, 32u, 64u,  // 128u
-        }) {
+             2u, 4u, 8u, 16u, 32u, 64u,  // 128u
+         }) {
         benchmark::RegisterBenchmark("Server/Write/N" + std::to_string(N), [N](benchmark::State& s) { WriteBench(s, N); });
     }
 }
