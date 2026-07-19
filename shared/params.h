@@ -37,7 +37,7 @@ inline constexpr Values kStandard{
     /*ringDim*/ 1u << 14,
     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-    /*multiplicativeDepth*/ 5,
+    /*multiplicativeDepth*/ 4,
     /*firstModSize*/ 60,
     /*scalingModSize*/ 59,
     /*standardDeviation*/ 3.19,
