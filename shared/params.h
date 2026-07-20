@@ -52,7 +52,7 @@ inline constexpr Values kStandardMP{
     /*ringDim*/ 1u << 14,
     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-    /*multiplicativeDepth*/ 2,
+    /*multiplicativeDepth*/ 3,
     /*firstModSize*/ 60,
     /*scalingModSize*/ 59,
     /*standardDeviation*/ 3.19,

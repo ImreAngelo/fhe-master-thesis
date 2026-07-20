@@ -2,6 +2,7 @@
 #include "core/context.h"
 #include "core/types.h"
 #include "core/utils/noise.h"
+#include "core/utils/record.h"
 #include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
@@ -158,6 +159,29 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
     }
 
+    // Records ||e||_inf of the noisiest RLWE in L, so every phase leaves behind a
+    // CSV row even when it never touches the matrix (a fresh L reads as 0).
+    void TearDown() override {
+#if defined(DEBUG_LOGGING)
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        // Parameterized names arrive as "<Test>/<Param>"; keep the stem out of the path.
+        std::string test(info->name());
+        test = test.substr(0, test.find('/'));
+
+        BigInteger maxE(0);
+        for (const auto& row : L_mat) {
+            for (const auto& ct : row) {
+                const auto e = core::utils::MaxNoise(cc, ct, jointSk);
+                if (e > maxE) maxE = e;
+            }
+        }
+
+        RECORD_START("results/Multiparty/" + test + "-N" + std::to_string(n) + ".csv", "n,msb,noise");
+        RECORD(n, maxE.GetMSB(), maxE);
+        RECORD_END();
+#endif
+    }
+
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
     void RunEncryptOneHot() {
         std::random_device rd;
@@ -268,7 +292,7 @@ TEST_P(Multiparty, Decryption) {
     ASSERT_EQ(numValues, 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u),
+INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u, 3u),
                          [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
 }  // namespace spar::test
