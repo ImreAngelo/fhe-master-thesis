@@ -126,7 +126,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
 
         plaintextModulus = ccParams.GetPlaintextModulus();
 
-        cc = GenContextBV(ccParams, 3);
+        cc = GenContextBV(ccParams, 4);
         cc->Enable(lbcrypto::PKE);
         cc->Enable(lbcrypto::LEVELEDSHE);
         cc->Enable(lbcrypto::MULTIPARTY);
