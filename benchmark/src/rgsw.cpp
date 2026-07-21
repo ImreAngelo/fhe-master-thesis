@@ -71,7 +71,7 @@ const std::vector<SchemeCase> kSchemes = {
     // {"BV_Small", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Small), /*ell=*/3); }},
     // {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid)); },
     // /*internalProduct=*/false},
-    {"BV", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2); }},
+    {"BV", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 4); }},
     // {"Hybrid", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }, /*internalProduct=*/false},
 };
 

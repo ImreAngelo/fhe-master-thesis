@@ -1,7 +1,6 @@
 #pragma once
 #include "constants-defs.h"
 #include "lattice/stdlatticeparms.h"
-#include "openfhe.h"
 
 #include <optional>
 #include <stdexcept>
@@ -13,8 +12,8 @@ namespace spar::params {
 enum class Set {
     Standard,     ///< Large parameters, supports SIMD (N = 2^14, Q = 180 bits)
     MultiParty,   ///< OpenFHE multiparty adds two 60-bit primes
-    Small,        ///< sPAR paper parameters (N = 2^12, Q = 64 bits)
-    SmallHybrid,  ///< Small with HYBRID key switching (N = 2^13)
+    // Small,        ///< sPAR paper parameters (N = 2^12, Q = 64 bits)
+    // SmallHybrid,  ///< Small with HYBRID key switching (N = 2^13)
 };
 
 namespace {
@@ -60,38 +59,38 @@ inline constexpr Values kStandardMP{
     /*numLargeDigits*/ 1,
 };
 
-inline constexpr Values kSmall{
-    /*plaintextModulus*/ 1u << 8,
-    /*ringDim*/ 1u << 12,
-    /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
-    /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-    /*multiplicativeDepth*/ 2,
-    /*firstModSize*/ 24,
-    /*scalingModSize*/ 20,
-    /*standardDeviation*/ 512,
-    /*keySwitchTechnique*/ std::nullopt,
-    /*numLargeDigits*/ std::nullopt,
-};
+// inline constexpr Values kSmall{
+//     /*plaintextModulus*/ 1u << 8,
+//     /*ringDim*/ 1u << 12,
+//     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
+//     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
+//     /*multiplicativeDepth*/ 2,
+//     /*firstModSize*/ 24,
+//     /*scalingModSize*/ 20,
+//     /*standardDeviation*/ 512,
+//     /*keySwitchTechnique*/ std::nullopt,
+//     /*numLargeDigits*/ std::nullopt,
+// };
 
-inline constexpr Values kSmallHybrid{
-    /*plaintextModulus*/ 1u << 8,
-    /*ringDim*/ 1u << 13,  // Larger ring for hybrid to support larger QP modulus
-    /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
-    /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-    /*multiplicativeDepth*/ 2,
-    /*firstModSize*/ 24,
-    /*scalingModSize*/ 20,
-    /*standardDeviation*/ 512,
-    /*keySwitchTechnique*/ lbcrypto::HYBRID,
-    /*numLargeDigits*/ 1,  // |P| ~= |Q|
-};
+// inline constexpr Values kSmallHybrid{
+//     /*plaintextModulus*/ 1u << 8,
+//     /*ringDim*/ 1u << 13,  // Larger ring for hybrid to support larger QP modulus
+//     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
+//     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
+//     /*multiplicativeDepth*/ 2,
+//     /*firstModSize*/ 24,
+//     /*scalingModSize*/ 20,
+//     /*standardDeviation*/ 512,
+//     /*keySwitchTechnique*/ lbcrypto::HYBRID,
+//     /*numLargeDigits*/ 1,  // |P| ~= |Q|
+// };
 
 inline constexpr const Values& Get(const Set set) {
     switch(set) {
         case Set::Standard: return kStandard;
         case Set::MultiParty: return kStandardMP;
-        case Set::Small: return kSmall;
-        case Set::SmallHybrid: return kSmallHybrid;
+        // case Set::Small: return kSmall;
+        // case Set::SmallHybrid: return kSmallHybrid;
     }
     throw std::invalid_argument("Unknown parameter set");
 }

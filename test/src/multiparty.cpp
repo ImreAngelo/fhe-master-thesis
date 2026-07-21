@@ -122,11 +122,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         n = (1u << bits);
 
         auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
-        // ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY); // <- Test with FIXED_NOISE_MULTIPARTY (faster) and NOISE_FLOODING_MULTIPARTY (security)
+        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
 
         plaintextModulus = ccParams.GetPlaintextModulus();
 
-        cc = GenContextBV(ccParams, 2);
+        cc = GenContextBV(ccParams, 3);
         cc->Enable(lbcrypto::PKE);
         cc->Enable(lbcrypto::LEVELEDSHE);
         cc->Enable(lbcrypto::MULTIPARTY);
