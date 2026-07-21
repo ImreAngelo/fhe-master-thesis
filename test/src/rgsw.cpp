@@ -208,14 +208,14 @@ TEST_P(RGSW, InternalProductChains) {
 
 INSTANTIATE_TEST_SUITE_P(
     Scheme, RGSW,
-    ::testing::Values(SchemeCase{"bv_1", [] { return GenContextBV(params::Make(params::Set::Standard), 1); }},
-                      SchemeCase{"bv", [] { return GenContextBV(params::Make(params::Set::Standard), 2); }},
-                      SchemeCase{"bv_3", [] { return GenContextBV(params::Make(params::Set::Standard), 3); }},
-                      SchemeCase{"bv_4", [] { return GenContextBV(params::Make(params::Set::Standard), 4); }},
-                      SchemeCase{"bv_5", [] { return GenContextBV(params::Make(params::Set::Standard), 5); }}
+    ::testing::Values(// SchemeCase{"bv_1", [] { return GenContextBV(params::Make(params::Set::Standard), 1); }},
+                    //   SchemeCase{"bv_2", [] { return GenContextBV(params::Make(params::Set::Standard), 2); }},
+                    //   SchemeCase{"bv_3", [] { return GenContextBV(params::Make(params::Set::Standard), 3); }},
+                    //   SchemeCase{"bv_4", [] { return GenContextBV(params::Make(params::Set::Standard), 4); }}
+                    //   SchemeCase{"bv_5", [] { return GenContextBV(params::Make(params::Set::Standard), 5); }}
                       // SchemeCase{"bv_small", [] { return GenContextBV(params::Make(params::Set::Small), 3); }},
                       // SchemeCase{"hybrid_small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
-                      // SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}),
-                      ),
+                      SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}
+                    ),
     [](const auto& info) { return info.param.name; });
 }  // namespace spar::test

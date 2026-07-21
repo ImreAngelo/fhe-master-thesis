@@ -39,9 +39,9 @@ inline constexpr Values kStandard{
     /*ringDim*/ 1u << 14,
     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-    /*multiplicativeDepth*/ 4,
+    /*multiplicativeDepth*/ 5,
     /*firstModSize*/ 60,
-    /*scalingModSize*/ 59,
+    /*scalingModSize*/ 60,
     /*standardDeviation*/ 3.19,
     /*keySwitchTechnique*/ lbcrypto::HYBRID,  // For GHS
     /*numLargeDigits*/ 1,
@@ -54,7 +54,7 @@ inline constexpr Values kStandardMP{
     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
     /*multiplicativeDepth*/ 3,
     /*firstModSize*/ 60,
-    /*scalingModSize*/ 59,
+    /*scalingModSize*/ 60,
     /*standardDeviation*/ 3.19,
     /*keySwitchTechnique*/ lbcrypto::HYBRID,  // For GHS
     /*numLargeDigits*/ 1,

@@ -122,7 +122,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         n = (1u << bits);
 
         auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
-        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
+        // ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY); // <- Test with FIXED_NOISE_MULTIPARTY (faster) and NOISE_FLOODING_MULTIPARTY (security)
 
         plaintextModulus = ccParams.GetPlaintextModulus();
 

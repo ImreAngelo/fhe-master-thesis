@@ -53,7 +53,13 @@ PARAM_SETS = [
     # ParamSet("standard", N=2**14, logQ=420, sigma=3.19)
 
     # 157.6 bits
-    ParamSet("standard", N=2**14, logQ=355, sigma=3.19)
+    # ParamSet("standard", N=2**14, logQ=355, sigma=3.19)
+
+    # 156.7 bits
+    # ParamSet("standard", N=2**14, logQ=357, sigma=3.19)
+
+    # 155.3 bits
+    ParamSet("standard", N=2**14, logQ=360, sigma=3.19)
 
     # Old sets
     # # 120.0 bits
