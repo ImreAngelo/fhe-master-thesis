@@ -17,6 +17,7 @@ class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     /// @brief Create a public key (noiseless RGSW)
     virtual RGSW MakePublicRGSW(const PublicKey&, const Plaintext&) const = 0;
 
+
     /// @brief Encrypt an RGSW ciphertext of message
     virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&) const = 0;
 
@@ -25,6 +26,7 @@ class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
 
     /// @brief Internal product
     virtual RGSW EvalInternalProduct(const RGSW&, const RGSW&) const = 0;
+
 
     /// @brief Add two RGSW ciphertexts
     virtual RGSW EvalAddRGSW(const RGSW&, const RGSW&) const = 0;

@@ -1,4 +1,5 @@
 name: Unit Test
+permissions: read-all
 
 on:
   push:
@@ -33,7 +34,7 @@ jobs:
 
       - name: Build and install OpenFHE
         if: steps.cache-openfhe.outputs.cache-hit != 'true'
-        run: make ci
+        run: make openfhe
 
       - name: Save OpenFHE cache
         if: steps.cache-openfhe.outputs.cache-hit != 'true'

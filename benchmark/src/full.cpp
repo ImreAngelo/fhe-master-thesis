@@ -161,8 +161,7 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
             EncryptClient(f, client, gen);
             const auto w1 = clock::now();
             if (fullWrite || client.id == 0) {
-                client.hasWritten =
-                    spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
+                client.hasWritten = spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
             }
             const auto w2 = clock::now();
             client.indices.clear();

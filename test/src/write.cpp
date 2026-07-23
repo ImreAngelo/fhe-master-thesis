@@ -31,9 +31,9 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 
         // WARN: Hybrid does not support internal product atm
         // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 3);
+        cc = GenContextBV(params::Make(params::Set::Standard), 2);
         cc->Enable(PKE);
-        cc->Enable(LEVELEDSHE); // Required for EvalAdd
+        cc->Enable(LEVELEDSHE);  // Required for EvalAdd
 
         keys = cc->KeyGen();
 
@@ -53,7 +53,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 };
 
 TEST_P(Server, Write) {
-    const auto one = cc->Encrypt(keys.publicKey, one_pt); // TODO: Write should output hasNotWritten as an RLWE, one should have no error
+    const auto one = cc->Encrypt(keys.publicKey, one_pt);  // TODO: Write should output hasNotWritten as an RLWE, one should have no noise
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
     RECORD_START("results/write-N" + std::to_string(N) + ".csv", "n,msb,noise");
@@ -100,7 +100,7 @@ TEST_P(Server, Write) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u, 16u),
-                         [](const auto& info) { return "N" + std::to_string(info.param); });
+// 2u, 16u,
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(32u), [](const auto& info) { return "N" + std::to_string(info.param); });
 
 }  // namespace spar::test
