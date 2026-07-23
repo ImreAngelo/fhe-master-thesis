@@ -1,4 +1,4 @@
-# (Somewhat) Practical Anonymous Routing with Homomorphic Encryption
+# (Somewhat) Practical Anonymous Router
 
 Many anonymous communication systems have been proposed and implemented with the goal of allowing users to exchange messages over a network without revealing who is communicating with whom. Most of these designs (e.g., Tor, I2P, mixnets) rely on the _threshold model_ to provide anonymity, wherein some components of their infrastructure must be behaving honestly. Systems with stronger anonymity guarantees (e.g., DC-nets) generally suffer from poor scalability or are impractical to instantiate.
 
@@ -15,15 +15,16 @@ __Research Questions:__
 ## Table of Contents
 <ul>
     <li><a href="#build-instructions">Build Instructions</a></li>
-    <li><a href="#project-layout">Project Layout</a></li>
+    <!-- <li><a href="#project-layout">Project Layout</a></li> -->
     <li><a href="#unit-tests">Unit Tests</a></li>
+    <li><a href="#benchmarks">Benchmarks</a></li>
 </ul>
 
 
 
 ## Build Instructions
 
-1. Clone the repo `git clone git@github.com:ImreAngelo/fhe-master-thesis.git` 
+1. Clone the repo `git clone git@github.com:ImreAngelo/sPAR.git`
 2. Initialize submodules recursively `git submodule update --init --recursive`
 3. Run `make build` to build OpenFHE and the project
 4. Profit
@@ -31,10 +32,12 @@ __Research Questions:__
 <!-- TODO: -->
 > [!NOTE] 
 > The project will statically link OpenFHE by default. 
-> To build the project using a version of OpenFHE already installed on the system, ... <!-- run `make build-dynamic` -->
+> To build the project using a version of OpenFHE already installed on the system... <!-- run `make build-dynamic` -->
 
-<!-- ## Project Layout
-TBD... -->
+## Project Layout
+Split into 3 distinct libraries + helpers for unit testing etc.
+- Main directories inside `lib`: `libs/core`, `libs/client`, `libs/server`
+- Auxiliary directories: `benchmark`, `test`, `scripts`
 
 
 ## Unit Tests
@@ -42,17 +45,17 @@ Unit tests are located inside the `tests` directory.
 Configured with [Google Test](https://github.com/google/googletest).
 
 > [!NOTE]
-> Each test has a make target
+> Each test has a make target matching the file name in `test/src`
 >
 > ```sh
-> make test         # run all tests
-> make test-rgsw    # test external product
-> make homplacing   # test homomorphic placing
+> make test             # run all tests
+> make test-rgsw        # test rgsw operations
+> make test-multiparty  # run protocol once
 > ```
 
 > [!TIP]
 > Enable debug logging and timing by setting the debug environment variable
-> ```
+> ```sh
 > DEBUG=1 make test
 > ```
 
@@ -64,13 +67,41 @@ Benchmarks are located inside the `benchmark` directory.
 Configured with [Google Benchmark](https://github.com/google/benchmark).
 
 ```sh
+# Run the full benchmark suite
 make bench
 ```
 
+> [!TIP]
+> Single benchmarks can be ran by overriding the `BENCH_NAMES` flag in `make -C benchmark run`
+> ```sh
+> make -C benchmark run BENCH_NAMES=rgsw   # benchmark RGSW operations
+> make bench-rgsw                          # same but does not take more flags
+> ```
+
+| **Flag**          | **Description**                                                                                                 | **Default**            |
+|-------------------|-----------------------------------------------------------------------------------------------------------------|------------------------|
+| BENCH_REPETITIONS | Run tests multiple times to get additional statistics (median, standard deviation etc)                          | 1                      |
+| BENCH_NAMES       | Specify benchmark files to run                                                                                  | All in `benchmark/src` |
+| BENCH_FILTER      | Run only the benchmarks that match this filter                                                                  | .*                     |
+| BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
+| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 6                      |
+
+<!-- TODO: Make smaller and center on page + bright and dark versions -->
+<picture>
+  <!-- <source
+    width="100%"
+    srcset="./docs/img/..-dark.avif"
+    media="(prefers-color-scheme: dark)"
+  />
+  <source
+    width="100%"
+    srcset="./docs/img/..-light.avif"
+    media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+  /> -->
+  <img width="100%" src="./docs/img/bench-rgsw.png" alt="RGSW benchmarks"/>
+</picture>
+
+
 ## TODO
-- [x] Add/verify support for MakeCoefPackedPlaintext (and smaller params)
 - [ ] Add/verify support for BFV
-- [ ] Verify depth requirements
-- [ ] Make code multi-threaded where possible
-- [ ] Test multi-threaded performance
-- [/] Hybrid keyswitching gadget
+- [ ] Pass parameters via CLI

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "openfhe.h"
+#include "pke/cryptocontext.h"
 #include "types.h"
 
 
@@ -9,9 +9,16 @@ namespace core {
 class IExtendedContext : public lbcrypto::CryptoContextImpl<Poly> {
     using Base = lbcrypto::CryptoContextImpl<Poly>;
 
-public:
+   public:
+    /// @brief Publish extended (QP) key material. Required by the hybrid scheme
+    ///        (call once after KeyGen); a no-op for schemes that don't need it.
+    virtual void SetExtendedKey(const lbcrypto::KeyPair<Poly>&) {}
+
+    /// @brief Create a public key (noiseless RGSW)
+    virtual RGSW MakePublicRGSW(const PublicKey&, const Plaintext&) const = 0;
+
     /// @brief Encrypt an RGSW ciphertext of message
-    virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&, const bool noisy = true) const = 0;
+    virtual RGSW EncryptRGSW(const PublicKey&, const Plaintext&) const = 0;
 
     /// @brief External product
     virtual RLWE EvalExternalProduct(const RLWE&, const RGSW&) const = 0;
@@ -23,12 +30,12 @@ public:
     virtual RGSW EvalAddRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Subtract an RGSW ciphertext from another (lhs - rhs)
-    virtual RGSW EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const = 0;
+    virtual RGSW EvalSubRGSW(const RGSW&, const RGSW&) const = 0;
 
     /// @brief Multiply an RGSW ciphertext by a plaintext
     virtual RGSW EvalMultRGSW(const RGSW&, const Plaintext&) const = 0;
 
-protected:
+   protected:
     explicit IExtendedContext(const Base& cc) : Base(cc) {}
 };
 

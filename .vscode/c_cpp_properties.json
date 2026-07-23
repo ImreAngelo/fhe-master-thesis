@@ -6,7 +6,13 @@
                 "${workspaceFolder}/build/compile_commands.json"
             ],
             "includePath": [
-                "${workspaceFolder}/src",
+                "${workspaceFolder}/libs/core/include",
+                "${workspaceFolder}/libs/core/src",
+                "${workspaceFolder}/libs/client/include",
+                "${workspaceFolder}/libs/server/include",
+                "${workspaceFolder}/libs/server/src",
+                "${workspaceFolder}/shared",
+                "${workspaceFolder}/test",
                 "${workspaceFolder}/vendors/install/include/openfhe",
                 "${workspaceFolder}/vendors/install/include/openfhe/core",
                 "${workspaceFolder}/vendors/install/include/openfhe/pke",

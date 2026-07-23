@@ -1,4 +1,6 @@
-# Mirrored OpenFHE internals
+# BENCHMARKS
+
+## Mirrored OpenFHE internals
 
 [ RUN      ] RGSW.inv
   [timing] Encrypt RGSW: 58.59 ms
@@ -18,7 +20,7 @@
 [       OK ] RGSW.max (530 ms)
 
 
-# Direct call to OpenFHE internals
+## Direct call to OpenFHE internals
 
 [ RUN      ] RGSW.inv
   [timing] Encrypt RGSW: 59.99 ms
@@ -38,7 +40,7 @@
 [       OK ] RGSW.max (581 ms)
 
 
-# Further optimizations
+## Further optimizations
 
 [ RUN      ] RGSW.inv
   [timing] Encrypt RGSW: 59.86 ms
@@ -58,7 +60,7 @@
 [       OK ] RGSW.max (451 ms)
 
 
-# BV-RNS Gadget
+## BV-RNS Gadget
 Benchmark                            Time             CPU   Iterations
 ----------------------------------------------------------------------
 RGSW/Encrypt_mean                0.700 ms        0.688 ms           10

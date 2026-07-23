@@ -1,7 +1,3 @@
 #pragma once
 
-namespace spar::client {
-
-
-
-}
+namespace spar::client {}

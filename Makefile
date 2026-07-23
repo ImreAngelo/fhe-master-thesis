@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% params tune-% latex clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean test test-% bench bench-% bench-full-write params format format-check data clean clean-build clean-cmake help
 
 all: build
 
@@ -64,58 +64,101 @@ _CONFIGURE = cmake -S . -B $(BUILDDIR) \
 	-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -mtune=native" \
 	$(_DEBUG_FLAGS)
 
-# Build whatever production binaries are registered in CMakeLists.txt.
+# Build whatever production binaries are registered in CMakeLists.txt
 build: openfhe
 	@$(_CONFIGURE)
 	@cmake --build $(BUILDDIR) -j$(shell nproc)
+
+####################
+# Parameter Tuning #
+####################
+
+estimate:
+	@echo "Estimating security parameters with lattice-estimator..."
+	@./.venv/bin/python scripts/estimate-security-param.py --full
 
 #########
 # Tests #
 #########
 
-# Build and run all tests against the optimized OpenFHE.
+# DEBUG=1 make test-% TEST_OMP_THREADS=X
+TEST_OMP_THREADS ?= 12
+
+# Build and run all tests against the optimized OpenFHE build
 test: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target check -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target check -j$(shell nproc)
 
 # Build and run a specific test:  make test-rgsw
 test-%: openfhe
 	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
+	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
 
 ##############
 # Benchmarks #
 ##############
 
-# Delegated to benchmark/Makefile, which uses the same $(BUILDDIR) and depends
-# on the openfhe target above. See `make -C benchmark help`.
+# Run all benchmarks
 bench: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
 
+# Full-pipeline benchmark with all N server writes per iteration. The default
+# bench-full does a single write and reports its actual time.
+bench-full-write: openfhe
+	@FULL_WRITE=1 $(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='full' BENCH_FILTER='$(BENCH_FILTER)'
+
+# Run specific benchmark:  make bench-rgsw
 bench-%: openfhe
-	@$(MAKE) -C benchmark $@ BUILDDIR="$(CURDIR)/$(BUILDDIR)"
+	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='$*' BENCH_FILTER='$(BENCH_FILTER)'
 
-#####################
-# Parameter tuning #
-####################
+###############
+# Thesis data #
+###############
 
-# Set up a venv with Optuna installed. Always re-checks pip + optuna so this
-# can be re-run whenever requirements change.
-params:
-	@python3 -m venv .venv
-	@.venv/bin/pip install --upgrade pip optuna
-	@touch .venv/.params-stamp
+# Copy fresh results into the thesis, preserving any subdirectory structure:
+#   test/results/<path>.csv        -> docs/latex/Data/Noise/<path>.csv
+#   build/results-<path>.json      -> docs/latex/Data/Times/<path>.json
+# Sources are gitignored run outputs and are left in place; destinations are
+# tracked by git, so missing sources are skipped silently (nothing to publish).
+DATADIR := docs/latex/Data
+NOISEDIR := $(DATADIR)/Noise
+TIMESDIR := $(DATADIR)/Times
 
-.venv/.params-stamp:
-	@$(MAKE) params
+data:
+	@copied=0; \
+	mkdir -p "$(NOISEDIR)" "$(TIMESDIR)"; \
+	for f in $$(find test/results -type f -name '*.csv' 2>/dev/null); do \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		dst="$(NOISEDIR)/$${f#test/results/}"; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
+	done; \
+	for f in $$(find $(BUILDDIR) -type f -name 'results-*.json' 2>/dev/null); do \
+		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
+		rel="$${f#$(BUILDDIR)/}"; \
+		dst="$(TIMESDIR)/$$(dirname "$$rel")/$$(basename "$$rel" | sed 's/^results-//')"; \
+		dst="$$(echo "$$dst" | sed 's#/\./#/#')"; \
+		mkdir -p "$$(dirname "$$dst")"; \
+		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
+	done; \
+	echo "Copied $$copied file(s) into $(DATADIR)"
 
-# One-click tuning. Builds the matching test binary, then hands the target
-# name to the search script which decides per-target search space + filter.
-#   make tune-rgsw  →  scripts/parameter-search.py rgsw
-tune-%: openfhe .venv/.params-stamp
-	@$(_CONFIGURE)
-	@cmake --build $(BUILDDIR) --target test-$* -j$(shell nproc)
-	@.venv/bin/python scripts/parameter-search.py $*
+##############
+# Formatting #
+##############
+
+# All hand-written C++ sources/headers. vendors/ and build/ are excluded
+CLANG_FORMAT ?= clang-format
+FORMAT_FILES := $(shell find libs benchmark test -type f \( -name '*.cpp' -o -name '*.h' \))
+
+# Rewrite files in place to match .clang-format
+format:
+	@echo "Formatting $(words $(FORMAT_FILES)) files..."
+	@$(CLANG_FORMAT) -i $(FORMAT_FILES)
+
+# Report files that are not formatted, without modifying them (exit 1 if any)
+format-check:
+	@$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 
 ############
 # Clean-up #
@@ -132,13 +175,6 @@ clean-cmake:
 	@rm -rf $(BUILDDIR)/CMakeCache.txt
 
 ################
-# Latex Thesis #
-################
-
-latex:
-	$(MAKE) -C docs/latex
-
-################
 # Instructions #
 ################
 
@@ -149,8 +185,14 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
+	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 12)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
-	@echo "  bench-<name>       - Build a specific benchmark binary"
+	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
+	@echo "                       bench-full does 1 server write and reports its actual time"
+	@echo "  bench-full-write   - bench-full with all N server writes run for real"
+	@echo "  data               - Copy test CSVs into Data/Noise, benchmark JSONs into Data/Times"
+	@echo "  format             - Run clang-format -i over libs, benchmark and test"
+	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
 	@echo "  tune-<name>        - Run Optuna against test-<name>"
 	@echo "  clean              - Clean project build artifacts"

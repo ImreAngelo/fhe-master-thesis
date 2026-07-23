@@ -12,17 +12,22 @@ BUILDDIR ?= $(ROOT)/build
 # is included by `make bench` without touching this Makefile.
 ALL_BENCH_NAMES := $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/benchmark/src/*.cpp))
 
-# Defaults — override per invocation, e.g.
-#   make run BENCH_NAMES=rgsw                 # only one
-#   make run BENCH_FILTER=ExternalProduct
-#   make run BENCH_REPETITIONS=10
+# Defaults
 BENCH_NAMES       ?= $(ALL_BENCH_NAMES)
 BENCH_FILTER      ?= .*
 BENCH_TIME_UNIT   ?= ms
-BENCH_REPETITIONS ?= 10
+BENCH_REPETITIONS ?= 1
 
-# TODO: Investigate multi-threaded performance
-BENCH_OMP_THREADS ?= 4
+# Cap OMP at the physical core count: the FHE kernels are memory-bound, so
+# hyperthreads add noise rather than speedup.
+BENCH_OMP_THREADS ?= 6
+
+# One thread per physical core, spread across cores; WSL2 exposes the SMT
+# sibling topology, so "cores" forms 6 places and <=6 threads never share a
+# core. OMP_MAX_ACTIVE_LEVELS=1 pins the no-nesting behavior the row-level
+# EvalInternalProduct loop relies on.
+BENCH_OMP_PROC_BIND ?= spread
+BENCH_OMP_PLACES    ?= cores
 
 # Per-binary flags — BENCH_OUT is per-name so the JSON files don't collide.
 bench_flags = \
@@ -30,6 +35,7 @@ bench_flags = \
 	--benchmark_time_unit=$(BENCH_TIME_UNIT) \
 	--benchmark_repetitions=$(BENCH_REPETITIONS) \
 	--benchmark_report_aggregates_only=true \
+	--benchmark_counters_tabular=true \
 	--benchmark_out_format=json \
 	--benchmark_out="$(BUILDDIR)/results-$(1).json" \
 	--benchmark_color=yes
@@ -42,7 +48,7 @@ run: build
 	@for name in $(BENCH_NAMES); do \
 		echo ""; \
 		echo "▶ bench-$$name (filter=$(BENCH_FILTER), OMP_NUM_THREADS=$(BENCH_OMP_THREADS))"; \
-		OMP_NUM_THREADS=$(BENCH_OMP_THREADS) $(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
+		OMP_NUM_THREADS=$(BENCH_OMP_THREADS) OMP_PROC_BIND=$(BENCH_OMP_PROC_BIND) OMP_PLACES=$(BENCH_OMP_PLACES) OMP_MAX_ACTIVE_LEVELS=1 $(BUILDDIR)/benchmark/bench-$$name $(call bench_flags,$$name) || exit $$?; \
 		echo "  JSON: $(BUILDDIR)/results-$$name.json"; \
 	done
 
@@ -75,5 +81,7 @@ help:
 	@echo "                          currently auto-discovered: $(ALL_BENCH_NAMES)"
 	@echo "  BENCH_FILTER=<regex>    --benchmark_filter (default: .*)"
 	@echo "  BENCH_TIME_UNIT=<u>     --benchmark_time_unit (default: ms)"
-	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 10)"
-	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 1)"
+	@echo "  BENCH_REPETITIONS=<n>   --benchmark_repetitions (default: 1)"
+	@echo "  BENCH_OMP_THREADS=<n>   OMP_NUM_THREADS for the run (default: 6)"
+	@echo "  BENCH_OMP_PROC_BIND=<p> OMP_PROC_BIND for the run (default: spread)"
+	@echo "  BENCH_OMP_PLACES=<p>    OMP_PLACES for the run (default: cores)"

@@ -1,11 +1,10 @@
+#include "core/context.h"
+#include "params.h"
 #include <benchmark/benchmark.h>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "core/context.h"
-#include "params.h"
 
 namespace {
 
@@ -14,13 +13,14 @@ using namespace lbcrypto;
 struct SchemeCase {
     std::string name;
     std::function<core::ExtendedContext()> make;
+    bool internalProduct = true;  // hybrid internal product ("mixed") is not benchmarked
 };
 
 struct Fixture {
-    core::ExtendedContext             cc;
-    KeyPair<DCRTPoly>                 keys;
-    Plaintext                         pt_msg;
-    Ciphertext<DCRTPoly>              rlwe_ct;
+    core::ExtendedContext cc;
+    KeyPair<DCRTPoly> keys;
+    Plaintext pt_msg;
+    Ciphertext<DCRTPoly> rlwe_ct;
     std::vector<Ciphertext<DCRTPoly>> rgsw_ct;
 };
 
@@ -28,9 +28,9 @@ Fixture BuildFixture(const SchemeCase& sc) {
     Fixture f;
     f.cc = sc.make();
     f.cc->Enable(PKE);
-    f.cc->Enable(LEVELEDSHE);
-    f.keys    = f.cc->KeyGen();
-    f.pt_msg  = f.cc->MakeCoefPackedPlaintext({2});
+    f.keys = f.cc->KeyGen();
+    f.cc->SetExtendedKey(f.keys);  // publishes QP key material (no-op for BV)
+    f.pt_msg = f.cc->MakeCoefPackedPlaintext({2});
     f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
     f.rgsw_ct = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
     return f;
@@ -68,22 +68,22 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
 }
 
 const std::vector<SchemeCase> kSchemes = {
-    {"BV", [] { return core::GenContextBV(spar::params::Small(), /*ell=*/2); }},
-    {"Hybrid",  [] { return core::GenContextHybrid(spar::params::Small()); }},
+    // {"BV_Small", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Small), /*ell=*/3); }},
+    // {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid)); }, /*internalProduct=*/false},
+    {"BV", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2); }},
+    // {"Hybrid", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }, /*internalProduct=*/false},
 };
 
 void RegisterAll() {
     for (const auto& sc : kSchemes) {
-        benchmark::RegisterBenchmark("RGSW/Encrypt/"         + sc.name,
-            [sc](benchmark::State& s) { EncryptBench(s, sc); });
-        benchmark::RegisterBenchmark("RGSW/ExternalProduct/" + sc.name,
-            [sc](benchmark::State& s) { ExternalProductBench(s, sc); });
-        benchmark::RegisterBenchmark("RGSW/InternalProduct/" + sc.name,
-            [sc](benchmark::State& s) { InternalProductBench(s, sc); });
+        benchmark::RegisterBenchmark("RGSW/Encrypt/" + sc.name, [sc](benchmark::State& s) { EncryptBench(s, sc); });
+        benchmark::RegisterBenchmark("RGSW/ExternalProduct/" + sc.name, [sc](benchmark::State& s) { ExternalProductBench(s, sc); });
+        if (sc.internalProduct)
+            benchmark::RegisterBenchmark("RGSW/InternalProduct/" + sc.name, [sc](benchmark::State& s) { InternalProductBench(s, sc); });
     }
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     benchmark::Initialize(&argc, argv);
