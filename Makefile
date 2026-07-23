@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean test test-% bench bench-% bench-full-write params format format-check data clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean ci test test-% bench bench-% bench-full-write params format format-check data clean clean-build clean-cmake help
 
 all: build
 
@@ -41,6 +41,30 @@ $(OPENFHE_STAMP) $(TCM_STAMP):
 
 openfhe-clean:
 	@rm -rf vendors/install vendors/openfhe-development/build
+
+# Portable OpenFHE install for CI. Same as `openfhe` but drops the flags that
+# tie the build to the builder's CPU/runtime: no tcmalloc (WITH_TCM) and no
+# native tuning (WITH_NATIVEOPT / -march=native), so the cached install runs on
+# any x86-64 runner. Installs to the same vendors/install as `openfhe`.
+ci:
+	@echo "Building portable OpenFHE for CI (no tcmalloc, no native tuning)..."
+	@rm -rf vendors/openfhe-development/build vendors/install
+	@cmake -S vendors/openfhe-development -B vendors/openfhe-development/build \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_STATIC=ON \
+		-DBUILD_SHARED=OFF \
+		-DBUILD_BENCHMARKS=OFF \
+		-DBUILD_UNITTESTS=OFF \
+		-DBUILD_EXAMPLES=OFF \
+		-DBUILD_EXTRAS=OFF \
+		-DWITH_NATIVEOPT=OFF \
+		-DWITH_OPENMP=ON \
+		-DWITH_REDUCED_NOISE=ON \
+		-DWITH_TCM=OFF \
+		-DNATIVE_SIZE=64 \
+		-DCMAKE_INSTALL_PREFIX="$(CURDIR)/vendors/install"
+	@cmake --build vendors/openfhe-development/build -j$(shell nproc)
+	@cmake --install vendors/openfhe-development/build
 
 ###########
 # Project #
@@ -181,6 +205,7 @@ clean-cmake:
 help:
 	@echo "Available targets:"
 	@echo "  openfhe            - Build the optimized OpenFHE install (idempotent)"
+	@echo "  ci                 - Build a portable OpenFHE install (no tcmalloc/native tuning)"
 	@echo "  build              - Configure project + build registered binaries"
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"

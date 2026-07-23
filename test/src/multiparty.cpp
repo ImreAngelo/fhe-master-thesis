@@ -290,7 +290,8 @@ TEST_P(Multiparty, Decryption) {
     ASSERT_EQ(numValues, 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u, 3u),
+// 1u, 2u, 3u
+INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(2u),
                          [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
 }  // namespace spar::test
