@@ -71,8 +71,8 @@ TEST_P(Products, External) {
 };
 
 TEST_P(Products, Internal) {
-    // TODO: Clean up + test mixed product in place of internal product
-    if (GetParam().isHybrid) return;
+    // TODO: test mixed product in place of internal product for hybrid gadget
+    if (GetParam().isHybrid) GTEST_SKIP() << "Internal product not supported for hybrid gadget";
 
     const auto expected = MakePlaintext({base_value * base_value});
     const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);
