@@ -34,7 +34,7 @@ jobs:
 
       - name: Build and install OpenFHE
         if: steps.cache-openfhe.outputs.cache-hit != 'true'
-        run: make openfhe
+        run: make ci
 
       - name: Save OpenFHE cache
         if: steps.cache-openfhe.outputs.cache-hit != 'true'
