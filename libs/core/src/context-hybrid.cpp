@@ -16,8 +16,6 @@ std::vector<NativeInteger> ComputeQHatInverses(const std::shared_ptr<lbcrypto::C
 
     std::vector<NativeInteger> qHatInv(q.size());
 
-    // Too small to use threads
-    // #pragma omp parallel for
     for (size_t i = 0; i < q.size(); i++) {
         const auto& qi = q[i]->GetModulus();
         BigInteger qHat = Q / BigInteger(qi);
@@ -325,6 +323,10 @@ Poly ExtendedContextHybridImpl::Lift(const Poly& input) const {
     result.SetFormat(Format::EVALUATION);
     return result;
 };
+
+//------//
+//      //
+//------//
 
 RGSW ExtendedContextHybridImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const {
     if (lhs.size() != 2 || rhs.size() != 2) {

@@ -45,3 +45,13 @@ struct Timer {
     do {                   \
     } while (0);
 #endif
+
+#if defined(DEBUG_TIMING)
+#define TIME_OP(label, op, ...) \
+    [this, __VA_ARGS__] {       \
+        DEBUG_TIMER(label);     \
+        return op(__VA_ARGS__); \
+    }()
+#else
+#define TIME_OP(label, op, ...) op(__VA_ARGS__)
+#endif

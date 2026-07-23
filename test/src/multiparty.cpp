@@ -32,8 +32,6 @@ std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const u
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
     const auto one_pt = cc->MakeCoefPackedPlaintext({1});
 
-    // std::cout << idx << ", ";
-
     std::vector<RGSW> slots(len);
     for (uint32_t i = 0; i < len; i++) {
         slots[i] = cc->EncryptRGSW(pk, (i == idx) ? one_pt : zero_pt);

@@ -1,5 +1,8 @@
 #include "core/context.h"
+#include "core/types.h"
 #include "core/utils/noise.h"
+#include "core/utils/timer.h"
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -26,10 +29,10 @@ class RGSW : public ::testing::TestWithParam<SchemeCase> {
     void SetUp() override {
         cc = GetParam().make();
         cc->Enable(PKE);
-        // cc->Enable(LEVELEDSHE);
 
         keys = cc->KeyGen();
         cc->SetExtendedKey(keys);  // publishes QP key material (no-op for BV)
+
         pt_one = cc->MakeCoefPackedPlaintext({kVal});
     }
 
@@ -38,6 +41,13 @@ class RGSW : public ::testing::TestWithParam<SchemeCase> {
     int64_t FirstCoef(const Plaintext& pt) const {
         const auto& coef = pt->GetCoefPackedValue();
         return coef.empty() ? 0 : coef[0];
+    }
+
+    Plaintext Decrypt(const RLWE& ciphertext, const size_t len = 1) const {
+        Plaintext pt;
+        cc->Decrypt(keys.secretKey, ciphertext, &pt);
+        pt->SetLength(len);
+        return pt;
     }
 };
 
@@ -52,14 +62,11 @@ TEST_P(RGSW, PublicExternalProduct) {
     const auto rlwe = cc->Encrypt(keys.publicKey, pt_one);
 
     DEBUG_TIMER("Public External Product");
-    const auto result = cc->EvalExternalProduct(rlwe, rgsw);
+    // auto r = TIME_OP("External Product Public Key", cc->EvalExternalProduct, rlwe, rgsw);
 
-    Plaintext decrypted;
-    cc->Decrypt(keys.secretKey, result, &decrypted);
-    decrypted->SetLength(1);
-
+    const auto result = Decrypt(cc->EvalExternalProduct(rlwe, rgsw));
     const auto expected = cc->MakeCoefPackedPlaintext({kVal * kVal});
-    ASSERT_EQ(decrypted, expected);
+    ASSERT_EQ(result, expected);
 }
 
 TEST_P(RGSW, ExternalProduct) {
@@ -206,16 +213,15 @@ TEST_P(RGSW, InternalProductChains) {
     ASSERT_GT(last_ok, 0) << "Could not chain even one internal product";
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Scheme, RGSW,
-    ::testing::Values(// SchemeCase{"bv_1", [] { return GenContextBV(params::Make(params::Set::Standard), 1); }},
-                      SchemeCase{"bv_2", [] { return GenContextBV(params::Make(params::Set::Standard), 2); }},
-                      SchemeCase{"bv_3", [] { return GenContextBV(params::Make(params::Set::Standard), 3); }},
-                      SchemeCase{"bv_4", [] { return GenContextBV(params::Make(params::Set::Standard), 4); }}
-                    //   SchemeCase{"bv_5", [] { return GenContextBV(params::Make(params::Set::Standard), 5); }}
-                      // SchemeCase{"bv_small", [] { return GenContextBV(params::Make(params::Set::Small), 3); }},
-                      // SchemeCase{"hybrid_small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
-                    //   SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}
-                    ),
-    [](const auto& info) { return info.param.name; });
+INSTANTIATE_TEST_SUITE_P(Scheme, RGSW,
+                         ::testing::Values(  // SchemeCase{"bv_1", [] { return GenContextBV(params::Make(params::Set::Standard), 1); }},
+                             SchemeCase{"bv_2", [] { return GenContextBV(params::Make(params::Set::Standard), 2); }},
+                             SchemeCase{"bv_3", [] { return GenContextBV(params::Make(params::Set::Standard), 3); }},
+                             SchemeCase{"bv_4", [] { return GenContextBV(params::Make(params::Set::Standard), 4); }}
+                             //   SchemeCase{"bv_5", [] { return GenContextBV(params::Make(params::Set::Standard), 5); }}
+                             // SchemeCase{"bv_small", [] { return GenContextBV(params::Make(params::Set::Small), 3); }},
+                             // SchemeCase{"hybrid_small", [] { return GenContextHybrid(params::Make(params::Set::SmallHybrid)); }},
+                             //   SchemeCase{"hybrid", [] { return GenContextHybrid(params::Make(params::Set::Standard)); }}
+                             ),
+                         [](const auto& info) { return info.param.name; });
 }  // namespace spar::test
