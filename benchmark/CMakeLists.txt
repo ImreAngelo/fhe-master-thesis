@@ -39,6 +39,7 @@ endfunction()
 
 # ── Register benchmarks ──────────────────────────────────────────────────────
 register_benchmark(bench-rgsw       SOURCE src/rgsw)
+register_benchmark(bench-rgsw-hybrid SOURCE src/rgsw-hybrid)
 register_benchmark(bench-write      SOURCE src/write)
 register_benchmark(bench-full       SOURCE src/full)
 

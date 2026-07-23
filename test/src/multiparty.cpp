@@ -1,6 +1,8 @@
+#include "constants-defs.h"
 #include "core/context.h"
 #include "core/types.h"
 #include "core/utils/noise.h"
+#include "core/utils/record.h"
 #include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
@@ -29,8 +31,6 @@ struct Client {
 std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
     const auto one_pt = cc->MakeCoefPackedPlaintext({1});
-
-    // std::cout << idx << ", ";
 
     std::vector<RGSW> slots(len);
     for (uint32_t i = 0; i < len; i++) {
@@ -119,10 +119,12 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams = spar::params::Make(spar::params::Set::Standard);
+        auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
+        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
+
         plaintextModulus = ccParams.GetPlaintextModulus();
 
-        cc = GenContextBV(ccParams, 2);
+        cc = GenContextBV(ccParams, 4);
         cc->Enable(lbcrypto::PKE);
         cc->Enable(lbcrypto::LEVELEDSHE);
         cc->Enable(lbcrypto::MULTIPARTY);
@@ -153,6 +155,29 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         std::tie(I_mat, L_mat) = server::InitializeState(cc, jointPk, n);
 
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
+    }
+
+    // Records ||e||_inf of the noisiest RLWE in L, so every phase leaves behind a
+    // CSV row even when it never touches the matrix (a fresh L reads as 0).
+    void TearDown() override {
+#if defined(DEBUG_LOGGING)
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        // Parameterized names arrive as "<Test>/<Param>"; keep the stem out of the path.
+        std::string test(info->name());
+        test = test.substr(0, test.find('/'));
+
+        BigInteger maxE(0);
+        for (const auto& row : L_mat) {
+            for (const auto& ct : row) {
+                const auto e = core::utils::MaxNoise(cc, ct, jointSk);
+                if (e > maxE) maxE = e;
+            }
+        }
+
+        RECORD_START("results/Multiparty/" + test + "-N" + std::to_string(n) + ".csv", "n,msb,noise");
+        RECORD(n, maxE.GetMSB(), maxE);
+        RECORD_END();
+#endif
     }
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
@@ -265,7 +290,7 @@ TEST_P(Multiparty, Decryption) {
     ASSERT_EQ(numValues, 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u),
+INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u, 2u, 3u),
                          [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
 }  // namespace spar::test

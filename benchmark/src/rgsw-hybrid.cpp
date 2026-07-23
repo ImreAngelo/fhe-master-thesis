@@ -13,7 +13,6 @@ using namespace lbcrypto;
 struct SchemeCase {
     std::string name;
     std::function<core::ExtendedContext()> make;
-    bool internalProduct = true;  // hybrid internal product ("mixed") is not benchmarked
 };
 
 struct Fixture {
@@ -29,7 +28,7 @@ Fixture BuildFixture(const SchemeCase& sc) {
     f.cc = sc.make();
     f.cc->Enable(PKE);
     f.keys = f.cc->KeyGen();
-    f.cc->SetExtendedKey(f.keys);  // publishes QP key material (no-op for BV)
+    f.cc->SetExtendedKey(f.keys);  // publishes QP key material
     f.pt_msg = f.cc->MakeCoefPackedPlaintext({2});
     f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
     f.rgsw_ct = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
@@ -59,28 +58,15 @@ void ExternalProductBench(benchmark::State& s, const SchemeCase& sc) {
     }
 }
 
-void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
-    const auto& f = GetFixture(sc);
-    for (auto _ : s) {
-        auto c = f.cc->EvalInternalProduct(f.rgsw_ct, f.rgsw_ct);
-        benchmark::DoNotOptimize(c);
-    }
-}
-
+// The hybrid internal product ("mixed") is not benchmarked here.
 const std::vector<SchemeCase> kSchemes = {
-    // {"BV_Small", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Small), /*ell=*/3); }},
-    // {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid)); },
-    // /*internalProduct=*/false},
-    {"BV", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2); }},
-    // {"Hybrid", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }, /*internalProduct=*/false},
+    {"Hybrid", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }},
 };
 
 void RegisterAll() {
     for (const auto& sc : kSchemes) {
         benchmark::RegisterBenchmark("RGSW/Encrypt/" + sc.name, [sc](benchmark::State& s) { EncryptBench(s, sc); });
         benchmark::RegisterBenchmark("RGSW/ExternalProduct/" + sc.name, [sc](benchmark::State& s) { ExternalProductBench(s, sc); });
-        if (sc.internalProduct)
-            benchmark::RegisterBenchmark("RGSW/InternalProduct/" + sc.name, [sc](benchmark::State& s) { InternalProductBench(s, sc); });
     }
 }
 

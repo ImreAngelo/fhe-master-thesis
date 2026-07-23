@@ -9,9 +9,15 @@ using namespace core;
 template <uint32_t K, uint32_t D>
 RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const RLWE& Vr, const uint32_t n, Matrix<RLWE, K>& L, Matrix<RGSW, K>& I,
            const std::vector<std::vector<RGSW>>& z, const PrivateKey& debug_sk) {
-    if (L.size() != n || I.size() != n) { throw std::logic_error("Incorrect state dimensions"); }
-    if (z.size() != D) { throw std::logic_error("Incorrect number of choice vectors"); }
-    if (z[0].size() != n) { throw std::logic_error("Incorrect number of encrypted bits"); }
+    if (L.size() != n || I.size() != n) {
+        throw std::logic_error("Incorrect state dimensions");
+    }
+    if (z.size() != D) {
+        throw std::logic_error("Incorrect number of choice vectors");
+    }
+    if (z[0].size() != n) {
+        throw std::logic_error("Incorrect number of encrypted bits");
+    }
 
     auto notHasWritten = cc->MakePublicRGSW(pk, cc->MakeCoefPackedPlaintext({1}));
 
