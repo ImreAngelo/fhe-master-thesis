@@ -53,7 +53,7 @@ class Server : public ::testing::TestWithParam<uint32_t> {
 };
 
 TEST_P(Server, Write) {
-    const auto one = cc->Encrypt(keys.publicKey, one_pt);  // TODO: Write should output hasNotWritten as an RLWE, one should have no error
+    const auto one = cc->Encrypt(keys.publicKey, one_pt);  // TODO: Write should output hasNotWritten as an RLWE, one should have no noise
     const auto expected = cc->MakeCoefPackedPlaintext({0});
 
     RECORD_START("results/write-N" + std::to_string(N) + ".csv", "n,msb,noise");
