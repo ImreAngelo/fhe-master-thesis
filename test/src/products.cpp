@@ -1,12 +1,12 @@
 #include "core/context.h"
 #include "core/types.h"
-#include "gtest/gtest.h"
 #include "key/keypair.h"
 #include "lattice/hal/lat-backend.h"
-#include "params.h"
+#include "spar/params.h"
 #include <gtest/gtest.h>
 #include <cstddef>
 #include <functional>
+#include <ostream>
 
 namespace spar::test {
 
@@ -15,9 +15,17 @@ using namespace lbcrypto;
 struct TestCase {
     std::string label;
     std::function<ExtendedContext()> make;
-    enum Packing { COEF = 0x0, SIMD = 0x1 } packing;
+    enum Packing { COEF = 0x0, SIMD = 0x1 } packing = COEF;
     bool isHybrid = false;
 };
+
+/// Without this, gtest has no way to print a TestCase and falls back to dumping
+/// the raw object bytes into every failure message for a parameterized case.
+/// The label is already the test name's suffix, so print what the name does not
+/// carry.
+void PrintTo(const TestCase& tc, std::ostream* os) {
+    *os << "packing=" << (tc.packing == TestCase::SIMD ? "simd" : "coef") << ", scheme=" << (tc.isHybrid ? "hybrid" : "bv");
+}
 
 class Products : public ::testing::TestWithParam<TestCase> {
    protected:
@@ -29,15 +37,7 @@ class Products : public ::testing::TestWithParam<TestCase> {
 
     void SetUp() override {
         cc = GetParam().make();
-        cc->Enable(PKE);
-
-        keys = cc->KeyGen();
-
-        // TODO: Streamline
-        if (GetParam().isHybrid) {
-            cc->SetExtendedKey(keys);
-        }
-
+        keys = utils::MakeKeys(cc);  // SetExtendedKey is a no-op for BV
         pt_one = MakePlaintext({1});
     }
 
@@ -49,11 +49,9 @@ class Products : public ::testing::TestWithParam<TestCase> {
     };
 
     Plaintext MakePlaintext(const std::vector<int64_t>& value) const {
-        // clang-format off
-        return (GetParam().packing == TestCase::COEF) 
+        return (GetParam().packing == TestCase::COEF)  // packing is a test parameter
             ? cc->MakeCoefPackedPlaintext(value)
             : cc->MakePackedPlaintext(value);
-        // clang-format on
     }
 };
 
@@ -89,19 +87,21 @@ TEST_P(Products, Internal) {
 #define SETUP_TEST_SUITE(prefix, ...) \
     INSTANTIATE_TEST_SUITE_P(prefix, Products, ::testing::Values(__VA_ARGS__), [](const auto& info) { return info.param.label; })
 
-using params::Set;
+using params::MakeContext;
+using params::Resolve;
+using params::Scheme;
 
 // clang-format off
 // Standard gadget
-SETUP_TEST_SUITE(BV, 
-    TestCase{"standard", [] { return GenContextBV(Make(Set::Standard), 3); }},
-    TestCase{"simd", [] { return GenContextBV(Make(Set::Standard), 3); }, TestCase::SIMD}
+SETUP_TEST_SUITE(BV,
+    TestCase{"standard", [] { return MakeContext(Resolve()); }},
+    TestCase{"simd", [] { return MakeContext(Resolve()); }, TestCase::SIMD}
 );
 
 // Hybrid gadget
-SETUP_TEST_SUITE(Hybrid, 
-    TestCase{"standard", [] { return GenContextHybrid(Make(Set::Standard)); }, TestCase::Packing::COEF, true},
-    TestCase{"simd", [] { return GenContextHybrid(Make(Set::Standard)); }, TestCase::Packing::SIMD, true}
+SETUP_TEST_SUITE(Hybrid,
+    TestCase{"standard", [] { return MakeContext(Resolve(), Scheme::Hybrid); }, TestCase::Packing::COEF, true},
+    TestCase{"simd", [] { return MakeContext(Resolve(), Scheme::Hybrid); }, TestCase::Packing::SIMD, true}
 );
 // clang-format on
 

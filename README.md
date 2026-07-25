@@ -37,11 +37,33 @@ __Research Questions:__
 ## Project Layout
 Split into 3 distinct libraries + helpers for unit testing etc.
 - Main directories inside `lib`: `libs/core`, `libs/client`, `libs/server`
+- `libs/utils`: measurement helpers (timer, noise, CSV recording) and the runtime
+  parameter factory. Sits *above* `core` and is linked only by tests and benchmarks —
+  never by the libraries themselves. Headers use the `spar/` include prefix, because
+  OpenFHE already owns `utils/`.
 - Auxiliary directories: `benchmark`, `test`, `scripts`
+
+## Parameters
+All crypto parameters live in [`params.toml`](params.toml) at the repo root and are
+read **at runtime** by both the C++ factory (`libs/utils/src/params.cpp`) and the
+security estimator (`scripts/estimate-security-param.py`). Changing a value needs no
+rebuild.
+
+```sh
+make test                          # uses the [standard] set
+SPAR_PARAMS=standard make test     # select a set explicitly
+SPAR_PARAMS_FILE=/path/to.toml ... # point at a different file
+```
+
+Values that are not degrees of freedom (security level, scaling technique,
+key-switch technique, number of large digits) are pinned in the factory and
+deliberately absent from the file. `multiplicativeDepth` is *derived* from the
+`limbs` count and the mode, so one set serves both single-party and multiparty at
+the same |Q|.
 
 
 ## Unit Tests
-Unit tests are located inside the `tests` directory.
+Unit tests are located inside the `test` directory.
 Configured with [Google Test](https://github.com/google/googletest).
 
 > [!NOTE]
@@ -49,9 +71,14 @@ Configured with [Google Test](https://github.com/google/googletest).
 >
 > ```sh
 > make test             # run all tests
-> make test-rgsw        # test rgsw operations
-> make test-multiparty  # run protocol once
+> make test-products    # test the external/internal products
+> make test-multiparty  # run protocol once (slow)
 > ```
+>
+> Tests carry CTest labels, so subsets can be run without rebuilding:
+> `ctest --test-dir build -L ci` runs everything except the minutes-long
+> multiparty test. That is what CI does, via `make -C build check-ci`. Labels
+> select *tests*, never parameters — every label runs the same `params.toml` set.
 
 > [!TIP]
 > Enable debug logging and timing by setting the debug environment variable
@@ -84,7 +111,7 @@ make bench
 | BENCH_NAMES       | Specify benchmark files to run                                                                                  | All in `benchmark/src` |
 | BENCH_FILTER      | Run only the benchmarks that match this filter                                                                  | .*                     |
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
-| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 6                      |
+| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 5                      |
 
 <!-- TODO: Make smaller and center on page + bright and dark versions -->
 <picture>
@@ -104,4 +131,9 @@ make bench
 
 ## TODO
 - [ ] Add/verify support for BFV
-- [ ] Pass parameters via CLI
+- [x] Pass parameters via CLI — now `params.toml` + `SPAR_PARAMS`, read at runtime
+- [ ] Cache the heavier tests if they haven't change
+- [ ] Optionally pass base B as a parameter to BV, rather than auto-selecting
+- [ ] Consider adding back specialized params for each scheme (add a `[section]`
+      to `params.toml` and select it with `SPAR_PARAMS`)
+- [ ] Add clang-tidy

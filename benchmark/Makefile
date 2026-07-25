@@ -10,7 +10,14 @@ BUILDDIR ?= $(ROOT)/build
 # Auto-discovered: every benchmark/src/<name>.cpp registered in CMakeLists.txt
 # lives at benchmark/src/<name>.cpp on disk. Glob picks them up so a new file
 # is included by `make bench` without touching this Makefile.
-ALL_BENCH_NAMES := $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/benchmark/src/*.cpp))
+#
+# `chain` is the one deliberate exception: it is a noise sweep, not a timing
+# benchmark, and it measures ||e||_inf after every product (a full CRTInterpolate
+# over N=2^14) across 11 chains, so it runs far longer than everything else
+# combined. Do NOT "fix" this filter — run it explicitly with `make bench-chain`,
+# or SPAR_CHAIN_ITERATIONS=20 make bench-chain for a smoke test.
+ALL_BENCH_NAMES := $(filter-out chain, \
+    $(patsubst $(ROOT)/benchmark/src/%.cpp,%,$(wildcard $(ROOT)/benchmark/src/*.cpp)))
 
 # Defaults
 BENCH_NAMES       ?= $(ALL_BENCH_NAMES)

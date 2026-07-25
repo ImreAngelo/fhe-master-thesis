@@ -12,7 +12,7 @@
  * RECORD_END(), and call RECORD(a, b, c) once per row inside the block.
  * No-ops unless DEBUG_LOGGING is defined (DEBUG=1 make test-<name>).
  */
-namespace core::utils {
+namespace spar::utils {
 
 inline std::ofstream& RecordStream() {
     static std::ofstream os;
@@ -43,12 +43,12 @@ inline void RecordEnd() {
     RecordStream().close();
 }
 
-}  // namespace core::utils
+}  // namespace spar::utils
 
 #if defined(DEBUG_LOGGING)
-#define RECORD_START(filename, header) core::utils::RecordStart((filename), (header))
-#define RECORD(...) core::utils::RecordRow(__VA_ARGS__)
-#define RECORD_END() core::utils::RecordEnd()
+#define RECORD_START(filename, header) spar::utils::RecordStart((filename), (header))
+#define RECORD(...) spar::utils::RecordRow(__VA_ARGS__)
+#define RECORD_END() spar::utils::RecordEnd()
 #else
 /// Enable recording by defining a DEBUG_LOGGING macro
 #define RECORD_START(filename, header) \

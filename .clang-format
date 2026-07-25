@@ -3,7 +3,7 @@ IndentWidth: 4
 ColumnLimit: 140
 PointerAlignment: Left           # int* p, not int *p
 # BreakBeforeTernaryOperators: true
-# AlignOperands: Align
+AlignOperands: DontAlign         # flat continuation indent, no aligning under the open paren
 AllowShortFunctionsOnASingleLine: Inline
 SortIncludes: CaseInsensitive
 MaxEmptyLinesToKeep: 2

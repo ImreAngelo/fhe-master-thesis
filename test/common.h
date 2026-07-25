@@ -8,12 +8,13 @@
 #include <gtest/gtest.h>
 
 // DEBUG_TIMING / DEBUG_LOGGING are opt-in via `DEBUG=1 make test-<name>`,
-// which configures core with PUBLIC compile defs that also reach tests.
-#include "core/utils/logging.h"
-#include "core/utils/timer.h"
+// which configures spar_utils with PUBLIC compile defs that also reach tests.
+#include "spar/logging.h"
+#include "spar/timer.h"
 
-// Shared parameter presets (lives in shared/, reached via spar_shared INTERFACE target).
-#include "params.h"
+// Crypto parameters, loaded at runtime from params.toml at the repo root.
+#include "spar/keys.h"
+#include "spar/params.h"
 
 // Tests freely reference scheme symbols (ExtendedContext, GenContextBV, ...) unqualified.
 using namespace core;

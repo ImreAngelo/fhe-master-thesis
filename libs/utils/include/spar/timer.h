@@ -6,7 +6,7 @@
 #include <string>
 
 
-namespace core::utils {
+namespace spar::utils {
 using Clock = std::chrono::high_resolution_clock;
 using Ms = std::chrono::duration<double, std::milli>;
 
@@ -33,12 +33,12 @@ struct Timer {
     std::string m_label;
     Clock::time_point m_start;
 };
-}  // namespace core::utils
+}  // namespace spar::utils
 
 #define CONCAT(a, b) a##b
 #if defined(DEBUG_TIMING)
 /// Macro for creating an RAII timer
-#define DEBUG_TIMER(label) core::utils::Timer CONCAT(t, __COUNTER__)(label)
+#define DEBUG_TIMER(label) spar::utils::Timer CONCAT(t, __COUNTER__)(label)
 #else
 /// Enable timer by defining a DEBUG_TIMING macro
 #define DEBUG_TIMER(label) \

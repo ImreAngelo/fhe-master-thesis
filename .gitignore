@@ -9,8 +9,9 @@ CMakeCache.txt
 .cache
 .trunk
 
-# Recorded measurements (RECORD_START/RECORD csv output)
+# Recorded measurements (RECORD_START/RECORD csv output, and the chain noise sweep)
 test/results
+benchmark/results
 
 # Scripts
 .venv

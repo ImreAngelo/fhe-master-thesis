@@ -1,9 +1,9 @@
 #include "server/write.h"
 #include "constants-defs.h"
 #include "core/context.h"
-#include "core/utils/noise.h"
-#include "core/utils/record.h"
 #include "server/state.h"
+#include "spar/noise.h"
+#include "spar/record.h"
 #include <string>
 
 namespace spar::test {
@@ -29,13 +29,10 @@ class Server : public ::testing::TestWithParam<uint32_t> {
     void SetUp() override {
         N = GetParam();
 
-        // WARN: Hybrid does not support internal product atm
-        // cc = GenContextHybrid(params::Make(params::Set::Standard));
-        cc = GenContextBV(params::Make(params::Set::Standard), 2);
-        cc->Enable(PKE);
-        cc->Enable(LEVELEDSHE);  // Required for EvalAdd
-
-        keys = cc->KeyGen();
+        // WARN: Hybrid does not support the internal product atm, so this uses
+        // whichever scheme params.toml declares (bv).
+        cc = params::MakeContext(params::Resolve());
+        keys = utils::MakeKeys(cc);
 
         zero_pt = cc->MakeCoefPackedPlaintext({0});
         one_pt = cc->MakeCoefPackedPlaintext({1});

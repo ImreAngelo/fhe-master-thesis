@@ -1,16 +1,16 @@
+#include "client/encrypt.h"
 #include "constants-defs.h"
 #include "core/context.h"
 #include "core/types.h"
-#include "core/utils/noise.h"
-#include "core/utils/record.h"
-#include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
 #include "server/write.h"
+#include "spar/noise.h"
+#include "spar/timer.h"
 #include <gtest/gtest.h>
-#include <bitset>
 #include <cstdint>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,34 +22,29 @@ using namespace core;
 struct Client {
     uint32_t id;
     lbcrypto::KeyPair<Poly> kpShard;  // (joint pk after i's contribution, sk_i)
-    std::vector<std::vector<RGSW>> indices;
-    RLWE value;
-    RGSW failed;
+    // Defaulted: clients[0] is aggregate-initialized from {id, kpShard} alone and these
+    // three are filled in later by the protocol steps.
+    std::vector<std::vector<RGSW>> indices{};
+    RLWE value{};
+    RGSW failed{};
 };
 
-/// @brief Encrypts a one-hot indicator of length `len` with the 1 at position `idx`
-std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
-    const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
-    const auto one_pt = cc->MakeCoefPackedPlaintext({1});
-
-    std::vector<RGSW> slots(len);
-    for (uint32_t i = 0; i < len; i++) {
-        slots[i] = cc->EncryptRGSW(pk, (i == idx) ? one_pt : zero_pt);
-    }
-    return slots;
+/// @brief Number of control bits a binary tree over `len` leaves needs, i.e. ceil(log2(len))
+uint32_t TreeDepth(const uint32_t len) {
+    uint32_t depth = 0;
+    while ((1u << depth) < len) depth++;
+    return depth;
 }
 
 /// @brief Client encryption matching bandwidth-optimized scenario from paper
-template <typename T = uint32_t>
-RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_t l, T idx) {
-    // static_assert(sizeof(T) >= length, "");
-    // TODO: Assert idx can be represented by l bits
+RLWE EncryptBinaryIndices(const CryptoContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
+    if (idx >= len) throw std::invalid_argument("index does not fit in a tree over len leaves");
 
-    std::bitset<sizeof(T)> bits;
-    std::vector<int64_t> bits_vec(l);
+    const uint32_t depth = TreeDepth(len);
+    std::vector<int64_t> bits_vec(depth);
 
-    for (uint32_t i = 0; i < l; i++) {
-        bits_vec[i] = bits[i];
+    for (uint32_t i = 0; i < depth; i++) {
+        bits_vec[i] = (idx >> i) & 1u;
     }
 
     const auto pt = cc->MakeCoefPackedPlaintext(bits_vec);
@@ -60,12 +55,7 @@ RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_
 std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const std::vector<RLWE>& cts, const uint32_t n,
                                                  const std::vector<PrivateKey>& sks) {
     std::vector<std::vector<RLWE>> partials(n);
-
-    partials[0] = cc->MultipartyDecryptLead(cts, sks[0]);
-    for (uint32_t i = 1; i < n; i++) {
-        partials[i] = cc->MultipartyDecryptMain(cts, sks[i]);
-    }
-
+    for (uint32_t i = 0; i < n; i++) partials[i] = client::Decrypt(cc, cts, sks[i], i == 0);
     return partials;
 }
 
@@ -98,7 +88,7 @@ Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_
 // Fixture: SetUp() handles everything before the Encryption Phase
 // (crypto context, chained joint pk, server state matrices, identity ct).
 // Each TEST_P below corresponds to one scoped phase from the original flow.
-class Multiparty : public ::testing::TestWithParam<uint32_t> {
+class Protocol : public ::testing::TestWithParam<uint32_t> {
    protected:
     uint32_t bits = 0;
     uint32_t n = 0;
@@ -112,22 +102,18 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
     PrivateKey jointSk;  // simulation-only: sum of shards, for noise inspection via PRINT_MAX_NOISE
     server::Matrix<RGSW, 3> I_mat;
     server::Matrix<RLWE, 3> L_mat;
-    RLWE identity;  // for EvalExternalProduct-based RGSW->RLWE conversion
+    RLWE identity;
 
     void SetUp() override {
         bits = GetParam();
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
-        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
-
-        plaintextModulus = ccParams.GetPlaintextModulus();
-
-        cc = GenContextBV(ccParams, 4);
-        cc->Enable(lbcrypto::PKE);
-        cc->Enable(lbcrypto::LEVELEDSHE);
-        cc->Enable(lbcrypto::MULTIPARTY);
+        // MultiParty mode derives the depth from `limbs` and turns on noise
+        // flooding; both are needed for threshold decryption.
+        const auto set = spar::params::Resolve();
+        plaintextModulus = set.plaintextModulus;
+        cc = spar::params::MakeContext(set, spar::params::Mode::MultiParty);
 
         // Chained joint pk generation
         clients.resize(n);
@@ -157,10 +143,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
     }
 
+    // TODO: Move to "noise" benchmark
     // Records ||e||_inf of the noisiest RLWE in L, so every phase leaves behind a
     // CSV row even when it never touches the matrix (a fresh L reads as 0).
-    void TearDown() override {
 #if defined(DEBUG_LOGGING)
+    void TearDown() override {
         const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
         // Parameterized names arrive as "<Test>/<Param>"; keep the stem out of the path.
         std::string test(info->name());
@@ -169,7 +156,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         BigInteger maxE(0);
         for (const auto& row : L_mat) {
             for (const auto& ct : row) {
-                const auto e = core::utils::MaxNoise(cc, ct, jointSk);
+                const auto e = spar::utils::MaxNoise(cc, ct, jointSk);
                 if (e > maxE) maxE = e;
             }
         }
@@ -177,10 +164,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         RECORD_START("results/Multiparty/" + test + "-N" + std::to_string(n) + ".csv", "n,msb,noise");
         RECORD(n, maxE.GetMSB(), maxE);
         RECORD_END();
-#endif
     }
+#endif
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
+    template <typename T>
     void RunEncryptOneHot() {
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -188,8 +176,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
         for (auto& client : clients) {
-            client.indices = {OneHot(cc, jointPk, n, n_dist(gen)), OneHot(cc, jointPk, n, n_dist(gen)),
-                              OneHot(cc, jointPk, n, n_dist(gen))};
+            client.indices = {
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+            };
             client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
         }
     }
@@ -206,33 +197,52 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
 //------------------//
 
 // Method suggested in paper, requires HomExpand on server (not implemented yet)
-TEST_P(Multiparty, EncryptBandwidth) {
+TEST_P(Protocol, EncryptBandwidth) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
 
-    DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
+    std::vector<uint32_t> indices;  // plaintext indices, in encryption order
+    std::vector<RLWE> ciphertexts;
+    indices.reserve(3 * clients.size());
+    ciphertexts.reserve(3 * clients.size());
 
-    for (auto& client : clients) {
-        const auto z0 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto z1 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto z2 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto pt = cc->MakeCoefPackedPlaintext({client.id});
+    {
+        DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
+        for (uint32_t i = 0; i < clients.size(); i++) {
+            for (uint32_t j = 0; j < 3; j++) {
+                indices.push_back(n_dist(gen));
+                ciphertexts.push_back(EncryptBinaryIndices(cc, jointPk, n, indices.back()));
+            }
+        }
+    }
+
+    // Each ciphertext must decrypt to the binary expansion of its index, lsb first.
+    const auto pts = MPDecryptFinal(cc, MPDecryptPartials(cc, ciphertexts, n, secrets));
+    ASSERT_EQ(pts.size(), indices.size());
+
+    for (size_t i = 0; i < pts.size(); i++) {
+        const auto coeffs = pts[i]->GetCoefPackedValue();
+        ASSERT_GE(coeffs.size(), bits);
+
+        for (uint32_t k = 0; k < bits; k++) {
+            EXPECT_EQ(coeffs[k], (indices[i] >> k) & 1u) << "index " << indices[i] << ", bit " << k;
+        }
     }
 }
 
 // Higher bandwidth method, does not require HomExpand
-TEST_P(Multiparty, EncryptOneHot) {
+TEST_P(Protocol, EncryptOneHot) {
     DEBUG_TIMER("Client: Encrypt");
-    RunEncryptOneHot();
+    RunEncryptOneHot<RGSW>();
 }
 
 //--------------------//
 // Server Write Phase //
 //--------------------//
 
-TEST_P(Multiparty, ServerWrite) {
-    RunEncryptOneHot();
+TEST_P(Protocol, ServerWrite) {
+    RunEncryptOneHot<RGSW>();
 
     DEBUG_TIMER("Server: Write");
     for (auto& client : clients) {
@@ -254,8 +264,8 @@ TEST_P(Multiparty, ServerWrite) {
 // Decryption //
 //------------//
 
-TEST_P(Multiparty, Decryption) {
-    RunEncryptOneHot();
+TEST_P(Protocol, Decryption) {
+    RunEncryptOneHot<RGSW>();
     RunServerWrite();
 
     std::vector<std::vector<RLWE>> partials;
@@ -291,7 +301,6 @@ TEST_P(Multiparty, Decryption) {
 }
 
 // 1u, 2u, 3u
-INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(2u),
-                         [](const auto& info) { return "N" + std::to_string(1u << info.param); });
+INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u), [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
 }  // namespace spar::test

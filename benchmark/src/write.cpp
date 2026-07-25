@@ -1,8 +1,4 @@
 #include "server/write.h"
-#include "core/context.h"
-#include "core/types.h"
-#include "params.h"
-#include <benchmark/benchmark.h>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -34,12 +30,10 @@ struct Fixture {
 Fixture BuildFixture(uint32_t N) {
     Fixture f;
     f.N = N;
-    // WARN: Hybrid does not support internal product yet
-    // f.cc = core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid));
-    f.cc = core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2);
-    f.cc->Enable(PKE);
-    f.cc->Enable(LEVELEDSHE);
-    f.keys = f.cc->KeyGen();
+    // WARN: Hybrid does not support the internal product yet, so this uses
+    // whichever scheme params.toml declares (bv).
+    f.cc = spar::params::MakeContext(spar::params::Resolve());
+    f.keys = spar::utils::MakeKeys(f.cc);
 
     f.zero_pt = f.cc->MakeCoefPackedPlaintext({0});
     f.one_pt = f.cc->MakeCoefPackedPlaintext({1});

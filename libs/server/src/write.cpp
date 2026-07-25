@@ -1,14 +1,12 @@
 #include "server/write.h"
 #include "core/types.h"
-#include "core/utils/logging.h"
-#include "core/utils/noise.h"
 
 namespace spar::server {
 using namespace core;
 
 template <uint32_t K, uint32_t D>
 RGSW Write(const ExtendedContext& cc, const PublicKey& pk, const RLWE& Vr, const uint32_t n, Matrix<RLWE, K>& L, Matrix<RGSW, K>& I,
-           const std::vector<std::vector<RGSW>>& z, const PrivateKey& debug_sk) {
+           const std::vector<std::vector<RGSW>>& z, [[maybe_unused]] const PrivateKey& debug_sk) {
     if (L.size() != n || I.size() != n) {
         throw std::logic_error("Incorrect state dimensions");
     }

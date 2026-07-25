@@ -26,7 +26,14 @@ function(register_benchmark name)
     endif()
 
     add_executable(${name} ${_src})
-    target_link_libraries(${name} PRIVATE benchmark::benchmark spar_shared)
+    # spar_warnings carries the root's -Wall -Wextra; Google Benchmark is built
+    # under _deps and never sees it.
+    target_link_libraries(${name} PRIVATE benchmark::benchmark spar_utils spar_client spar_server spar_warnings)
+
+    # Force-include common.h before every translation unit, mirroring register_test().
+    target_compile_options(${name} PRIVATE
+        -include ${CMAKE_CURRENT_SOURCE_DIR}/common.h
+    )
 
     add_custom_target(run-${name}
         COMMAND $<TARGET_FILE:${name}> --benchmark_color=yes
@@ -39,9 +46,16 @@ endfunction()
 
 # ── Register benchmarks ──────────────────────────────────────────────────────
 register_benchmark(bench-rgsw       SOURCE src/rgsw)
-register_benchmark(bench-rgsw-hybrid SOURCE src/rgsw-hybrid)
 register_benchmark(bench-write      SOURCE src/write)
 register_benchmark(bench-full       SOURCE src/full)
+
+# Noise measurement, not a timing benchmark: sweeps the gadget digit count `ell`
+# and writes one CSV per chain into benchmark/results/. Excluded from the default
+# `make bench` run list (see benchmark/Makefile) because the sweep is slow.
+register_benchmark(bench-chain      SOURCE src/chain)
+target_compile_definitions(bench-chain PRIVATE
+    SPAR_BENCH_RESULTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/results"
+)
 
 # ── "make bench-all": build every benchmark binary ───────────────────────────
 get_property(_all_benches GLOBAL PROPERTY ALL_BENCH_TARGETS)

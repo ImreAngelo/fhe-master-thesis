@@ -1,12 +1,7 @@
-#include "core/context.h"
-#include "params.h"
-// server/state.h references core types (RGSW, RLWE, Poly, Format) unqualified,
-// matching the convention in the server sources and the tests (common.h). Bring
-// namespace core into scope before including it, as those translation units do.
-using namespace core;
+// benchmark/common.h is force-included ahead of this file and already brings
+// namespace core into scope, which server/state.h and server/write.h rely on.
 #include "server/state.h"
 #include "server/write.h"
-#include <benchmark/benchmark.h>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -89,17 +84,13 @@ Fixture BuildFixture(uint32_t n) {
     Fixture f;
     f.n = n;
 
-    // Full protocol runs on BV with the Standard parameter set only; the hybrid
-    // scheme lacks an internal product, so Write cannot run there.
-    auto ccParams = spar::params::Make(spar::params::Set::Standard);
-    f.plaintextModulus = ccParams.GetPlaintextModulus();
-    f.cc = core::GenContextBV(ccParams, 2);
-
-    f.cc->Enable(PKE);
-    f.cc->Enable(KEYSWITCH);
-    f.cc->Enable(LEVELEDSHE);
-    f.cc->Enable(ADVANCEDSHE);
-    f.cc->Enable(MULTIPARTY);
+    // Must mirror test/src/multiparty.cpp exactly: same set, same mode. This
+    // previously ran WITHOUT noise flooding, so it benchmarked a different
+    // protocol than the test verifies. The hybrid scheme lacks an internal
+    // product, so Write can only run on the bv gadget params.toml declares.
+    const auto set = spar::params::Resolve();
+    f.plaintextModulus = set.plaintextModulus;
+    f.cc = spar::params::MakeContext(set, spar::params::Mode::MultiParty);
 
     f.clients.resize(n);
     f.secrets.resize(n);
