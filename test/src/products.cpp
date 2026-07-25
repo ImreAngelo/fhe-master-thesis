@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <cstddef>
 #include <functional>
+#include <ostream>
 
 namespace spar::test {
 
@@ -17,6 +18,14 @@ struct TestCase {
     enum Packing { COEF = 0x0, SIMD = 0x1 } packing;
     bool isHybrid = false;
 };
+
+/// Without this, gtest has no way to print a TestCase and falls back to dumping
+/// the raw object bytes into every failure message for a parameterized case.
+/// The label is already the test name's suffix, so print what the name does not
+/// carry.
+void PrintTo(const TestCase& tc, std::ostream* os) {
+    *os << "packing=" << (tc.packing == TestCase::SIMD ? "simd" : "coef") << ", scheme=" << (tc.isHybrid ? "hybrid" : "bv");
+}
 
 class Products : public ::testing::TestWithParam<TestCase> {
    protected:

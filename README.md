@@ -136,3 +136,4 @@ make bench
 - [ ] Optionally pass base B as a parameter to BV, rather than auto-selecting
 - [ ] Consider adding back specialized params for each scheme (add a `[section]`
       to `params.toml` and select it with `SPAR_PARAMS`)
+- [ ] Add clang-tidy

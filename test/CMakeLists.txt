@@ -51,16 +51,31 @@ function(register_test name)
     )
 
     # Register individual TEST() cases with CTest.
+    #
     # WORKING_DIRECTORY keeps RECORD_* CSV output in test/results/ whether the
     # binary is run via ctest or via "make run-test-<name>"; "make data" scans
     # test/results/.
+    #
+    # NO_PRETTY_VALUES strips the "# GetParam() = ..." comment that
+    # --gtest_list_tests appends to every parameterized case. CMake's default
+    # only rewrites that comment when the value suffix is a numeric index
+    # (see the /[0-9]+ regex in GoogleTestAddTests.cmake); every suite here uses
+    # a custom name generator, so the default leaves the comment verbatim — and
+    # for a param type gtest cannot print, that comment is a raw byte dump.
+    # Suppressing it keeps the generator's own name, e.g.
+    #   BV/Products.External/standard   instead of
+    #   BV/Products.External/standard  # GetParam() = 72-byte object <A0-CB ...>
     if(ARG_LABELS)
         gtest_discover_tests(${name}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            NO_PRETTY_VALUES
             PROPERTIES LABELS "${ARG_LABELS}"
         )
     else()
-        gtest_discover_tests(${name} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        gtest_discover_tests(${name}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            NO_PRETTY_VALUES
+        )
     endif()
 
     # "make run-<name>" rebuilds the binary if stale, then runs it directly.
