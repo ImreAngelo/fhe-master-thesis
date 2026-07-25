@@ -8,9 +8,9 @@
 #include "server/state.h"
 #include "server/write.h"
 #include <gtest/gtest.h>
-#include <bitset>
 #include <cstdint>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -27,17 +27,22 @@ struct Client {
     RGSW failed;
 };
 
+/// @brief Number of control bits a binary tree over `len` leaves needs, i.e. ceil(log2(len))
+uint32_t TreeDepth(const uint32_t len) {
+    uint32_t depth = 0;
+    while ((1u << depth) < len) depth++;
+    return depth;
+}
+
 /// @brief Client encryption matching bandwidth-optimized scenario from paper
-template <typename T = uint32_t>
-RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_t l, T idx) {
-    // static_assert(sizeof(T) >= length, "");
-    // TODO: Assert idx can be represented by l bits
+RLWE EncryptBinaryIndices(const CryptoContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
+    if (idx >= len) throw std::invalid_argument("index does not fit in a tree over len leaves");
 
-    std::bitset<sizeof(T)> bits;
-    std::vector<int64_t> bits_vec(l);
+    const uint32_t depth = TreeDepth(len);
+    std::vector<int64_t> bits_vec(depth);
 
-    for (uint32_t i = 0; i < l; i++) {
-        bits_vec[i] = bits[i];
+    for (uint32_t i = 0; i < depth; i++) {
+        bits_vec[i] = (idx >> i) & 1u;
     }
 
     const auto pt = cc->MakeCoefPackedPlaintext(bits_vec);
@@ -48,12 +53,7 @@ RLWE EncryptBinaryIndicies(const CryptoContext& cc, const PublicKey& pk, uint32_
 std::vector<std::vector<RLWE>> MPDecryptPartials(const CryptoContext& cc, const std::vector<RLWE>& cts, const uint32_t n,
                                                  const std::vector<PrivateKey>& sks) {
     std::vector<std::vector<RLWE>> partials(n);
-
-    partials[0] = cc->MultipartyDecryptLead(cts, sks[0]);
-    for (uint32_t i = 1; i < n; i++) {
-        partials[i] = cc->MultipartyDecryptMain(cts, sks[i]);
-    }
-
+    for (uint32_t i = 0; i < n; i++) partials[i] = client::Decrypt(cc, cts, sks[i], i == 0);
     return partials;
 }
 
@@ -170,7 +170,7 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
 #endif
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
-    template<typename T>
+    template <typename T>
     void RunEncryptOneHot() {
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -178,11 +178,8 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
         for (auto& client : clients) {
-            client.indices = {
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen))
-            };
+            client.indices = {client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)), client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                              client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen))};
             client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
         }
     }
@@ -204,13 +201,32 @@ TEST_P(Protocol, EncryptBandwidth) {
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
 
-    DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
+    std::vector<uint32_t> indices;  // plaintext indices, in encryption order
+    std::vector<RLWE> ciphertexts;
+    indices.reserve(3 * clients.size());
+    ciphertexts.reserve(3 * clients.size());
 
-    for (auto& client : clients) {
-        const auto z0 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto z1 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto z2 = EncryptBinaryIndicies(cc, jointPk, n, n_dist(gen));
-        const auto pt = cc->MakeCoefPackedPlaintext({client.id});
+    {
+        DEBUG_TIMER("Client: Encrypt (Bandwidth optimized RLWE)");
+        for (uint32_t i = 0; i < clients.size(); i++) {
+            for (uint32_t j = 0; j < 3; j++) {
+                indices.push_back(n_dist(gen));
+                ciphertexts.push_back(EncryptBinaryIndices(cc, jointPk, n, indices.back()));
+            }
+        }
+    }
+
+    // Each ciphertext must decrypt to the binary expansion of its index, lsb first.
+    const auto pts = MPDecryptFinal(cc, MPDecryptPartials(cc, ciphertexts, n, secrets));
+    ASSERT_EQ(pts.size(), indices.size());
+
+    for (size_t i = 0; i < pts.size(); i++) {
+        const auto coeffs = pts[i]->GetCoefPackedValue();
+        ASSERT_GE(coeffs.size(), bits);
+
+        for (uint32_t k = 0; k < bits; k++) {
+            EXPECT_EQ(coeffs[k], (indices[i] >> k) & 1u) << "index " << indices[i] << ", bit " << k;
+        }
     }
 }
 

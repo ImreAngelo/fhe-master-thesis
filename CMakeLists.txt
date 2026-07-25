@@ -101,10 +101,15 @@ if(ENABLE_DEBUG_LOGGING)
 endif()
 
 # ── spar_client library: client-side protocol ────────────────────────────────
-# Header-only for now (no .cpp yet). Becomes STATIC when implementations land.
-add_library(spar_client INTERFACE)
-target_include_directories(spar_client INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/include)
-target_link_libraries(spar_client INTERFACE core)
+file(GLOB_RECURSE SPAR_CLIENT_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/client/src/*.cpp"
+)
+add_library(spar_client STATIC ${SPAR_CLIENT_SOURCES})
+target_include_directories(spar_client
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/src
+)
+target_link_libraries(spar_client PUBLIC core)
 
 # ── spar_server library: server-side protocol ────────────────────────────────
 file(GLOB_RECURSE SPAR_SERVER_SOURCES CONFIGURE_DEPENDS

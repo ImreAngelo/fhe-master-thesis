@@ -6,31 +6,27 @@
 
 namespace spar::client {
 
-using core::ExtendedContext;
-using core::RGSW;
-using core::RLWE;
-
-inline RLWE Encrypt(const ExtendedContext& cc, const std::vector<RLWE>& cts, const uint32_t n) {
+inline core::RLWE Encrypt(const core::ExtendedContext& cc, const std::vector<core::RLWE>& cts, const uint32_t n) {
     throw std::logic_error("Not implemented");
 };
 
-inline std::vector<RLWE> Decrypt() {
-    throw std::logic_error("Not implemented");
-};
+/// @brief Partially decrypt array
+std::vector<core::RLWE> Decrypt(const core::CryptoContext&, const std::vector<core::RLWE>& cts, const core::PrivateKey&,
+                                const bool is_lead = false);
 
 /// @brief Encrypts a one-hot indicator of length `len` with the 1 at position `idx`
 template <typename T>
-std::vector<T> EncryptOneHot(const ExtendedContext& cc, const core::PublicKey& pk, const uint32_t len, const uint32_t idx) {
+inline std::vector<T> EncryptOneHot(const core::ExtendedContext& cc, const core::PublicKey& pk, const uint32_t len, const uint32_t idx) {
     const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
     const auto one_pt = cc->MakeCoefPackedPlaintext({1});
 
     std::vector<T> slots(len);
     for (uint32_t i = 0; i < len; i++) {
         const auto& pt = (i == idx) ? one_pt : zero_pt;
-        if constexpr (std::is_same_v<T, RLWE>) {
+        if constexpr (std::is_same_v<T, core::RLWE>) {
             slots[i] = cc->Encrypt(pk, pt);
         } else {
-            static_assert(std::is_same_v<T, RGSW>, "unsupported slot type");
+            static_assert(std::is_same_v<T, core::RGSW>, "unsupported slot type");
             slots[i] = cc->EncryptRGSW(pk, pt);
         }
     }
