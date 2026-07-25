@@ -1,3 +1,4 @@
+#include "client/encrypt.h"
 #include "constants-defs.h"
 #include "core/context.h"
 #include "core/types.h"
@@ -25,18 +26,6 @@ struct Client {
     RLWE value;
     RGSW failed;
 };
-
-/// @brief Encrypts a one-hot indicator of length `len` with the 1 at position `idx`
-std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, const uint32_t len, const uint32_t idx) {
-    const auto zero_pt = cc->MakeCoefPackedPlaintext({0});
-    const auto one_pt = cc->MakeCoefPackedPlaintext({1});
-
-    std::vector<RGSW> slots(len);
-    for (uint32_t i = 0; i < len; i++) {
-        slots[i] = cc->EncryptRGSW(pk, (i == idx) ? one_pt : zero_pt);
-    }
-    return slots;
-}
 
 /// @brief Client encryption matching bandwidth-optimized scenario from paper
 template <typename T = uint32_t>
@@ -180,6 +169,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
     }
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
+    template<typename T>
     void RunEncryptOneHot() {
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -187,8 +177,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
         for (auto& client : clients) {
-            client.indices = {OneHot(cc, jointPk, n, n_dist(gen)), OneHot(cc, jointPk, n, n_dist(gen)),
-                              OneHot(cc, jointPk, n, n_dist(gen))};
+            client.indices = {
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen))
+            };
             client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
         }
     }
@@ -223,7 +216,7 @@ TEST_P(Multiparty, EncryptBandwidth) {
 // Higher bandwidth method, does not require HomExpand
 TEST_P(Multiparty, EncryptOneHot) {
     DEBUG_TIMER("Client: Encrypt");
-    RunEncryptOneHot();
+    RunEncryptOneHot<RGSW>();
 }
 
 //--------------------//
@@ -231,7 +224,7 @@ TEST_P(Multiparty, EncryptOneHot) {
 //--------------------//
 
 TEST_P(Multiparty, ServerWrite) {
-    RunEncryptOneHot();
+    RunEncryptOneHot<RGSW>();
 
     DEBUG_TIMER("Server: Write");
     for (auto& client : clients) {
@@ -254,7 +247,7 @@ TEST_P(Multiparty, ServerWrite) {
 //------------//
 
 TEST_P(Multiparty, Decryption) {
-    RunEncryptOneHot();
+    RunEncryptOneHot<RGSW>();
     RunServerWrite();
 
     std::vector<std::vector<RLWE>> partials;
