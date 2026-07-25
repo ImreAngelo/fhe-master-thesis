@@ -38,10 +38,12 @@ function(register_test name)
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
     # spar_utils brings core + spar/params.h; spar_client/spar_server are the protocol.
+    # spar_warnings is the root's -Wall -Wextra carrier; GoogleTest itself is built
+    # under _deps and never sees it.
     if(ARG_CUSTOM_MAIN)
-        target_link_libraries(${name} PRIVATE GTest::gtest spar_utils spar_client spar_server)
+        target_link_libraries(${name} PRIVATE GTest::gtest spar_utils spar_client spar_server spar_warnings)
     else()
-        target_link_libraries(${name} PRIVATE GTest::gtest_main spar_utils spar_client spar_server)
+        target_link_libraries(${name} PRIVATE GTest::gtest_main spar_utils spar_client spar_server spar_warnings)
     endif()
 
     # Force-include common.h before every translation unit in this target.

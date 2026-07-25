@@ -15,7 +15,7 @@ using namespace lbcrypto;
 struct TestCase {
     std::string label;
     std::function<ExtendedContext()> make;
-    enum Packing { COEF = 0x0, SIMD = 0x1 } packing;
+    enum Packing { COEF = 0x0, SIMD = 0x1 } packing = COEF;
     bool isHybrid = false;
 };
 

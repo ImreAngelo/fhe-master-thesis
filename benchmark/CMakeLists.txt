@@ -26,7 +26,9 @@ function(register_benchmark name)
     endif()
 
     add_executable(${name} ${_src})
-    target_link_libraries(${name} PRIVATE benchmark::benchmark spar_utils spar_client spar_server)
+    # spar_warnings carries the root's -Wall -Wextra; Google Benchmark is built
+    # under _deps and never sees it.
+    target_link_libraries(${name} PRIVATE benchmark::benchmark spar_utils spar_client spar_server spar_warnings)
 
     # Force-include common.h before every translation unit, mirroring register_test().
     target_compile_options(${name} PRIVATE

@@ -6,7 +6,9 @@
 
 namespace spar::client {
 
-inline core::RLWE Encrypt(const core::ExtendedContext& cc, const std::vector<core::RLWE>& cts, const uint32_t n) {
+// Unimplemented stub; the parameter names record the intended signature.
+inline core::RLWE Encrypt([[maybe_unused]] const core::ExtendedContext& cc, [[maybe_unused]] const std::vector<core::RLWE>& cts,
+                          [[maybe_unused]] const uint32_t n) {
     throw std::logic_error("Not implemented");
 };
 

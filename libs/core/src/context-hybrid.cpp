@@ -211,7 +211,10 @@ RLWE ExtendedContextHybridImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW
     return result;
 }
 
-RGSW ExtendedContextHybridImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
+// Parameters are named but unused: the body below throws, and the commented-out
+// reference implementation that follows it reads both.
+RGSW ExtendedContextHybridImpl::EvalInternalProduct([[maybe_unused]] const RGSW& lhs,
+                                                    [[maybe_unused]] const RGSW& rhs) const {
     // TODO: The straightforward per-row external product does not work here: modding
     // a row down re-amplifies the rounding by P, and skipping the ModDown leaves the
     // d·e cross term undivided — both blow the noise budget. Needs a dedicated design.

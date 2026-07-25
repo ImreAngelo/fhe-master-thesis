@@ -50,12 +50,23 @@ set(CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS})
 # num_threads(GetThreadLimit(...)) OpenMP loop in libs/.
 add_compile_definitions(PARALLEL)
 
-include_directories(${OPENMP_INCLUDES})
-include_directories(${OpenFHE_INCLUDE})
-include_directories(${OpenFHE_INCLUDE}/third-party/include)
-include_directories(${OpenFHE_INCLUDE}/core)
-include_directories(${OpenFHE_INCLUDE}/pke)
-include_directories(${OpenFHE_INCLUDE}/binfhe)
+# SYSTEM (-isystem, not -I): OpenFHE_CXX_FLAGS above carries -Wall -Werror, and the
+# first-party targets add -Wextra on top (see spar_warnings below). OpenFHE's headers
+# do not build clean under -Wextra — the abstract bases in pke/schemebase/ alone raise
+# dozens of -Wunused-parameter, which -Werror turns into build failures in whichever of
+# OUR translation units happens to include them. SYSTEM silences diagnostics originating
+# inside these headers while leaving our own code fully checked.
+#
+# Ordering note: -isystem paths are searched after every -I path, so the libs/*/include
+# dirs now win a name clash instead of OpenFHE. That is the order the "spar/" include
+# prefix was chosen for anyway (see the spar_utils comment below); OpenFHE-internal
+# includes such as utils/exception.h still resolve, as nothing under libs/ shadows them.
+include_directories(SYSTEM ${OPENMP_INCLUDES})
+include_directories(SYSTEM ${OpenFHE_INCLUDE})
+include_directories(SYSTEM ${OpenFHE_INCLUDE}/third-party/include)
+include_directories(SYSTEM ${OpenFHE_INCLUDE}/core)
+include_directories(SYSTEM ${OpenFHE_INCLUDE}/pke)
+include_directories(SYSTEM ${OpenFHE_INCLUDE}/binfhe)
 ### add directories for other OpenFHE modules as needed for your project
 
 if(UNIX AND NOT APPLE)
@@ -71,6 +82,16 @@ else()
     set(CMAKE_EXE_LINKER_FLAGS ${OpenFHE_EXE_LINKER_FLAGS})
     link_libraries(${OpenFHE_SHARED_LIBRARIES})
 endif()
+
+# ── Warnings for first-party code ────────────────────────────────────────────
+# Carried by an INTERFACE target rather than CMAKE_CXX_FLAGS: the latter is
+# global and would also hit the FetchContent dependencies (toml++, GoogleTest,
+# Google Benchmark) that configure under ${BUILDDIR}/_deps, plus anything else
+# added to this tree. Link it PRIVATE into every target built from our own
+# sources — the libraries below, and the test/benchmark binaries via
+# register_test() / register_benchmark().
+add_library(spar_warnings INTERFACE)
+target_compile_options(spar_warnings INTERFACE -Wall -Wextra)
 
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.
@@ -91,6 +112,7 @@ target_include_directories(core
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/core/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/core/src
 )
+target_link_libraries(core PRIVATE spar_warnings)
 
 # Timing/logging macros in libs/utils/include/spar/ are gated on DEBUG_TIMING /
 # DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`, which
@@ -108,7 +130,7 @@ target_include_directories(spar_client
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/client/src
 )
-target_link_libraries(spar_client PUBLIC core)
+target_link_libraries(spar_client PUBLIC core PRIVATE spar_warnings)
 
 # ── spar_server library: server-side protocol ────────────────────────────────
 file(GLOB_RECURSE SPAR_SERVER_SOURCES CONFIGURE_DEPENDS
@@ -119,7 +141,7 @@ target_include_directories(spar_server
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/libs/server/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/server/src
 )
-target_link_libraries(spar_server PUBLIC core)
+target_link_libraries(spar_server PUBLIC core PRIVATE spar_warnings)
 
 # ── spar_utils library: measurement helpers + runtime parameter loading ──────
 # Sits ABOVE core in the dependency graph: params.cpp returns core::ExtendedContext
@@ -143,7 +165,7 @@ add_library(spar_utils STATIC ${SPAR_UTILS_SOURCES})
 target_include_directories(spar_utils
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libs/utils/include
 )
-target_link_libraries(spar_utils PUBLIC core PRIVATE tomlplusplus::tomlplusplus)
+target_link_libraries(spar_utils PUBLIC core PRIVATE tomlplusplus::tomlplusplus spar_warnings)
 
 # Absolute path so params.toml resolves identically from ctest's cwd (build/test/)
 # and from the benchmark targets' cwd (benchmark/). $SPAR_PARAMS_FILE overrides it.

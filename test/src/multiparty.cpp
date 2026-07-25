@@ -22,9 +22,11 @@ using namespace core;
 struct Client {
     uint32_t id;
     lbcrypto::KeyPair<Poly> kpShard;  // (joint pk after i's contribution, sk_i)
-    std::vector<std::vector<RGSW>> indices;
-    RLWE value;
-    RGSW failed;
+    // Defaulted: clients[0] is aggregate-initialized from {id, kpShard} alone and these
+    // three are filled in later by the protocol steps.
+    std::vector<std::vector<RGSW>> indices{};
+    RLWE value{};
+    RGSW failed{};
 };
 
 /// @brief Number of control bits a binary tree over `len` leaves needs, i.e. ceil(log2(len))

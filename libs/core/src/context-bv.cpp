@@ -27,7 +27,7 @@ uint64_t ComputeLogB(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t
 }
 
 /// @brief Computes the offset (\varGamma) for parallel signed digit decomposition
-uint64_t ComputeOffset(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell, const uint64_t logB) {
+uint64_t ComputeOffset(const uint32_t ell, const uint64_t logB) {
     const uint64_t halfB = uint64_t(1) << (logB - 1);
     uint64_t offset = 0;
     for (uint32_t i = 0; i + 1 < ell; i++)  // the last digit is already [0, B/2)
@@ -76,7 +76,7 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
     : IExtendedContext(cc),
       m_ell(ell),
       m_logB(ComputeLogB(cc, m_ell)),
-      m_offset(ComputeOffset(cc, m_ell, m_logB)),
+      m_offset(ComputeOffset(m_ell, m_logB)),
       m_powers(ComputePowers(cc, m_ell, m_logB)) {}
 
 
