@@ -5,7 +5,7 @@
  * @file noise.h
  * @brief Checks the accumulated noise in an RLWE ciphertext in BGV
  */
-namespace core::utils {
+namespace spar::utils {
 inline lbcrypto::BigInteger MaxNoise(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                                      const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>& ct,
                                      const lbcrypto::PrivateKey<lbcrypto::DCRTPoly>& sk) {
@@ -51,7 +51,7 @@ inline lbcrypto::BigInteger MaxNoise(const lbcrypto::CryptoContext<lbcrypto::DCR
 
     return maxE;
 }
-}  // namespace core::utils
+}  // namespace spar::utils
 
 
 #include "logging.h"
@@ -59,15 +59,15 @@ inline lbcrypto::BigInteger MaxNoise(const lbcrypto::CryptoContext<lbcrypto::DCR
 
 // Prints ||epsilon||_inf for a ciphertext. Args: crypto context, ciphertext,
 // secret key. Prefixes the ciphertext expression so multiple prints are legible.
-#define PRINT_MAX_NOISE(cc, ct, sk) DEBUG_PRINT("max noise [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)))
-#define PRINT_MAX_NOISE_MSB(cc, ct, sk) DEBUG_PRINT("max noise bits [" #ct "] = " << core::utils::MaxNoise((cc), (ct), (sk)).GetMSB())
+#define PRINT_MAX_NOISE(cc, ct, sk) DEBUG_PRINT("max noise [" #ct "] = " << spar::utils::MaxNoise((cc), (ct), (sk)))
+#define PRINT_MAX_NOISE_MSB(cc, ct, sk) DEBUG_PRINT("max noise bits [" #ct "] = " << spar::utils::MaxNoise((cc), (ct), (sk)).GetMSB())
 
 // Writes a "n,msb,noise" row to the CSV opened by RECORD_START, computing
 // MaxNoise once. Gated on DEBUG_LOGGING so the decrypt compiles out otherwise.
 #if defined(DEBUG_LOGGING)
 #define RECORD_MAX_NOISE(n, cc, ct, sk)                              \
     do {                                                             \
-        const auto rec_e_ = core::utils::MaxNoise((cc), (ct), (sk)); \
+        const auto rec_e_ = spar::utils::MaxNoise((cc), (ct), (sk)); \
         RECORD((n), rec_e_.GetMSB(), rec_e_);                        \
     } while (0)
 #else
