@@ -49,11 +49,9 @@ class Products : public ::testing::TestWithParam<TestCase> {
     };
 
     Plaintext MakePlaintext(const std::vector<int64_t>& value) const {
-        // clang-format off
-        return (GetParam().packing == TestCase::COEF) 
+        return (GetParam().packing == TestCase::COEF)  // packing is a test parameter
             ? cc->MakeCoefPackedPlaintext(value)
             : cc->MakePackedPlaintext(value);
-        // clang-format on
     }
 };
 
