@@ -105,4 +105,5 @@ make bench
 ## TODO
 - [ ] Add/verify support for BFV
 - [ ] Pass parameters via CLI
+- [ ] Add BVParams etc.
 - [ ] Cache the heavier tests if they haven't change

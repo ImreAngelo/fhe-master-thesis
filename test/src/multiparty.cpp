@@ -86,7 +86,7 @@ Plaintext MPDecryptFull(const ExtendedContext& cc, const RGSW& ct, const uint32_
 // Fixture: SetUp() handles everything before the Encryption Phase
 // (crypto context, chained joint pk, server state matrices, identity ct).
 // Each TEST_P below corresponds to one scoped phase from the original flow.
-class Multiparty : public ::testing::TestWithParam<uint32_t> {
+class Protocol : public ::testing::TestWithParam<uint32_t> {
    protected:
     uint32_t bits = 0;
     uint32_t n = 0;
@@ -100,7 +100,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
     PrivateKey jointSk;  // simulation-only: sum of shards, for noise inspection via PRINT_MAX_NOISE
     server::Matrix<RGSW, 3> I_mat;
     server::Matrix<RLWE, 3> L_mat;
-    RLWE identity;  // for EvalExternalProduct-based RGSW->RLWE conversion
+    RLWE identity;
 
     void SetUp() override {
         bits = GetParam();
@@ -145,10 +145,11 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         identity = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({1}));
     }
 
+    // TODO: Move to "noise" benchmark
     // Records ||e||_inf of the noisiest RLWE in L, so every phase leaves behind a
     // CSV row even when it never touches the matrix (a fresh L reads as 0).
-    void TearDown() override {
 #if defined(DEBUG_LOGGING)
+    void TearDown() override {
         const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
         // Parameterized names arrive as "<Test>/<Param>"; keep the stem out of the path.
         std::string test(info->name());
@@ -165,8 +166,8 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
         RECORD_START("results/Multiparty/" + test + "-N" + std::to_string(n) + ".csv", "n,msb,noise");
         RECORD(n, maxE.GetMSB(), maxE);
         RECORD_END();
-#endif
     }
+#endif
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
     template<typename T>
@@ -198,7 +199,7 @@ class Multiparty : public ::testing::TestWithParam<uint32_t> {
 //------------------//
 
 // Method suggested in paper, requires HomExpand on server (not implemented yet)
-TEST_P(Multiparty, EncryptBandwidth) {
+TEST_P(Protocol, EncryptBandwidth) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
@@ -214,7 +215,7 @@ TEST_P(Multiparty, EncryptBandwidth) {
 }
 
 // Higher bandwidth method, does not require HomExpand
-TEST_P(Multiparty, EncryptOneHot) {
+TEST_P(Protocol, EncryptOneHot) {
     DEBUG_TIMER("Client: Encrypt");
     RunEncryptOneHot<RGSW>();
 }
@@ -223,7 +224,7 @@ TEST_P(Multiparty, EncryptOneHot) {
 // Server Write Phase //
 //--------------------//
 
-TEST_P(Multiparty, ServerWrite) {
+TEST_P(Protocol, ServerWrite) {
     RunEncryptOneHot<RGSW>();
 
     DEBUG_TIMER("Server: Write");
@@ -246,7 +247,7 @@ TEST_P(Multiparty, ServerWrite) {
 // Decryption //
 //------------//
 
-TEST_P(Multiparty, Decryption) {
+TEST_P(Protocol, Decryption) {
     RunEncryptOneHot<RGSW>();
     RunServerWrite();
 
@@ -283,6 +284,6 @@ TEST_P(Multiparty, Decryption) {
 }
 
 // 1u, 2u, 3u
-INSTANTIATE_TEST_SUITE_P(Bits, Multiparty, ::testing::Values(1u), [](const auto& info) { return "N" + std::to_string(1u << info.param); });
+INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u), [](const auto& info) { return "N" + std::to_string(1u << info.param); });
 
 }  // namespace spar::test
