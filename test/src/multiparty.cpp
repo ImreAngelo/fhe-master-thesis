@@ -178,8 +178,11 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
         for (auto& client : clients) {
-            client.indices = {client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)), client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-                              client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen))};
+            client.indices = {
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+            };
             client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
         }
     }
