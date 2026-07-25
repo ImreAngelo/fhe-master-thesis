@@ -2,8 +2,6 @@
 #include "core/types.h"
 #include "core/utils/logging.h"
 #include "factory.h"
-#include "scheme/ckksrns/ckksrns-utils.h"
-#include "scheme/gen-cryptocontext-params.h"
 #include "utils/exception.h"
 #include "utils/parallel.h"
 #include <cstdint>
@@ -12,6 +10,7 @@
 
 namespace {
 using namespace core;
+using lbcrypto::OpenFHEParallelControls;
 
 //---------------------//
 // Pre-computed values //
@@ -71,13 +70,6 @@ std::vector<NativeInteger> ComputePowers(const lbcrypto::CryptoContextImpl<Poly>
 bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
     return plaintext->GetEncodingType() == lbcrypto::PlaintextEncodings::COEF_PACKED_ENCODING;
 }
-
-/// @brief Used when the cloned poly should be const except converting to a different format
-// Poly CloneToCoefficient(const Poly& poly) {
-//     auto clone = poly.Clone();
-//     clone.SetFormat(Format::COEFFICIENT);
-//     return clone;
-// }
 
 }  // namespace
 
@@ -167,63 +159,35 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
     return rows;
 }
 
-// TODO: Multi-thread this function
-// RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
-//     const size_t k = rlwe->GetElements()[0].GetNumOfElements();
-//     const size_t l = k * m_ell;
+#if true
 
-//     const auto& c0 = rlwe->GetElements()[0];
-//     const auto& c1 = rlwe->GetElements()[1];
-
-//     // Decompose into the k*\ell broadcasted format
-//     std::vector<Poly> d0 = Decompose(c0);
-//     std::vector<Poly> d1 = Decompose(c1);
-
-//     auto params = c0.GetParams();
-//     Poly acc0(params, Format::EVALUATION, true);
-//     Poly acc1(params, Format::EVALUATION, true);
-
-//     // Inner product
-//     for (size_t r = 0; r < l; r++) {
-//         const auto& rUpper = rgsw[r]->GetElements();
-//         const auto& rLower = rgsw[l + r]->GetElements();
-//         acc0 += d0[r] * rUpper[0] + d1[r] * rLower[0];
-//         acc1 += d0[r] * rUpper[1] + d1[r] * rLower[1];
-//     }
-
-//     RLWE result = rlwe->CloneEmpty();
-//     result->SetElements({std::move(acc0), std::move(acc1)});
-
-//     return result;
-// }
-
-#if false
-using lbcrypto::OpenFHEParallelControls;
-
-namespace {
-/// @brief Extracts the digits [-B/2, B/2) on each coefficient
-void ExtractDigits(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const uint64_t logB, const uint64_t offset) {
+void ExtendedContextBVImpl::Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const NativePoly& limb,
+                                      const size_t i) const {
     const auto N = params->GetRingDimension();
-    const auto mask = (uint64_t(1) << logB) - 1;
-    const auto half = uint64_t(1) << (logB - 1);
+    const auto mask = (uint64_t(1) << m_logB) - 1;
+    const auto half = uint64_t(1) << (m_logB - 1);
+    const auto shift = (i % m_ell) * m_logB;
+    const auto top = ((i % m_ell) + 1 == m_ell);
+
+    const uint64_t qt = params->GetModulus().ConvertToInt();
 
     NativePoly dt(params, Format::COEFFICIENT, true);
     for (size_t c = 0; c < N; c++) {
-        c += offset;
+        const uint64_t u = ((limb[c].ConvertToInt() + m_offset) >> (shift)) & mask;
+        dt[c] = top ? NativeInteger(u) : NativeInteger(u >= half ? u - half : qt - (half - u));
     }
 
     // Forward NTT
     dt.SetFormat(Format::EVALUATION);
     digits = std::move(dt);
 }
-}  // namespace
 
 RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
     const auto& x = rlwe->GetElements();
     const auto k = x[0].GetNumOfElements();
-    const auto kl = k * m_ell;  // digits per
+    const auto kl = k * m_ell;
 
-    // Parallel iNTT each tower of c0 and c1 into flattened array
+    // Parallel iNTT of all limbs into flattened array
     std::vector<NativePoly> coef(2 * k);
 
 #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(2 * k))
@@ -233,23 +197,51 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
     }
 
     // Extract digits
-    std::vector<NativePoly> d(2 * kl * k);
+    std::vector<NativePoly> digits(2 * kl * k);
 
-    const auto params = x[0].GetParams()->GetParams();
+    const auto params = x[0].GetParams();
+    const auto params_t = params->GetParams();
 
-#pragma omp parallel for collapse(2) num_threads(OpenFHEParallelControls.GetThreadLimit(2 * k))
-    for (size_t i = 0; i < d.size(); i++) {
+#pragma omp parallel for collapse(2) num_threads(OpenFHEParallelControls.GetThreadLimit(digits.size()))
+    for (size_t i = 0; i < 2 * kl; i++) {
         for (size_t t = 0; t < k; t++) {
             const auto r = i % kl;
             const auto src_t = r / m_ell;
-
             const auto& limb = coef[(i / kl) * k + src_t];
-            ExtractDigits(d[i * k + t], params[t], m_logB);
+            Decompose(digits[i * k + t], params_t[t], limb, i);
         }
-        // d[i] = ExtractDigits();
     }
 
     // Parallel add
+    Poly acc0(params, Format::EVALUATION, true);
+    Poly acc1(params, Format::EVALUATION, true);
+    Poly* acc[2] = {&acc0, &acc1};
+
+    const auto N = params->GetRingDimension();
+
+#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
+    for (size_t b = 0; b < 2; b++) {
+        for (size_t t = 0; t < k; t++) {
+            const auto& tp = params->GetParams()[t];
+            NativePoly sum(tp, Format::EVALUATION, true);
+
+            // Fused mod-FMA: accumulate in place, no per-term poly temporaries
+            const NativeInteger& qt = tp->GetModulus();
+            const NativeInteger mu = qt.ComputeMu();
+
+            for (size_t s = 0; s < 2 * kl; s++) {  // sequential FMA, contention-free
+                const NativePoly& d = digits[s * k + t];
+                const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
+                for (size_t x = 0; x < N; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
+            }
+
+            acc[b]->SetElementAtIndex(t, std::move(sum));
+        }
+    }
+
+    RLWE result = rlwe->CloneEmpty();
+    result->SetElements({std::move(acc0), std::move(acc1)});
+    return result;
 }
 #else
 

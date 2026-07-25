@@ -28,8 +28,10 @@ class ExtendedContextBVImpl final : public IExtendedContext {
     /// @returns B^i mod q_j
     NativeInteger GetPower(const uint32_t i, const uint32_t j) const;
 
-    // /// @returns Signed digit decomposition of the input polynomial
-    // std::vector<Poly> Decompose(const Poly&) const;
+    /// @brief Extracts the digits [-B/2, B/2) on each coefficient
+    /// @returns Signed digit decomposition of the input polynomial limb
+    void Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const NativePoly& limb,
+                   const size_t i) const;
 };
 
 using ExtendedContextBV = std::shared_ptr<ExtendedContextBVImpl>;
