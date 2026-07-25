@@ -105,5 +105,6 @@ make bench
 ## TODO
 - [ ] Add/verify support for BFV
 - [ ] Pass parameters via CLI
-- [ ] Add BVParams etc.
 - [ ] Cache the heavier tests if they haven't change
+- [ ] Consider adding back specialized params for each scheme
+- [ ] Optionally pass base B as a parameter to BV, rather than auto-selecting

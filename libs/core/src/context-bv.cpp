@@ -90,7 +90,7 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
 
 RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
     const auto msg = pt->GetElement<Poly>();
-    const auto zero = IsCoefPackedPlaintext(pt)
+    const auto zero = IsCoefPackedPlaintext(pt)  //
         ? this->MakeCoefPackedPlaintext({0})
         : this->MakePackedPlaintext({0});
 
@@ -198,7 +198,7 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
 
 RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
     const auto msg = pt->GetElement<Poly>();
-    const auto zero = IsCoefPackedPlaintext(pt)  // zero must match the packing of pt
+    const auto zero = IsCoefPackedPlaintext(pt)  //
         ? this->MakeCoefPackedPlaintext({0})
         : this->MakePackedPlaintext({0});
 
@@ -298,10 +298,6 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 // Internals //
 //-----------//
 
-NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
-    return m_powers[i + m_ell * j];
-}
-
 using NativeParams = std::shared_ptr<lbcrypto::ILNativeParams>;
 
 void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams params, const NativePoly& limb, const size_t i) const {
@@ -322,6 +318,10 @@ void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams par
     // Forward NTT
     dt.SetFormat(Format::EVALUATION);
     digits = std::move(dt);
+}
+
+NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
+    return m_powers[i + m_ell * j];
 }
 
 //-------------------------//

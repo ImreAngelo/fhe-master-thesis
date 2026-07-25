@@ -30,8 +30,7 @@ class ExtendedContextBVImpl final : public IExtendedContext {
 
     /// @brief Extracts the digits [-B/2, B/2) on each coefficient
     /// @returns Signed digit decomposition of the input polynomial limb
-    void Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const NativePoly& limb,
-                   const size_t i) const;
+    void Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams>, const NativePoly&, const size_t) const;
 };
 
 using ExtendedContextBV = std::shared_ptr<ExtendedContextBVImpl>;
