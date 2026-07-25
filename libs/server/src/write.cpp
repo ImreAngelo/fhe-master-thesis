@@ -1,7 +1,5 @@
 #include "server/write.h"
 #include "core/types.h"
-#include "core/utils/logging.h"
-#include "core/utils/noise.h"
 
 namespace spar::server {
 using namespace core;

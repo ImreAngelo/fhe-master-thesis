@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: build/_deps
-          key: gtest-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt') }}
+          key: gtest-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt', 'CMakeLists.txt') }}
 
       - name: Configure project
         run: cmake -B build -DBUILD_STATIC=ON
@@ -72,7 +72,10 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: build/_deps
-          key: gtest-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt') }}
+          key: gtest-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt', 'CMakeLists.txt') }}
 
+      # check-ci runs the ci-labelled tests only, and does not even build
+      # test-multiparty (minutes-long). Crypto parameters are identical to a
+      # local run: params.toml is checked in and SPAR_PARAMS is unset.
       - name: Run tests
-        run: cmake --build build --target check -j$(nproc)
+        run: cmake --build build --target check-ci -j$(nproc)

@@ -1,9 +1,8 @@
 #include "core/context.h"
 #include "core/types.h"
-#include "gtest/gtest.h"
 #include "key/keypair.h"
 #include "lattice/hal/lat-backend.h"
-#include "params.h"
+#include "spar/params.h"
 #include <gtest/gtest.h>
 #include <cstddef>
 #include <functional>
@@ -29,15 +28,7 @@ class Products : public ::testing::TestWithParam<TestCase> {
 
     void SetUp() override {
         cc = GetParam().make();
-        cc->Enable(PKE);
-
-        keys = cc->KeyGen();
-
-        // TODO: Streamline
-        if (GetParam().isHybrid) {
-            cc->SetExtendedKey(keys);
-        }
-
+        keys = utils::MakeKeys(cc);  // SetExtendedKey is a no-op for BV
         pt_one = MakePlaintext({1});
     }
 
@@ -87,19 +78,21 @@ TEST_P(Products, Internal) {
 #define SETUP_TEST_SUITE(prefix, ...) \
     INSTANTIATE_TEST_SUITE_P(prefix, Products, ::testing::Values(__VA_ARGS__), [](const auto& info) { return info.param.label; })
 
-using params::Set;
+using params::MakeContext;
+using params::Resolve;
+using params::Scheme;
 
 // clang-format off
 // Standard gadget
-SETUP_TEST_SUITE(BV, 
-    TestCase{"standard", [] { return GenContextBV(Make(Set::Standard), 3); }},
-    TestCase{"simd", [] { return GenContextBV(Make(Set::Standard), 3); }, TestCase::SIMD}
+SETUP_TEST_SUITE(BV,
+    TestCase{"standard", [] { return MakeContext(Resolve()); }},
+    TestCase{"simd", [] { return MakeContext(Resolve()); }, TestCase::SIMD}
 );
 
 // Hybrid gadget
-SETUP_TEST_SUITE(Hybrid, 
-    TestCase{"standard", [] { return GenContextHybrid(Make(Set::Standard)); }, TestCase::Packing::COEF, true},
-    TestCase{"simd", [] { return GenContextHybrid(Make(Set::Standard)); }, TestCase::Packing::SIMD, true}
+SETUP_TEST_SUITE(Hybrid,
+    TestCase{"standard", [] { return MakeContext(Resolve(), Scheme::Hybrid); }, TestCase::Packing::COEF, true},
+    TestCase{"simd", [] { return MakeContext(Resolve(), Scheme::Hybrid); }, TestCase::Packing::SIMD, true}
 );
 // clang-format on
 

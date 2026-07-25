@@ -5,11 +5,10 @@
  */
 #pragma once
 
-#include "openfhe.h"
-#include <benchmark/benchmark.h>
-
 #include "core/context.h"
 #include "core/types.h"
+#include "openfhe.h"
+#include <benchmark/benchmark.h>
 
 // Crypto parameters, loaded at runtime from params.toml at the repo root.
 #include "spar/keys.h"

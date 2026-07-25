@@ -1,3 +1,16 @@
+/**
+ * @file rgsw.cpp
+ * @brief REFERENCE ONLY — not registered in test/CMakeLists.txt, never compiled.
+ *
+ * Kept for the operation coverage it sketches (MakePublicRGSW, EvalAddRGSW,
+ * EvalSubRGSW, EvalMultRGSW). It predates the params/utils refactor, so the
+ * includes and the params::Set::Standard call sites below are stale: parameters
+ * now come from params.toml via spar::params::Resolve()/MakeContext(), and the
+ * utils headers live under spar/ rather than core/utils/.
+ *
+ * The two chained-product noise measurements that used to live here are now
+ * benchmark/src/chain.cpp.
+ */
 #include "core/context.h"
 #include "core/types.h"
 #include "core/utils/noise.h"

@@ -141,6 +141,7 @@ bench-%: openfhe
 
 # Copy fresh results into the thesis, preserving any subdirectory structure:
 #   test/results/<path>.csv        -> docs/latex/Data/Noise/<path>.csv
+#   benchmark/results/<path>.csv   -> docs/latex/Data/Noise/<path>.csv
 #   build/results-<path>.json      -> docs/latex/Data/Times/<path>.json
 # Sources are gitignored run outputs and are left in place; destinations are
 # tracked by git, so missing sources are skipped silently (nothing to publish).
@@ -151,9 +152,9 @@ TIMESDIR := $(DATADIR)/Times
 data:
 	@copied=0; \
 	mkdir -p "$(NOISEDIR)" "$(TIMESDIR)"; \
-	for f in $$(find test/results -type f -name '*.csv' 2>/dev/null); do \
+	for f in $$(find test/results benchmark/results -type f -name '*.csv' 2>/dev/null); do \
 		[ -s "$$f" ] || { echo "  SKIP $$f (empty)"; continue; }; \
-		dst="$(NOISEDIR)/$${f#test/results/}"; \
+		dst="$(NOISEDIR)/$${f#*/results/}"; \
 		mkdir -p "$$(dirname "$$dst")"; \
 		cp "$$f" "$$dst" && echo "  $$f -> $$dst" && copied=$$((copied+1)); \
 	done; \
@@ -208,14 +209,22 @@ help:
 	@echo "  ci                 - Build a portable OpenFHE install (no tcmalloc/native tuning)"
 	@echo "  build              - Configure project + build registered binaries"
 	@echo "  test               - Build and run all tests"
-	@echo "  test-<name>        - Build and run a specific test (e.g. make test-rgsw)"
+	@echo "  test-<name>        - Build and run a specific test (e.g. make test-products)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
 	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 12)"
+	@echo "                       Subsets: ctest --test-dir build -L ci   (what CI runs)"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
+	@echo "                       Excludes bench-chain; run that one explicitly"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"
 	@echo "                       bench-full does 1 server write and reports its actual time"
 	@echo "  bench-full-write   - bench-full with all N server writes run for real"
-	@echo "  data               - Copy test CSVs into Data/Noise, benchmark JSONs into Data/Times"
+	@echo "  bench-chain        - Noise sweep over the gadget digit count (slow; writes CSVs"
+	@echo "                       to benchmark/results). SPAR_CHAIN_ITERATIONS=20 to smoke test"
+	@echo "  data               - Copy test/benchmark CSVs into Data/Noise, benchmark JSONs into Data/Times"
+	@echo ""
+	@echo "Crypto parameters live in params.toml and are read at runtime (no rebuild):"
+	@echo "  SPAR_PARAMS=<name>       select a set (default: standard)"
+	@echo "  SPAR_PARAMS_FILE=<path>  use a different parameter file"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
 	@echo "  params             - Set up the .venv used by parameter tuning"

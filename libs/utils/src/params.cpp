@@ -1,12 +1,10 @@
 #include "spar/params.h"
-
-#include <toml++/toml.hpp>
-
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <toml++/toml.hpp>
 
 namespace spar::params {
 
@@ -27,9 +25,8 @@ const toml::table& Parsed() {
             return toml::parse_file(path);
         } catch (const toml::parse_error& e) {
             std::ostringstream msg;
-            msg << "spar::params: cannot parse '" << path << "': " << e.description() << " at line "
-                << e.source().begin.line << ", column " << e.source().begin.column
-                << " (set SPAR_PARAMS_FILE to override the location)";
+            msg << "spar::params: cannot parse '" << path << "': " << e.description() << " at line " << e.source().begin.line << ", column "
+                << e.source().begin.column << " (set SPAR_PARAMS_FILE to override the location)";
             throw std::runtime_error(msg.str());
         }
     }();
@@ -61,8 +58,7 @@ T Require(const toml::table& section, const std::string& set, const std::string&
 Scheme ParseScheme(const std::string& set, const std::string& value) {
     if (value == "bv") return Scheme::BV;
     if (value == "hybrid") return Scheme::Hybrid;
-    throw std::runtime_error("spar::params: set '" + set + "' has scheme = \"" + value +
-                             "\"; expected \"bv\" or \"hybrid\"");
+    throw std::runtime_error("spar::params: set '" + set + "' has scheme = \"" + value + "\"; expected \"bv\" or \"hybrid\"");
 }
 
 Set ReadSet(const std::string& name, const toml::table& section) {
@@ -84,9 +80,9 @@ void AnnounceOnce(const Set& set) {
     static bool announced = false;
     if (announced) return;
     announced = true;
-    std::cerr << "[spar::params] set=" << set.name << " N=" << set.ringDim << " t=" << set.plaintextModulus
-              << " limbs=" << set.limbs << " |Q|=" << set.LogQ() << " ell=" << set.ell
-              << " scheme=" << (set.scheme == Scheme::Hybrid ? "hybrid" : "bv") << " (" << FilePath() << ")\n";
+    std::cerr << "[spar::params] set=" << set.name << " N=" << set.ringDim << " t=" << set.plaintextModulus << " limbs=" << set.limbs
+              << " |Q|=" << set.LogQ() << " ell=" << set.ell << " scheme=" << (set.scheme == Scheme::Hybrid ? "hybrid" : "bv") << " ("
+              << FilePath() << ")\n";
 }
 
 }  // namespace
@@ -96,13 +92,11 @@ uint32_t Set::Depth(const Mode mode) const {
     // inserts NUM_MODULI_MULTIPARTY primes into Q, which OpenFHE spends before
     // any multiplicative level is available. Taken from OpenFHE's own constant so
     // the two stay in sync if upstream changes it.
-    const uint32_t reserved =
-        1 + (mode == Mode::MultiParty ? static_cast<uint32_t>(lbcrypto::NoiseFlooding::NUM_MODULI_MULTIPARTY) : 0u);
+    const uint32_t reserved = 1 + (mode == Mode::MultiParty ? static_cast<uint32_t>(lbcrypto::NoiseFlooding::NUM_MODULI_MULTIPARTY) : 0u);
 
     if (limbs <= reserved)
-        throw std::runtime_error("spar::params: set '" + name + "' has limbs = " + std::to_string(limbs) +
-                                 " but this mode reserves " + std::to_string(reserved) +
-                                 "; no usable multiplicative level remains");
+        throw std::runtime_error("spar::params: set '" + name + "' has limbs = " + std::to_string(limbs) + " but this mode reserves " +
+                                 std::to_string(reserved) + "; no usable multiplicative level remains");
 
     return limbs - reserved;
 }
@@ -110,8 +104,7 @@ uint32_t Set::Depth(const Mode mode) const {
 Set Resolve(const std::string& name) {
     const auto* section = Parsed()[name].as_table();
     if (!section)
-        throw std::runtime_error("spar::params: no set named '" + name + "' in " + FilePath() + "; available: " +
-                                 AvailableNames());
+        throw std::runtime_error("spar::params: no set named '" + name + "' in " + FilePath() + "; available: " + AvailableNames());
 
     const Set set = ReadSet(name, *section);
     AnnounceOnce(set);
@@ -121,14 +114,6 @@ Set Resolve(const std::string& name) {
 Set Resolve() {
     const char* name = std::getenv("SPAR_PARAMS");
     return Resolve(name ? name : "standard");
-}
-
-std::vector<Set> All() {
-    std::vector<Set> sets;
-    for (const auto& [key, value] : Parsed()) {
-        if (const auto* section = value.as_table()) sets.push_back(ReadSet(std::string(key.str()), *section));
-    }
-    return sets;
 }
 
 BGVParams Make(const Set& set, const Mode mode) {
@@ -141,9 +126,9 @@ BGVParams Make(const Set& set, const Mode mode) {
     params.SetStandardDeviation(set.standardDeviation);
 
     // Invariants — deliberately not configurable in params.toml.
-    params.SetSecurityLevel(lbcrypto::HEStd_NotSet);   // certified via scripts/estimate-security-param.py
-    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL); // the RGSW gadget assumes no automatic rescaling
-    params.SetKeySwitchTechnique(lbcrypto::HYBRID);    // GHS
+    params.SetSecurityLevel(lbcrypto::HEStd_NotSet);    // certified via scripts/estimate-security-param.py
+    params.SetScalingTechnique(lbcrypto::FIXEDMANUAL);  // the RGSW gadget assumes no automatic rescaling
+    params.SetKeySwitchTechnique(lbcrypto::HYBRID);     // GHS
     params.SetNumLargeDigits(1);
 
     // Inseparable from Depth(Mode::MultiParty): OpenFHE only inserts the two

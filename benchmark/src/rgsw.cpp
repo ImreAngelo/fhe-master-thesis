@@ -1,6 +1,3 @@
-#include "core/context.h"
-#include "params.h"
-#include <benchmark/benchmark.h>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -9,11 +6,12 @@
 namespace {
 
 using namespace lbcrypto;
+using spar::params::Scheme;
 
 struct SchemeCase {
     std::string name;
-    std::function<core::ExtendedContext()> make;
-    bool internalProduct = true;  // hybrid internal product ("mixed") is not benchmarked
+    Scheme scheme;
+    bool internalProduct = true;  // the hybrid internal product ("mixed") is not benchmarked
 };
 
 struct Fixture {
@@ -26,10 +24,8 @@ struct Fixture {
 
 Fixture BuildFixture(const SchemeCase& sc) {
     Fixture f;
-    f.cc = sc.make();
-    f.cc->Enable(PKE);
-    f.keys = f.cc->KeyGen();
-    f.cc->SetExtendedKey(f.keys);  // publishes QP key material (no-op for BV)
+    f.cc = spar::params::MakeContext(spar::params::Resolve(), sc.scheme);
+    f.keys = spar::utils::MakeKeys(f.cc);
     f.pt_msg = f.cc->MakeCoefPackedPlaintext({2});
     f.rlwe_ct = f.cc->Encrypt(f.keys.publicKey, f.pt_msg);
     f.rgsw_ct = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_msg);
@@ -67,12 +63,12 @@ void InternalProductBench(benchmark::State& s, const SchemeCase& sc) {
     }
 }
 
+// Both gadgets live in this one binary; the benchmark names are scheme-suffixed,
+// so nothing collides. The hybrid gadget has no internal product yet, so only
+// Encrypt and ExternalProduct are registered for it.
 const std::vector<SchemeCase> kSchemes = {
-    // {"BV_Small", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Small), /*ell=*/3); }},
-    // {"Hybrid_Small", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::SmallHybrid)); },
-    // /*internalProduct=*/false},
-    {"BV", [] { return core::GenContextBV(spar::params::Make(spar::params::Set::Standard), 2); }},
-    // {"Hybrid", [] { return core::GenContextHybrid(spar::params::Make(spar::params::Set::Standard)); }, /*internalProduct=*/false},
+    {"BV", Scheme::BV},
+    {"Hybrid", Scheme::Hybrid, /*internalProduct=*/false},
 };
 
 void RegisterAll() {

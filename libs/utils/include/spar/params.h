@@ -4,7 +4,6 @@
 #include "openfhe.h"
 #include <cstdint>
 #include <string>
-#include <vector>
 
 /**
  * @file params.h
@@ -53,10 +52,6 @@ Set Resolve();
 
 /// @brief A named set. Throws std::runtime_error listing the available names.
 Set Resolve(const std::string& name);
-
-/// @brief Every set in the file (for tooling and diagnostics). Order is toml++'s
-///        key order, not file order.
-std::vector<Set> All();
 
 /// @brief CCParams with the pinned invariants and the mode-derived depth applied.
 BGVParams Make(const Set& set, Mode mode = Mode::SingleParty);

@@ -20,6 +20,10 @@ project(sPAR CXX)
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" ON)
 
+# Used here for toml++ (spar_utils) and again in test/ and benchmark/ for
+# GoogleTest and Google Benchmark. All three land in ${BUILDDIR}/_deps.
+include(FetchContent)
+
 # Emit compile_commands.json so IDEs (VSCode, clangd, etc.) resolve all includes
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -88,17 +92,12 @@ target_include_directories(core
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/core/src
 )
 
-# Timing/logging macros in libs/core/include/core/utils/ are gated on DEBUG_TIMING
-# / DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`,
-# which passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON.
-option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints in core"  OFF)
-option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints in core"  OFF)
-if(ENABLE_DEBUG_TIMING)
-    target_compile_definitions(core PUBLIC DEBUG_TIMING)
-endif()
-if(ENABLE_DEBUG_LOGGING)
-    target_compile_definitions(core PUBLIC DEBUG_LOGGING)
-endif()
+# Timing/logging macros in libs/utils/include/spar/ are gated on DEBUG_TIMING /
+# DEBUG_LOGGING. Off by default — opt in via `DEBUG=1 make test-<name>`, which
+# passes -DENABLE_DEBUG_TIMING=ON / -DENABLE_DEBUG_LOGGING=ON. The definitions are
+# attached to spar_utils below, which owns those headers; core no longer uses them.
+option(ENABLE_DEBUG_TIMING  "Enable DEBUG_TIMER prints"  OFF)
+option(ENABLE_DEBUG_LOGGING "Enable DEBUG_PRINT prints"  OFF)
 
 # ── spar_client library: client-side protocol ────────────────────────────────
 file(GLOB_RECURSE SPAR_CLIENT_SOURCES CONFIGURE_DEPENDS
@@ -122,12 +121,43 @@ target_include_directories(spar_server
 )
 target_link_libraries(spar_server PUBLIC core)
 
-# ── Shared test/benchmark fixtures ───────────────────────────────────────────
-# Header-only INTERFACE target. Parameter presets live in shared/params.h and
-# are consumed by both test/ and benchmark/ — never by the libraries themselves.
-add_library(spar_shared INTERFACE)
-target_include_directories(spar_shared INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/shared)
-target_link_libraries(spar_shared INTERFACE core spar_client spar_server)
+# ── spar_utils library: measurement helpers + runtime parameter loading ──────
+# Sits ABOVE core in the dependency graph: params.cpp returns core::ExtendedContext
+# via core::GenContextBV / core::GenContextHybrid. Nothing under libs/{core,client,
+# server} may include spar/* — that would be a dependency cycle. If instrumentation
+# is ever needed inside core, split the macro-only headers back down instead.
+#
+# The include prefix is "spar/", NOT "utils/": the root puts ${OpenFHE_INCLUDE}/core
+# on the include path, so "utils/..." resolves to OpenFHE's own utils/ (see
+# libs/core/src/context-bv.cpp, which includes utils/exception.h and utils/parallel.h).
+FetchContent_Declare(tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(tomlplusplus)
+
+file(GLOB_RECURSE SPAR_UTILS_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/utils/src/*.cpp"
+)
+add_library(spar_utils STATIC ${SPAR_UTILS_SOURCES})
+target_include_directories(spar_utils
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libs/utils/include
+)
+target_link_libraries(spar_utils PUBLIC core PRIVATE tomlplusplus::tomlplusplus)
+
+# Absolute path so params.toml resolves identically from ctest's cwd (build/test/)
+# and from the benchmark targets' cwd (benchmark/). $SPAR_PARAMS_FILE overrides it.
+# PRIVATE: only params.cpp reads it, so it does not leak into every consumer TU.
+target_compile_definitions(spar_utils PRIVATE
+    SPAR_PARAMS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/params.toml"
+)
+
+if(ENABLE_DEBUG_TIMING)
+    target_compile_definitions(spar_utils PUBLIC DEBUG_TIMING)
+endif()
+if(ENABLE_DEBUG_LOGGING)
+    target_compile_definitions(spar_utils PUBLIC DEBUG_LOGGING)
+endif()
 
 # ── Test suite ───────────────────────────────────────────────────────────────
 # enable_testing() must be called in the root so CMake generates CTestTestfile.cmake.

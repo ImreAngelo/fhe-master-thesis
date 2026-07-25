@@ -2,11 +2,11 @@
 #include "constants-defs.h"
 #include "core/context.h"
 #include "core/types.h"
-#include "core/utils/noise.h"
-#include "core/utils/timer.h"
 #include "key/publickey-fwd.h"
 #include "server/state.h"
 #include "server/write.h"
+#include "spar/noise.h"
+#include "spar/timer.h"
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <random>
@@ -107,15 +107,11 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         ASSERT_GE(bits, 1u) << "Threshold decryption needs at least 2 clients";
         n = (1u << bits);
 
-        auto ccParams = spar::params::Make(spar::params::Set::MultiParty);
-        ccParams.SetMultipartyMode(lbcrypto::NOISE_FLOODING_MULTIPARTY);
-
-        plaintextModulus = ccParams.GetPlaintextModulus();
-
-        cc = GenContextBV(ccParams, 4);
-        cc->Enable(lbcrypto::PKE);
-        cc->Enable(lbcrypto::LEVELEDSHE);
-        cc->Enable(lbcrypto::MULTIPARTY);
+        // MultiParty mode derives the depth from `limbs` and turns on noise
+        // flooding; both are needed for threshold decryption.
+        const auto set = spar::params::Resolve();
+        plaintextModulus = set.plaintextModulus;
+        cc = spar::params::MakeContext(set, spar::params::Mode::MultiParty);
 
         // Chained joint pk generation
         clients.resize(n);
@@ -158,7 +154,7 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         BigInteger maxE(0);
         for (const auto& row : L_mat) {
             for (const auto& ct : row) {
-                const auto e = core::utils::MaxNoise(cc, ct, jointSk);
+                const auto e = spar::utils::MaxNoise(cc, ct, jointSk);
                 if (e > maxE) maxE = e;
             }
         }

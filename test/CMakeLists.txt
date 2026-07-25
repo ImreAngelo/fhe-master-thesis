@@ -13,19 +13,21 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
-# ── register_test(name [SOURCE stem] [CUSTOM_MAIN]) ──────────────────────────
+# ── register_test(name [SOURCE stem] [CUSTOM_MAIN] [LABELS ...]) ─────────────
 # name        - CMake target name; must start with "test-" (matches "make test-<stem>")
 # SOURCE      - source file stem without .cpp (defaults to name if omitted)
 # CUSTOM_MAIN - the source file provides its own main(); link GTest::gtest
 #               instead of GTest::gtest_main so the symbols don't collide.
-#               Used by tests that parse extra CLI flags (see src/rgsw.cpp).
+# LABELS      - CTest labels applied to every discovered case. These drive test
+#               subsetting ("ctest -L ci") and are orthogonal to crypto
+#               parameters: every label runs the SAME params.toml set.
 #
 # Creates:
 #   - executable target '<name>'         (excluded from bare "make")
 #   - CTest entry for every TEST() case  (used by "make test" / ctest -R)
 #   - custom target 'run-<name>'         (build + run just this binary)
 function(register_test name)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "CUSTOM_MAIN" "SOURCE" "")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "CUSTOM_MAIN" "SOURCE" "LABELS")
     if(ARG_SOURCE)
         set(_src ${ARG_SOURCE}.cpp)
     else()
@@ -35,12 +37,11 @@ function(register_test name)
     add_executable(${name} ${_src})
 
     # OpenFHE is already wired via link_libraries() in the root CMakeLists.
-    # spar_shared transitively brings in rgsw + spar_client + spar_server, plus
-    # shared/params.h for parameter presets.
+    # spar_utils brings core + spar/params.h; spar_client/spar_server are the protocol.
     if(ARG_CUSTOM_MAIN)
-        target_link_libraries(${name} PRIVATE GTest::gtest spar_shared)
+        target_link_libraries(${name} PRIVATE GTest::gtest spar_utils spar_client spar_server)
     else()
-        target_link_libraries(${name} PRIVATE GTest::gtest_main spar_shared)
+        target_link_libraries(${name} PRIVATE GTest::gtest_main spar_utils spar_client spar_server)
     endif()
 
     # Force-include common.h before every translation unit in this target.
@@ -50,7 +51,17 @@ function(register_test name)
     )
 
     # Register individual TEST() cases with CTest.
-    gtest_discover_tests(${name})
+    # WORKING_DIRECTORY keeps RECORD_* CSV output in test/results/ whether the
+    # binary is run via ctest or via "make run-test-<name>"; "make data" scans
+    # test/results/.
+    if(ARG_LABELS)
+        gtest_discover_tests(${name}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES LABELS "${ARG_LABELS}"
+        )
+    else()
+        gtest_discover_tests(${name} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
 
     # "make run-<name>" rebuilds the binary if stale, then runs it directly.
     add_custom_target(run-${name}
@@ -59,20 +70,33 @@ function(register_test name)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-    # Accumulate targets so the "check" target below can depend on all of them.
+    # Accumulate targets so the "check" targets below can depend on them.
     set_property(GLOBAL APPEND PROPERTY ALL_TEST_TARGETS ${name})
+    if("ci" IN_LIST ARG_LABELS)
+        set_property(GLOBAL APPEND PROPERTY CI_TEST_TARGETS ${name})
+    endif()
 endfunction()
 
 # ── Register tests ───────────────────────────────────────────────────────────
 # All targets are named "test-<stem>" so "make test-<stem>" works uniformly.
-# register_test(test-rgsw-bv          SOURCE src/rgsw-bv CUSTOM_MAIN)
-register_test(test-products         SOURCE src/products)
-register_test(test-multiparty       SOURCE src/multiparty)
-register_test(test-write            SOURCE src/write)
+# NOTE: src/rgsw.cpp is deliberately not registered — see the header comment in
+# that file. It is kept for reference only.
+register_test(test-products         SOURCE src/products     LABELS ci)
+register_test(test-write            SOURCE src/write        LABELS ci)
+register_test(test-multiparty       SOURCE src/multiparty   LABELS slow)
 
 # ── "make check" / "make test": rebuild all test binaries, run via CTest ─────
 get_property(_all_tests GLOBAL PROPERTY ALL_TEST_TARGETS)
+get_property(_ci_tests  GLOBAL PROPERTY CI_TEST_TARGETS)
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS ${_all_tests}
+)
+
+# CI subset: builds and runs only the ci-labelled binaries. test-multiparty is
+# excluded because it is minutes-long, NOT because it uses different parameters —
+# every test runs the same params.toml set.
+add_custom_target(check-ci
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L ci
+    DEPENDS ${_ci_tests}
 )
