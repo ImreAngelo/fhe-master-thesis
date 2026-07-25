@@ -16,8 +16,6 @@ enum class Set {
     // SmallHybrid,  ///< Small with HYBRID key switching (N = 2^13)
 };
 
-namespace {
-
 /// @brief Parameter values for one set; std::nullopt keeps OpenFHE's default
 struct Values {
     std::optional<PlaintextModulus> plaintextModulus;
@@ -59,32 +57,6 @@ inline constexpr Values kStandardMP{
     /*numLargeDigits*/ 1,
 };
 
-// inline constexpr Values kSmall{
-//     /*plaintextModulus*/ 1u << 8,
-//     /*ringDim*/ 1u << 12,
-//     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
-//     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-//     /*multiplicativeDepth*/ 2,
-//     /*firstModSize*/ 24,
-//     /*scalingModSize*/ 20,
-//     /*standardDeviation*/ 512,
-//     /*keySwitchTechnique*/ std::nullopt,
-//     /*numLargeDigits*/ std::nullopt,
-// };
-
-// inline constexpr Values kSmallHybrid{
-//     /*plaintextModulus*/ 1u << 8,
-//     /*ringDim*/ 1u << 13,  // Larger ring for hybrid to support larger QP modulus
-//     /*securityLevel*/ lbcrypto::SecurityLevel::HEStd_NotSet,
-//     /*scalingTechnique*/ lbcrypto::FIXEDMANUAL,
-//     /*multiplicativeDepth*/ 2,
-//     /*firstModSize*/ 24,
-//     /*scalingModSize*/ 20,
-//     /*standardDeviation*/ 512,
-//     /*keySwitchTechnique*/ lbcrypto::HYBRID,
-//     /*numLargeDigits*/ 1,  // |P| ~= |Q|
-// };
-
 inline constexpr const Values& Get(const Set set) {
     switch(set) {
         case Set::Standard: return kStandard;
@@ -94,8 +66,6 @@ inline constexpr const Values& Get(const Set set) {
     }
     throw std::invalid_argument("Unknown parameter set");
 }
-
-}  // namespace
 
 /// @brief Factory for constructing a parameter set by name
 template <typename T = lbcrypto::CryptoContextBGVRNS>

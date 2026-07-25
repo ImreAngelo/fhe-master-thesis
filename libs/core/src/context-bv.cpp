@@ -10,7 +10,6 @@
 
 namespace {
 using namespace core;
-using lbcrypto::OpenFHEParallelControls;
 
 //---------------------//
 // Pre-computed values //
@@ -75,6 +74,7 @@ bool IsCoefPackedPlaintext(const Plaintext& plaintext) {
 
 
 namespace core {
+using lbcrypto::OpenFHEParallelControls;
 
 ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<Poly>& cc, const uint32_t ell)
     : IExtendedContext(cc),
@@ -84,48 +84,9 @@ ExtendedContextBVImpl::ExtendedContextBVImpl(const lbcrypto::CryptoContextImpl<P
       m_powers(ComputePowers(cc, m_ell, m_logB)) {}
 
 
-//-----//
-// API //
-//-----//
-
-RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
-    // clang-format off
-    const auto msg = pt->GetElement<Poly>();
-    const auto zero = IsCoefPackedPlaintext(pt)
-        ? this->MakeCoefPackedPlaintext({0})
-        : this->MakePackedPlaintext({0});
-    // clang-format on
-
-    const size_t k = msg.GetNumOfElements();
-    const size_t l = k * m_ell;
-
-    // Noiseless zero row: only the metadata of the encryption is kept
-    RLWE z = this->Encrypt(pk, zero);
-    z->SetElements({
-        Poly(this->GetElementParams(), Format::EVALUATION, true),
-        Poly(this->GetElementParams(), Format::EVALUATION, true),
-    });
-
-    RGSW rows(2 * l);
-
-#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
-    for (size_t r = 0; r < l; r++) {
-        const size_t i = r % m_ell;  // The base power   [0, ell)
-        const size_t j = r / m_ell;  // The target tower [0, k)
-
-        const auto scaled = msg.GetElementAtIndex(j).Times(GetPower(i, j));
-
-        auto ct0 = z->Clone();
-        auto ct1 = z->Clone();
-        ct0->GetElements()[0].GetAllElements()[j] += scaled;
-        ct1->GetElements()[1].GetAllElements()[j] += scaled;
-
-        rows[r] = std::move(ct0);
-        rows[r + l] = std::move(ct1);
-    }
-
-    return rows;
-}
+//----------//
+// Main API //
+//----------//
 
 RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt) const {
     // clang-format off
@@ -140,7 +101,7 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
 
     RGSW rows(2 * l);
 
-#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(l))
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(l))
     for (size_t r = 0; r < l; r++) {
         const size_t i = r % m_ell;  // power [0, ell)
         const size_t j = r / m_ell;  // tower [0, k)
@@ -157,29 +118,6 @@ RGSW ExtendedContextBVImpl::EncryptRGSW(const PublicKey& pk, const Plaintext& pt
     }
 
     return rows;
-}
-
-#if true
-
-void ExtendedContextBVImpl::Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const NativePoly& limb,
-                                      const size_t i) const {
-    const auto N = params->GetRingDimension();
-    const auto mask = (uint64_t(1) << m_logB) - 1;
-    const auto half = uint64_t(1) << (m_logB - 1);
-    const auto shift = (i % m_ell) * m_logB;
-    const auto top = ((i % m_ell) + 1 == m_ell);
-
-    const uint64_t qt = params->GetModulus().ConvertToInt();
-
-    NativePoly dt(params, Format::COEFFICIENT, true);
-    for (size_t c = 0; c < N; c++) {
-        const uint64_t u = ((limb[c].ConvertToInt() + m_offset) >> (shift)) & mask;
-        dt[c] = top ? NativeInteger(u) : NativeInteger(u >= half ? u - half : qt - (half - u));
-    }
-
-    // Forward NTT
-    dt.SetFormat(Format::EVALUATION);
-    digits = std::move(dt);
 }
 
 RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
@@ -219,17 +157,18 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
 
     const auto N = params->GetRingDimension();
 
-#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
+#pragma omp parallel for collapse(2) num_threads(OpenFHEParallelControls.GetThreadLimit(2 * k))
     for (size_t b = 0; b < 2; b++) {
         for (size_t t = 0; t < k; t++) {
-            const auto& tp = params->GetParams()[t];
+            const auto& tp = params_t[t];
             NativePoly sum(tp, Format::EVALUATION, true);
 
-            // Fused mod-FMA: accumulate in place, no per-term poly temporaries
+            // Fused mod-FMA: accumulate in place to limit temporaries
             const NativeInteger& qt = tp->GetModulus();
             const NativeInteger mu = qt.ComputeMu();
 
-            for (size_t s = 0; s < 2 * kl; s++) {  // sequential FMA, contention-free
+            // sequential FMA, contention-free
+            for (size_t s = 0; s < 2 * kl; s++) {
                 const NativePoly& d = digits[s * k + t];
                 const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
                 for (size_t x = 0; x < N; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
@@ -243,93 +182,11 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
     result->SetElements({std::move(acc0), std::move(acc1)});
     return result;
 }
-#else
-
-
-RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rgsw) const {
-    const auto& cv = rlwe->GetElements();  // (c0, c1), EVALUATION format
-    const auto params = cv[0].GetParams();
-    const size_t k = cv[0].GetNumOfElements();
-    const size_t n = params->GetRingDimension();
-    const size_t l = k * m_ell;  // digits per component
-    const size_t S = 2 * l;      // digit slot s = c*l + r matches rgsw row s
-
-    const uint64_t mask = (uint64_t(1) << m_logB) - 1;
-    const uint64_t halfB = uint64_t(1) << (m_logB - 1);
-
-    // ---------- Stage 1: iNTT, 2k independent tower tasks ----------
-    // coef[c*k + jt] = tower jt of component c, in COEFFICIENT format
-    std::vector<NativePoly> coef(2 * k);
-
-#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
-    for (size_t u = 0; u < 2 * k; u++) {
-        coef[u] = cv[u / k].GetElementAtIndex(u % k);  // per-tower copy
-        coef[u].SetFormat(Format::COEFFICIENT);        // single-tower iNTT
-    }
-
-    // ---------- Stage 2: slice + lift + fNTT, 2*k*ell*k independent tasks ----------
-    // dig[s*k + t] = tower t of digit slot s, in EVALUATION format
-    std::vector<NativePoly> dig(S * k);
-
-#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(S* k))
-    for (size_t s = 0; s < S; s++) {
-        for (size_t t = 0; t < k; t++) {
-            const size_t r = s % l;
-            const size_t iT = r / m_ell;  // source tower -- matches EncryptRGSW
-            const size_t j = r % m_ell;   // base power
-            const size_t sh = j * m_logB;
-            const bool top = (j + 1 == m_ell);  // top digit: unsigned, no B/2 shift
-
-            const auto& limb = coef[(s / l) * k + iT];
-            const auto& tp = params->GetParams()[t];
-            const uint64_t qt = tp->GetModulus().ConvertToInt();
-
-            NativePoly dt(tp, Format::COEFFICIENT, true);
-            for (size_t x = 0; x < n; x++) {
-                const uint64_t u = ((limb[x].ConvertToInt() + m_offset) >> sh) & mask;
-                dt[x] = top ? NativeInteger(u) : NativeInteger(u >= halfB ? u - halfB : qt - (halfB - u));
-            }
-
-            dt.SetFormat(Format::EVALUATION);  // single-tower fNTT
-            dig[s * k + t] = std::move(dt);
-        }
-    }
-
-    // ---------- Stage 3: accumulation, separable over (b, t): no reduction ----------
-    Poly acc0(params, Format::EVALUATION, true);
-    Poly acc1(params, Format::EVALUATION, true);
-    Poly* acc[2] = {&acc0, &acc1};
-
-#pragma omp parallel for collapse(2) num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(2 * k))
-    for (size_t b = 0; b < 2; b++) {
-        for (size_t t = 0; t < k; t++) {
-            const auto& tp = params->GetParams()[t];
-            NativePoly sum(tp, Format::EVALUATION, true);
-
-            // Fused mod-FMA: accumulate in place, no per-term poly temporaries
-            const NativeInteger& qt = tp->GetModulus();
-            const NativeInteger mu = qt.ComputeMu();
-
-            for (size_t s = 0; s < S; s++) {  // sequential FMA, contention-free
-                const NativePoly& d = dig[s * k + t];
-                const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
-                for (size_t x = 0; x < n; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
-            }
-
-            acc[b]->SetElementAtIndex(t, std::move(sum));
-        }
-    }
-
-    RLWE result = rlwe->CloneEmpty();
-    result->SetElements({std::move(acc0), std::move(acc1)});
-    return result;
-}
-#endif
 
 RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs) const {
     RGSW result = lhs;
 
-#pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(result.size()))
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(result.size()))
     for (size_t r = 0; r < result.size(); r++) {
         result[r] = EvalExternalProduct(result[r], rhs);
     }
@@ -337,9 +194,48 @@ RGSW ExtendedContextBVImpl::EvalInternalProduct(const RGSW& lhs, const RGSW& rhs
     return result;
 }
 
-//-----------//
-//           //
-//-----------//
+//--------//
+// Extras //
+//--------//
+
+RGSW ExtendedContextBVImpl::MakePublicRGSW(const PublicKey& pk, const Plaintext& pt) const {
+    // clang-format off
+    const auto msg = pt->GetElement<Poly>();
+    const auto zero = IsCoefPackedPlaintext(pt)
+        ? this->MakeCoefPackedPlaintext({0})
+        : this->MakePackedPlaintext({0});
+    // clang-format on
+
+    const size_t k = msg.GetNumOfElements();
+    const size_t l = k * m_ell;
+
+    // Noiseless zero row: only the metadata of the encryption is kept
+    RLWE z = this->Encrypt(pk, zero);
+    z->SetElements({
+        Poly(this->GetElementParams(), Format::EVALUATION, true),
+        Poly(this->GetElementParams(), Format::EVALUATION, true),
+    });
+
+    RGSW rows(2 * l);
+
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(l))
+    for (size_t r = 0; r < l; r++) {
+        const size_t i = r % m_ell;  // The base power   [0, ell)
+        const size_t j = r / m_ell;  // The target tower [0, k)
+
+        const auto scaled = msg.GetElementAtIndex(j).Times(GetPower(i, j));
+
+        auto ct0 = z->Clone();
+        auto ct1 = z->Clone();
+        ct0->GetElements()[0].GetAllElements()[j] += scaled;
+        ct1->GetElements()[1].GetAllElements()[j] += scaled;
+
+        rows[r] = std::move(ct0);
+        rows[r + l] = std::move(ct1);
+    }
+
+    return rows;
+}
 
 RGSW ExtendedContextBVImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const {
     if (lhs.size() != rhs.size()) {
@@ -348,7 +244,7 @@ RGSW ExtendedContextBVImpl::EvalAddRGSW(const RGSW& lhs, const RGSW& rhs) const 
 
     RGSW result(lhs.size());
 
-    // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(lhs.size()))
     for (size_t r = 0; r < lhs.size(); r++) {
         auto out = lhs[r]->CloneEmpty();
 
@@ -369,7 +265,7 @@ RGSW ExtendedContextBVImpl::EvalSubRGSW(const RGSW& lhs, const RGSW& rhs) const 
 
     RGSW result(lhs.size());
 
-    // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(lhs.size()))
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(lhs.size()))
     for (size_t r = 0; r < lhs.size(); r++) {
         auto out = lhs[r]->CloneEmpty();
 
@@ -389,7 +285,7 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 
     RGSW result(rgsw.size());  // 2 * m_ell
 
-    // #pragma omp parallel for num_threads(lbcrypto::OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
+#pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(rgsw.size()))
     for (size_t r = 0; r < rgsw.size(); r++) {
         auto out = rgsw[r]->CloneEmpty();
 
@@ -408,6 +304,27 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 
 NativeInteger ExtendedContextBVImpl::GetPower(const uint32_t i, const uint32_t j) const {
     return m_powers[i + m_ell * j];
+}
+
+void ExtendedContextBVImpl::Decompose(NativePoly& digits, const std::shared_ptr<lbcrypto::ILNativeParams> params, const NativePoly& limb,
+                                      const size_t i) const {
+    const auto N = params->GetRingDimension();
+    const auto mask = (uint64_t(1) << m_logB) - 1;
+    const auto half = uint64_t(1) << (m_logB - 1);
+    const auto shift = (i % m_ell) * m_logB;
+    const auto top = ((i % m_ell) + 1 == m_ell);
+
+    const uint64_t qt = params->GetModulus().ConvertToInt();
+
+    NativePoly dt(params, Format::COEFFICIENT, true);
+    for (size_t c = 0; c < N; c++) {
+        const uint64_t u = ((limb[c].ConvertToInt() + m_offset) >> (shift)) & mask;
+        dt[c] = top ? NativeInteger(u) : NativeInteger(u >= half ? u - half : qt - (half - u));
+    }
+
+    // Forward NTT
+    dt.SetFormat(Format::EVALUATION);
+    digits = std::move(dt);
 }
 
 //-------------------------//

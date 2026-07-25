@@ -41,7 +41,7 @@ Split into 3 distinct libraries + helpers for unit testing etc.
 
 
 ## Unit Tests
-Unit tests are located inside the `tests` directory.
+Unit tests are located inside the `test` directory.
 Configured with [Google Test](https://github.com/google/googletest).
 
 > [!NOTE]
@@ -84,7 +84,7 @@ make bench
 | BENCH_NAMES       | Specify benchmark files to run                                                                                  | All in `benchmark/src` |
 | BENCH_FILTER      | Run only the benchmarks that match this filter                                                                  | .*                     |
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
-| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 6                      |
+| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 5                      |
 
 <!-- TODO: Make smaller and center on page + bright and dark versions -->
 <picture>
@@ -105,3 +105,4 @@ make bench
 ## TODO
 - [ ] Add/verify support for BFV
 - [ ] Pass parameters via CLI
+- [ ] Cache the heavier tests if they haven't change
