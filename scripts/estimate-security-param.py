@@ -49,8 +49,7 @@ class ParamSet:
 
 def security(ps: ParamSet, full: bool = False) -> tuple[float, str]:
     """Cost in bits of the cheapest attack, and which attack it is."""
-    # These are slow and never win unless sigma is << 3.19. Only the full
-    # estimator takes a deny list; the rough one runs a fixed pair of attacks.
+    # These are slow and never win unless sigma is << 3.19
     skip_attacks = ("arora-gb", "bkw", "bdd_mitm_hybrid")
     if full:
         results = LWE.estimate(ps.lwe(), quiet=True, jobs=6, deny_list=skip_attacks)
