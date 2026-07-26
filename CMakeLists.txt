@@ -91,7 +91,7 @@ endif()
 # sources — the libraries below, and the test/benchmark binaries via
 # register_test() / register_benchmark().
 add_library(spar_warnings INTERFACE)
-target_compile_options(spar_warnings INTERFACE -Wall -Wextra)
+target_compile_options(spar_warnings INTERFACE -Wall -Wextra -Wshadow)
 
 # ── Production binaries ──────────────────────────────────────────────────────
 # Uncomment each line when the corresponding source exists.

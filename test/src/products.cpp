@@ -19,10 +19,7 @@ struct TestCase {
     bool isHybrid = false;
 };
 
-/// Without this, gtest has no way to print a TestCase and falls back to dumping
-/// the raw object bytes into every failure message for a parameterized case.
-/// The label is already the test name's suffix, so print what the name does not
-/// carry.
+// Prettify output names
 void PrintTo(const TestCase& tc, std::ostream* os) {
     *os << "packing=" << (tc.packing == TestCase::SIMD ? "simd" : "coef") << ", scheme=" << (tc.isHybrid ? "hybrid" : "bv");
 }
@@ -84,8 +81,9 @@ TEST_P(Products, Internal) {
 
 #pragma endregion TESTS
 
-#define SETUP_TEST_SUITE(prefix, ...) \
-    INSTANTIATE_TEST_SUITE_P(prefix, Products, ::testing::Values(__VA_ARGS__), [](const auto& info) { return info.param.label; })
+#define SETUP_TEST_SUITE(prefix, ...)                                          \
+    INSTANTIATE_TEST_SUITE_P(prefix, Products, ::testing::Values(__VA_ARGS__), \
+                             [](const auto& param_info) { return param_info.param.label; })
 
 using params::MakeContext;
 using params::Resolve;

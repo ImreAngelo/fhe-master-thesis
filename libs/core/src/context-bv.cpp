@@ -165,7 +165,7 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
             for (size_t s = 0; s < 2 * kl; s++) {
                 const NativePoly& d = digits[s * k + t];
                 const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
-                for (size_t x = 0; x < N; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
+                for (size_t i = 0; i < N; i++) sum[i].ModAddFastEq(d[i].ModMulFast(g[i], qt, mu), qt);
             }
 
             acc[b]->SetElementAtIndex(t, std::move(sum));

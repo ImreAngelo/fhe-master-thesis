@@ -301,6 +301,9 @@ TEST_P(Protocol, Decryption) {
 }
 
 // 1u, 2u, 3u
-INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u), [](const auto& info) { return "N" + std::to_string(1u << info.param); });
+// `param_info`, not `info`: INSTANTIATE_TEST_SUITE_P expands this lambda inside a
+// function whose own parameter is named `info`, which -Wshadow rejects.
+INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u),
+                         [](const auto& param_info) { return "N" + std::to_string(1u << param_info.param); });
 
 }  // namespace spar::test
