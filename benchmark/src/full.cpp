@@ -194,7 +194,7 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
 }
 
 void RegisterAll(bool fullWrite) {
-    for (uint32_t bits : {1u, 2u, 3u, 4u}) {
+    for (uint32_t bits : {1u, 2u, 3u}) {
         const uint32_t n = 1u << bits;
         benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits, fullWrite](benchmark::State& s) {
             FullBench(s, bits, fullWrite);

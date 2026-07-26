@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Format the tree with clang-format before a push is allowed through.
+#
+# Nothing unformatted: the push proceeds untouched.
+# Something unformatted: the files are rewritten in place and the push is
+# aborted, so the fixes land in a commit instead of being pushed after the fact.
+#
+# Installed by `make hooks` (sets core.hooksPath to .githooks).
+# Skip once with:  git push --no-verify
+
+set -uo pipefail
+
+CLANG_FORMAT="${CLANG_FORMAT:-clang-format}"
+export CLANG_FORMAT
+
+if ! command -v "${CLANG_FORMAT}" >/dev/null 2>&1; then
+    echo "pre-push: ${CLANG_FORMAT} not found, skipping format check" >&2
+    exit 0
+fi
+
+# --dry-run reports on stderr as "<file>:<line>:<col>: error: ..." (--Werror
+# promotes the warning), one line per violation, so collapse to unique paths
+unformatted="$(make format-check 2>&1 >/dev/null |
+    sed -n 's/^\(.*\):[0-9]*:[0-9]*: \(warning\|error\): code should be clang-formatted.*/\1/p' | sort -u)"
+
+if [[ -z ${unformatted} ]]; then
+    exit 0
+fi
+
+make format >/dev/null
+
+echo "pre-push: reformatted the following files, push aborted:" >&2
+echo "  ${unformatted//$'\n'/$'\n'  }" >&2
+echo >&2
+echo "Review and commit them, then push again (or: git push --no-verify)." >&2
+exit 1

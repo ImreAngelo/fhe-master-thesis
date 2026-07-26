@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean ci test test-% bench bench-% bench-full-write params format format-check data clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean ci test test-% bench bench-% bench-full-write params format format-check hooks data clean clean-build clean-cmake help
 
 all: build
 
@@ -185,6 +185,12 @@ format:
 format-check:
 	@$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 
+# Point git at the versioned hooks in .githooks (pre-push runs the formatter)
+hooks:
+	@git config core.hooksPath .githooks
+	@chmod +x .githooks/*
+	@echo "Git hooks enabled from .githooks (git config --unset core.hooksPath to disable)"
+
 ############
 # Clean-up #
 ############
@@ -227,6 +233,7 @@ help:
 	@echo "  SPAR_PARAMS_FILE=<path>  use a different parameter file"
 	@echo "  format             - Run clang-format -i over libs, benchmark and test"
 	@echo "  format-check       - Check formatting without modifying (fails if dirty)"
+	@echo "  hooks              - Enable .githooks (pre-push formats and blocks on changes)"
 	@echo "  params             - Set up the .venv used by parameter tuning"
 	@echo "  tune-<name>        - Run Optuna against test-<name>"
 	@echo "  clean              - Clean project build artifacts"
