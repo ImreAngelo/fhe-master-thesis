@@ -3,8 +3,13 @@ name: Unit Test
 permissions:
   contents: read
 
+# push covers merges and direct commits to master, pull_request gates PRs
+# before they merge. Neither trigger fires twice for the same commit: push is
+# limited to master, and a PR head branch is never master
 on:
   push:
+    branches: [master]
+  pull_request:
     branches: [master]
   workflow_dispatch:
 

@@ -296,7 +296,7 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 
 using NativeParams = std::shared_ptr<lbcrypto::ILNativeParams>;
 
-void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams params, const NativePoly& limb, const size_t i) const {
+void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams& params, const NativePoly& limb, const size_t i) const {
     const auto N = params->GetRingDimension();
     const auto mask = (uint64_t(1) << m_logB) - 1;
     const auto half = uint64_t(1) << (m_logB - 1);
@@ -306,7 +306,7 @@ void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams par
     const uint64_t qt = params->GetModulus().ConvertToInt();
 
     NativePoly dt(params, Format::COEFFICIENT, true);
-    for (size_t c = 0; c < N; c++) {
+    for (size_t c = 0; c < N; c++) {  // TODO: Explicitly static_assert offset + int fits in uint64_t
         const uint64_t u = ((limb[c].ConvertToInt() + m_offset) >> (shift)) & mask;
         dt[c] = top ? NativeInteger(u) : NativeInteger(u >= half ? u - half : qt - (half - u));
     }
