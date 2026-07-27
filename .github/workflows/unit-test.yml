@@ -86,3 +86,47 @@ jobs:
       # local run: params.toml is checked in and SPAR_PARAMS is unset
       - name: Run tests
         run: cmake --build build --target check-ci -j$(nproc)
+
+  # Same ci-labelled tests as the job above, rebuilt with -fsanitize=address,
+  # undefined. Runs in parallel with it rather than replacing it: the sanitized
+  # binaries are several times slower, and a failure here should be readable as
+  # "memory/UB bug" rather than "tests broken"
+  sanitize:
+    runs-on: ubuntu-latest
+    needs: build-openfhe
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          submodules: recursive
+
+      - name: Restore OpenFHE cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: vendors/install
+          key: openfhe-${{ runner.os }}-${{ needs.build-openfhe.outputs.hash }}
+
+      # Distinct key from the test job: build-asan/ is a separate tree, built
+      # RelWithDebInfo and linked against the sanitizer runtime, so its GoogleTest
+      # objects are not the ones cached there
+      - name: Restore gtest cache
+        id: cache-gtest
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: build-asan/_deps
+          key: gtest-asan-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt', 'CMakeLists.txt') }}
+
+      # Configures build-asan/ and runs check-ci through it. Kept as one make
+      # target so the sanitizer flags and the ASAN_OPTIONS/UBSAN_OPTIONS defaults
+      # are defined in exactly one place, shared with local runs
+      - name: Run tests under ASan + UBSan
+        run: make sanitize-ci TEST_OMP_THREADS=$(nproc)
+
+      # always(): the sanitizer run is the slow part, so keep the compiled
+      # GoogleTest even when a test fails
+      - name: Save gtest cache
+        if: always() && steps.cache-gtest.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: build-asan/_deps
+          key: gtest-asan-${{ runner.os }}-${{ hashFiles('test/CMakeLists.txt', 'CMakeLists.txt') }}

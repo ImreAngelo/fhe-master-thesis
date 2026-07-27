@@ -1,4 +1,4 @@
-.PHONY: all build openfhe openfhe-clean ci test test-% bench bench-% bench-full-write params format format-check hooks data clean clean-build clean-cmake help
+.PHONY: all build openfhe openfhe-clean ci test test-% sanitize sanitize-ci sanitize-% bench bench-% bench-full-write params format format-check hooks data clean clean-build clean-cmake help
 
 all: build
 
@@ -106,7 +106,7 @@ estimate:
 #########
 
 # DEBUG=1 make test-% TEST_OMP_THREADS=X
-TEST_OMP_THREADS ?= 12
+TEST_OMP_THREADS ?= 6
 
 # Build and run all tests against the optimized OpenFHE build
 test: openfhe
@@ -117,6 +117,59 @@ test: openfhe
 test-%: openfhe
 	@$(_CONFIGURE)
 	@OMP_NUM_THREADS=$(TEST_OMP_THREADS) cmake --build $(BUILDDIR) --target run-test-$* -j$(shell nproc)
+
+##############
+# Sanitizers #
+##############
+
+# The test suite compiled with -fsanitize=address,undefined. Its own build tree:
+# the objects differ from the Release ones in flags and ABI, so sharing $(BUILDDIR)
+# would mean a full rebuild on every switch between the two.
+SAN_BUILDDIR := build-asan
+
+# Prerequisite is the OpenFHE stamp, not the `openfhe` target, which also demands
+# libtcmalloc_static.a. The sanitizer build drops tcmalloc from the link line
+# anyway (see ENABLE_SANITIZERS in CMakeLists.txt), so a portable `make ci`
+# install — which never produces that file — must not force a rebuild here.
+#
+# RelWithDebInfo rather than Release: -O2 -g keeps the FHE tests fast enough to
+# finish while leaving the symbols that make a sanitizer report readable. No
+# -march=native, so the same tree builds on any runner.
+_SAN_CONFIGURE = cmake -S . -B $(SAN_BUILDDIR) \
+	-DBUILD_STATIC=ON \
+	-DENABLE_SANITIZERS=ON \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	$(_DEBUG_FLAGS)
+
+# detect_container_overflow=0: the check compares annotations written by the
+# instrumented libraries against containers that OpenFHE, the tests or GoogleTest
+# built uninstrumented, so any std::vector crossing that boundary — and they all
+# do — reports a false positive.
+# ?= so the caller can override from the environment.
+ASAN_OPTIONS  ?= detect_leaks=1:detect_container_overflow=0:strict_string_checks=1
+UBSAN_OPTIONS ?= print_stacktrace=1
+LSAN_OPTIONS  ?= suppressions=$(CURDIR)/test/lsan.supp
+
+# Set on the build command, not just the test run: gtest_discover_tests() executes
+# each binary at build time to enumerate its cases, and that run is sanitized too.
+_SAN_ENV = ASAN_OPTIONS='$(ASAN_OPTIONS)' UBSAN_OPTIONS='$(UBSAN_OPTIONS)' \
+	LSAN_OPTIONS='$(LSAN_OPTIONS)' OMP_NUM_THREADS=$(TEST_OMP_THREADS)
+
+# Build and run the whole suite under both sanitizers
+sanitize: $(OPENFHE_STAMP)
+	@$(_SAN_CONFIGURE)
+	@$(_SAN_ENV) cmake --build $(SAN_BUILDDIR) --target check -j$(shell nproc)
+
+# The ci-labelled subset, i.e. what the Sanitize CI job runs. An explicit rule
+# beats a pattern rule in make, so this wins over sanitize-% below.
+sanitize-ci: $(OPENFHE_STAMP)
+	@$(_SAN_CONFIGURE)
+	@$(_SAN_ENV) cmake --build $(SAN_BUILDDIR) --target check-ci -j$(shell nproc)
+
+# Sanitize a specific test:  make sanitize-write
+sanitize-%: $(OPENFHE_STAMP)
+	@$(_SAN_CONFIGURE)
+	@$(_SAN_ENV) cmake --build $(SAN_BUILDDIR) --target run-test-$* -j$(shell nproc)
 
 ##############
 # Benchmarks #
@@ -199,11 +252,11 @@ clean: clean-cmake clean-build
 
 clean-build:
 	@echo "Cleaning project build..."
-	@rm -rf $(BUILDDIR)
+	@rm -rf $(BUILDDIR) $(SAN_BUILDDIR)
 
 clean-cmake:
 	@echo "Removing CMake cache..."
-	@rm -rf $(BUILDDIR)/CMakeCache.txt
+	@rm -rf $(BUILDDIR)/CMakeCache.txt $(SAN_BUILDDIR)/CMakeCache.txt
 
 ################
 # Instructions #
@@ -217,8 +270,12 @@ help:
 	@echo "  test               - Build and run all tests"
 	@echo "  test-<name>        - Build and run a specific test (e.g. make test-products)"
 	@echo "                       Add DEBUG=1 to enable DEBUG_TIMER / DEBUG_PRINT output"
-	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 12)"
+	@echo "                       TEST_OMP_THREADS=<n> sets OMP_NUM_THREADS (default: 6)"
 	@echo "                       Subsets: ctest --test-dir build -L ci   (what CI runs)"
+	@echo "  sanitize           - Build and run all tests under ASan + UBSan (build-asan/)"
+	@echo "  sanitize-ci        - Same, ci-labelled tests only (what CI runs)"
+	@echo "  sanitize-<name>    - Sanitize a specific test (e.g. make sanitize-write)"
+	@echo "                       ASAN_OPTIONS / UBSAN_OPTIONS / LSAN_OPTIONS override the defaults"
 	@echo "  bench              - Build + run all benchmarks (delegates to benchmark/)"
 	@echo "                       Excludes bench-chain; run that one explicitly"
 	@echo "  bench-<name>       - Build + run a specific benchmark (e.g. bench-rgsw)"

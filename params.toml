@@ -8,34 +8,23 @@
 #   SPAR_PARAMS=<name>       select the active set (default: "standard")
 #   SPAR_PARAMS_FILE=<path>  override this file's location (default: baked in at
 #                            configure time as an absolute path)
-#
-# Only genuine degrees of freedom live here. The following are pinned as
-# invariants in libs/utils/src/params.cpp and are deliberately NOT configurable:
-#   security_level       = HEStd_NotSet   we certify with the lattice estimator instead
-#   scaling_technique    = FIXEDMANUAL    the RGSW gadget assumes no automatic rescaling
-#   key_switch_technique = HYBRID         GHS
-#   num_large_digits     = 1
-#
-# Sections are self-contained; there is no inheritance between them.
 
-[standard]
+
 # The canonical set. N = 2^14, |Q| = 360 bits, ~155 bits of security.
 # Security history at N = 2^14, sigma = 3.19 (rough core-SVP, LWE.estimate.rough):
 #   |Q| = 180 -> 339.6    |Q| = 355 -> 157.6    |Q| = 357 -> 156.7
 #   |Q| = 360 -> 155.3    |Q| = 420 -> 131.5
+[standard]
 
-# Plaintext modulus t. NTT-friendly at N = 2^14, so SIMD packing works.
-plaintext_modulus = 65537
-
-# Ring dimension N.
-ring_dim = 16384
+plaintext_modulus = 65537   # Plaintext modulus t. NTT-friendly at N = 2^14, so SIMD packing works.
+ring_dim = 16384            # Ring dimension N.
 
 # Total RNS limbs in Q. OpenFHE's multiplicativeDepth is DERIVED from this at
 # runtime, so one set serves both modes at the same |Q|:
 #   single-party  depth = limbs - 1
 #   multiparty    depth = limbs - 3   (NOISE_FLOODING_MULTIPARTY inserts two extra
 #                                      60-bit primes; OpenFHE NUM_MODULI_MULTIPARTY)
-limbs = 6
+limbs = 7
 
 # Bits in q_0 and in every subsequent q_i.  |Q| = 60 + (6-1)*60 = 360 bits.
 # Keep scaling_mod_size = 60: OpenFHE's multiparty flooding primes are always
@@ -51,8 +40,19 @@ standard_deviation = 3.19
 # BV gadget digit count: `a` is decomposed into `ell` digits. Larger ell means
 # less noise and linearly more work. Ignored by the hybrid gadget, which
 # decomposes per RNS limb instead.
-ell = 3
+ell = 2
 
 # "bv" | "hybrid". Selects the gadget used by MakeContext(), and tells the
 # estimator whether the attacker sees Q (bv) or QP (hybrid).
+scheme = "bv"
+
+
+[small-t]
+plaintext_modulus = 256
+ring_dim = 16384
+limbs = 7
+first_mod_size = 60
+scaling_mod_size = 60
+standard_deviation = 3.19
+ell = 2
 scheme = "bv"

@@ -89,6 +89,32 @@ Configured with [Google Test](https://github.com/google/googletest).
 > [!TIP]
 > [VSCode Extension for GoogleTest](https://github.com/matepek/vscode-catch2-test-adapter)
 
+### Sanitizers
+The same tests, rebuilt with AddressSanitizer and UndefinedBehaviorSanitizer into
+a separate `build-asan` tree so the optimized one is left alone.
+
+```sh
+make sanitize          # every test under ASan + UBSan
+make sanitize-ci       # ci-labelled tests only (what CI runs)
+make sanitize-write    # a single test
+```
+
+> [!NOTE]
+> Instrumentation is compiled into `core`, `spar_client` and `spar_server` only.
+> The tests, the benchmarks and OpenFHE are the harness, not the subject — but
+> ASan replaces the allocator process-wide, so heap overflows, use-after-free,
+> double frees and leaks are still reported wherever they occur. What is given up
+> outside the three libraries are the compile-time checks: stack and global
+> redzones, poisoned load/store, and UBSan.
+>
+> tcmalloc is dropped from the link line (it fights ASan for `malloc`) and `vptr`
+> checks are off (they need the whole class hierarchy instrumented). Both
+> sanitizers run with `-fno-sanitize-recover=all`, so the first finding fails the
+> run.
+>
+> Leaks in code we do not own go in `test/lsan.supp`; `ASAN_OPTIONS`,
+> `UBSAN_OPTIONS` and `LSAN_OPTIONS` override the defaults in the `Makefile`.
+
 ## Benchmarks
 Benchmarks are located inside the `benchmark` directory.
 Configured with [Google Benchmark](https://github.com/google/benchmark).
@@ -111,7 +137,7 @@ make bench
 | BENCH_NAMES       | Specify benchmark files to run                                                                                  | All in `benchmark/src` |
 | BENCH_FILTER      | Run only the benchmarks that match this filter                                                                  | .*                     |
 | BENCH_TIME_UNIT   | Output times in this unit                                                                                       | ms                     |
-| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 5                      |
+| BENCH_OMP_THREADS | Limit the number of threads used by the program (note: the benchmark also runs multiple iterations in parallel) | 6                      |
 
 <!-- TODO: Make smaller and center on page + bright and dark versions -->
 <picture>
