@@ -179,8 +179,9 @@ sanitize-%: $(OPENFHE_STAMP)
 bench: openfhe
 	@$(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_FILTER='$(BENCH_FILTER)'
 
-# Full-pipeline benchmark with all N server writes per iteration. The default
-# bench-full does a single write and reports its actual time.
+# Full-pipeline benchmark with all N clients per iteration. The default
+# bench-full runs one client and reports its actual encrypt/write/partial-dec
+# time, leaving the multiplication by N to the reader.
 bench-full-write: openfhe
 	@FULL_WRITE=1 $(MAKE) -C benchmark run BUILDDIR="$(CURDIR)/$(BUILDDIR)" BENCH_NAMES='full' BENCH_FILTER='$(BENCH_FILTER)'
 

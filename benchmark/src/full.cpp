@@ -44,16 +44,6 @@ std::vector<RGSW> OneHot(const ExtendedContext& cc, const PublicKey& pk, uint32_
     return slots;
 }
 
-std::vector<std::vector<RLWE>> MPDecryptPartials(const core::CryptoContext& cc, const std::vector<RLWE>& cts, uint32_t n,
-                                                 const std::vector<PrivateKey>& sks) {
-    std::vector<std::vector<RLWE>> partials(n);
-    partials[0] = cc->MultipartyDecryptLead(cts, sks[0]);
-    for (uint32_t i = 1; i < n; ++i) {
-        partials[i] = cc->MultipartyDecryptMain(cts, sks[i]);
-    }
-    return partials;
-}
-
 std::vector<Plaintext> MPDecryptFinal(const core::CryptoContext& cc, const std::vector<std::vector<RLWE>>& partials) {
     const uint32_t n = partials.size();
     const uint32_t m = partials.empty() ? 0 : partials[0].size();
@@ -117,19 +107,21 @@ void EncryptClient(Fixture& f, Client& client, std::mt19937& gen) {
     client.value = f.cc->Encrypt(f.jointPk, f.cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
 }
 
-// Every write touches the same n-sized matrices, so each of the n writes
-// costs the same; the default mode times a single write and leaves the
-// extrapolation to n to the reader. FULL_WRITE=1 runs all n writes for real.
-bool FullWriteMode() {
+// Every client runs the same protocol against the same n-sized matrices, so
+// each of the n clients costs the same; the default mode times one client and
+// leaves the extrapolation to n to the reader. FULL_WRITE=1 runs and times all
+// n clients for real (the env var predates the mode covering encryption too).
+bool FullProtocolMode() {
     const char* v = std::getenv("FULL_WRITE");
     return v != nullptr && std::string(v) != "0";
 }
 
 // Runs the full pipeline once per iteration; reports per-phase wall time as
-// counters (per-iteration averages). real_time = sum of the four phase
-// totals. In the default mode the Write counter covers a single write;
-// multiply by n to compare against FULL_WRITE=1 runs.
-void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
+// counters (per-iteration averages). real_time = sum of the four phase totals.
+// In the default mode the three client-side counters each cover a single
+// client; multiply by n to compare against FULL_WRITE=1 runs. Final Dec. is
+// server-side and always covers the whole protocol.
+void FullBench(benchmark::State& s, uint32_t bits, bool fullProtocol) {
     const uint32_t n = 1u << bits;
     using clock = std::chrono::steady_clock;
     using ms = std::chrono::duration<double, std::milli>;
@@ -145,15 +137,15 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
 
         // Encryption and Write Phases, interleaved per client so only one
         // client's D*n index RGSWs are live at a time — all n clients at once
-        // is 3n^2 RGSW (~20 GB at n = 16). The phase counters are unaffected:
-        // each phase's time is summed across clients.
-        for (auto& client : f.clients) {
+        // is 3n^2 RGSW (~20 GB at n = 16). Each phase's time is summed over
+        // whichever clients run.
+        const uint32_t writers = fullProtocol ? n : 1;
+        for (uint32_t i = 0; i < writers; ++i) {
+            Client& client = f.clients[i];
             const auto w0 = clock::now();
             EncryptClient(f, client, gen);
             const auto w1 = clock::now();
-            if (fullWrite || client.id == 0) {
-                client.hasWritten = spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
-            }
+            client.hasWritten = spar::server::Write<K, D>(f.cc, f.jointPk, client.value, f.n, f.L_mat, f.I_mat, client.indices);
             const auto w2 = clock::now();
             client.indices.clear();
 
@@ -164,6 +156,10 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
 
         // Partial Decryption (clients). L now holds RLWE accumulators directly,
         // so the slots are decrypted as-is (no RGSW->RLWE conversion needed).
+        // Fusion needs all n shares, so every client's partial runs, but the
+        // default mode times only the lead's and pauses out the rest — a main
+        // is a lead minus one polynomial addition (MultipartyDecryptLead in
+        // OpenFHE adds cv[0]; the noise flooding and s*cv[1] are identical).
         std::vector<RLWE> cts;
         cts.reserve(K * n);
         for (auto& bucket : f.L_mat) {
@@ -171,17 +167,25 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
                 cts.push_back(rlwe);
             }
         }
-        auto partials = MPDecryptPartials(f.cc, cts, n, f.secrets);
+        std::vector<std::vector<RLWE>> partials(n);
+        partials[0] = f.cc->MultipartyDecryptLead(cts, f.secrets[0]);
         const auto e3 = clock::now();
+
+        if (!fullProtocol) s.PauseTiming();
+        for (uint32_t i = 1; i < n; ++i) {
+            partials[i] = f.cc->MultipartyDecryptMain(cts, f.secrets[i]);
+        }
+        if (!fullProtocol) s.ResumeTiming();
+        const auto e4 = clock::now();
 
         // Final Decryption (server)
         auto result = MPDecryptFinal(f.cc, partials);
-        const auto e4 = clock::now();
+        const auto e5 = clock::now();
 
         benchmark::DoNotOptimize(result);
 
-        t_partial += ms(e3 - e2).count();
-        t_fusion += ms(e4 - e3).count();
+        t_partial += ms((fullProtocol ? e4 : e3) - e2).count();
+        t_fusion += ms(e5 - e4).count();
     }
 
     // Numeric prefix forces execution-order columns under
@@ -193,11 +197,11 @@ void FullBench(benchmark::State& s, uint32_t bits, bool fullWrite) {
     s.counters["4. Final Dec."] = Counter(t_fusion, Counter::kAvgIterations);
 }
 
-void RegisterAll(bool fullWrite) {
-    for (uint32_t bits : {1u, 2u, 3u}) {
+void RegisterAll(bool fullProtocol) {
+    for (uint32_t bits : {1u, 2u, 3u, 4u}) {
         const uint32_t n = 1u << bits;
-        benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits, fullWrite](benchmark::State& s) {
-            FullBench(s, bits, fullWrite);
+        benchmark::RegisterBenchmark("Multiparty/Full/N" + std::to_string(n), [bits, fullProtocol](benchmark::State& s) {
+            FullBench(s, bits, fullProtocol);
         })->Unit(benchmark::kMillisecond);
     }
 }
@@ -206,11 +210,13 @@ void RegisterAll(bool fullWrite) {
 
 int main(int argc, char** argv) {
     benchmark::Initialize(&argc, argv);
-    const bool fullWrite = FullWriteMode();
-    if (!fullWrite) {
-        std::fprintf(stderr, "Write phase: 1 write per iteration; counter shows that single write (set FULL_WRITE=1 to run all N)\n");
+    const bool fullProtocol = FullProtocolMode();
+    if (!fullProtocol) {
+        std::fprintf(stderr,
+                     "Client phases: 1 client per iteration; the Encrypt, Write and Partial Dec. counters cover that "
+                     "single client, so multiply them by N for the protocol total (set FULL_WRITE=1 to run all N)\n");
     }
-    RegisterAll(fullWrite);
+    RegisterAll(fullProtocol);
     benchmark::RunSpecifiedBenchmarks();
     benchmark::Shutdown();
     return 0;

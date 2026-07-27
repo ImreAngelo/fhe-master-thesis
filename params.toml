@@ -46,7 +46,20 @@ ell = 2
 # estimator whether the attacker sees Q (bv) or QP (hybrid).
 scheme = "bv"
 
+## Double ring dimension to achieve approximate parity between security
+## in BV and Hybrid gadgets (hybrid is slightly more secure with double
+## N and double effective Q)
+[hybrid-parity]
+plaintext_modulus = 65537
+ring_dim = 16384
+limbs = 7
+first_mod_size = 60
+scaling_mod_size = 60
+standard_deviation = 3.19
+ell = 2
+scheme = "hybrid"
 
+## Test with smaller plaintext modulus t, since BGV scales the error by t
 [small-t]
 plaintext_modulus = 256
 ring_dim = 16384
