@@ -26,22 +26,20 @@ namespace {
 using namespace lbcrypto;
 using spar::params::Scheme;
 
-/// Noise scales with message magnitude; chain binary plaintexts.
+// Noise scales with message magnitude; chain binary plaintexts
 constexpr int64_t kVal = 1;
 
-/// The BV gadget digit counts to sweep. Ignored by the hybrid gadget, which
-/// decomposes per RNS limb, so the hybrid chain is registered once without a suffix.
-const std::vector<uint32_t> kEll = {1, 2, 3, 4, 5};
+// The BV gadget digit counts to sweep
+const std::vector<uint32_t> kEll = {2, 3, 4};
 
-/// Chain length. Shorter than a full run makes a quick smoke test:
-///   SPAR_CHAIN_ITERATIONS=20 make bench-chain
+// Chain length, example for overriding:
+// SPAR_CHAIN_ITERATIONS=20 make bench-chain
 int ChainIterations() {
     if (const char* value = std::getenv("SPAR_CHAIN_ITERATIONS")) return std::atoi(value);
     return 300;
 }
 
-/// Absolute, for the same reason params.toml's path is: the binary must write to
-/// the same place regardless of the directory it is invoked from.
+// Absolute path
 std::string CsvPath(const std::string& kind, const std::string& stem) {
     return std::string(SPAR_BENCH_RESULTS_DIR) + "/" + kind + "/" + stem + ".csv";
 }
@@ -73,7 +71,7 @@ int64_t FirstCoef(const Fixture& f, const RLWE& ct) {
     return coef.empty() ? 0 : coef[0];
 }
 
-/// @returns how many products still decrypted correctly.
+/// @returns how many products still decrypted correctly
 int ExternalChain(const Fixture& f, const std::string& csv, const int maxN) {
     auto current = f.cc->Encrypt(f.keys.publicKey, f.pt_one);
     int64_t expected = 1;
@@ -97,7 +95,7 @@ int ExternalChain(const Fixture& f, const std::string& csv, const int maxN) {
     return last_ok;
 }
 
-/// @returns how many products still decrypted correctly.
+/// @returns how many products still decrypted correctly
 int InternalChain(const Fixture& f, const std::string& csv, const int maxN) {
     const auto rgsw_mult = f.cc->EncryptRGSW(f.keys.publicKey, f.pt_one);
     const auto rlwe_one = f.cc->Encrypt(f.keys.publicKey, f.pt_one);
@@ -126,9 +124,6 @@ int InternalChain(const Fixture& f, const std::string& csv, const int maxN) {
     return last_ok;
 }
 
-/// One Google Benchmark iteration is a whole chain, which far exceeds the default
-/// minimum time, so Google Benchmark settles on a single iteration by itself.
-/// Rewriting the CSV on a repeat is idempotent.
 void ChainBench(benchmark::State& s, const Scheme scheme, const uint32_t ell, const bool internal, const std::string& stem) {
     const Fixture f = Build(scheme, ell);
     const int maxN = ChainIterations();
@@ -153,8 +148,8 @@ void RegisterAll() {
         })->Unit(benchmark::kMillisecond);
     }
 
-    // The hybrid gadget ignores ell and has no internal product, so it gets one
-    // unsuffixed external chain.
+    // The hybrid gadget ignores ell and has no internal product
+    // TODO: Add support for multiple numLargeDigits and test across (all of) them
     benchmark::RegisterBenchmark("Noise/ExternalProduct/hybrid", [](benchmark::State& s) {
         ChainBench(s, Scheme::Hybrid, 1, false, "hybrid");
     })->Unit(benchmark::kMillisecond);

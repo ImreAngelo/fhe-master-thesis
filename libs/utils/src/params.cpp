@@ -75,6 +75,7 @@ Set ReadSet(const std::string& name, const toml::table& section) {
     return set;
 }
 
+// TODO: Silence this in console
 /// @brief Announce the active set once, so every run records what it used.
 void AnnounceOnce(const Set& set) {
     static bool announced = false;

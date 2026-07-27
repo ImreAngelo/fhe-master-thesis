@@ -1,0 +1,31 @@
+name: Format
+
+permissions:
+  contents: read
+
+# Cheap enough to run on every branch: this is the net for pushes that skipped
+# the .githooks/pre-push hook (--no-verify, or a clone without `make hooks`)
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      # No submodules: FORMAT_FILES only covers libs, benchmark and test
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # Pinned to match the version developers run locally. clang-format's
+      # output shifts between major versions, so an unpinned binary would fail
+      # on files that are correctly formatted for 18
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-18
+
+      - name: Check formatting
+        env:
+          CLANG_FORMAT: clang-format-18
+        run: make format-check

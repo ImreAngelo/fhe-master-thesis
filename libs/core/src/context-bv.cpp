@@ -165,7 +165,7 @@ RLWE ExtendedContextBVImpl::EvalExternalProduct(const RLWE& rlwe, const RGSW& rg
             for (size_t s = 0; s < 2 * kl; s++) {
                 const NativePoly& d = digits[s * k + t];
                 const NativePoly& g = rgsw[s]->GetElements()[b].GetElementAtIndex(t);
-                for (size_t x = 0; x < N; x++) sum[x].ModAddFastEq(d[x].ModMulFast(g[x], qt, mu), qt);
+                for (size_t i = 0; i < N; i++) sum[i].ModAddFastEq(d[i].ModMulFast(g[i], qt, mu), qt);
             }
 
             acc[b]->SetElementAtIndex(t, std::move(sum));
@@ -296,7 +296,7 @@ RGSW ExtendedContextBVImpl::EvalMultRGSW(const RGSW& rgsw, const Plaintext& pt) 
 
 using NativeParams = std::shared_ptr<lbcrypto::ILNativeParams>;
 
-void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams params, const NativePoly& limb, const size_t i) const {
+void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams& params, const NativePoly& limb, const size_t i) const {
     const auto N = params->GetRingDimension();
     const auto mask = (uint64_t(1) << m_logB) - 1;
     const auto half = uint64_t(1) << (m_logB - 1);
@@ -306,7 +306,7 @@ void ExtendedContextBVImpl::Decompose(NativePoly& digits, const NativeParams par
     const uint64_t qt = params->GetModulus().ConvertToInt();
 
     NativePoly dt(params, Format::COEFFICIENT, true);
-    for (size_t c = 0; c < N; c++) {
+    for (size_t c = 0; c < N; c++) {  // TODO: Explicitly static_assert offset + int fits in uint64_t
         const uint64_t u = ((limb[c].ConvertToInt() + m_offset) >> (shift)) & mask;
         dt[c] = top ? NativeInteger(u) : NativeInteger(u >= half ? u - half : qt - (half - u));
     }

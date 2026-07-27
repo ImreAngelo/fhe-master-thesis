@@ -144,10 +144,11 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
     }
 
     // TODO: Move to "noise" benchmark
-    // Records ||e||_inf of the noisiest RLWE in L, so every phase leaves behind a
-    // CSV row even when it never touches the matrix (a fresh L reads as 0).
+    // Records ||e||_inf of the noisiest RLWE in L. Only the write phase calls this:
+    // it is the only step that touches the matrix, so anywhere else the row would
+    // either repeat the write's number or, on a fresh L, read as 0.
+    void RecordMatrixNoise() {
 #if defined(DEBUG_LOGGING)
-    void TearDown() override {
         const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
         // Parameterized names arrive as "<Test>/<Param>"; keep the stem out of the path.
         std::string test(info->name());
@@ -164,8 +165,8 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         RECORD_START("results/Multiparty/" + test + "-N" + std::to_string(n) + ".csv", "n,msb,noise");
         RECORD(n, maxE.GetMSB(), maxE);
         RECORD_END();
-    }
 #endif
+    }
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
     template <typename T>
@@ -185,9 +186,16 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
         }
     }
 
+    // TODO: rename failed -> notWritten
     void RunServerWrite() {
         for (auto& client : clients) {
-            client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+            {
+                DEBUG_TIMER("Server: Write");
+                client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+            }
+
+            // Track noise growth in the write matrix (L) as each user writes.
+            PRINT_MAX_NOISE_MSB(cc, L_mat[0][0], jointSk);
         }
     }
 };
@@ -197,7 +205,7 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
 //------------------//
 
 // Method suggested in paper, requires HomExpand on server (not implemented yet)
-TEST_P(Protocol, EncryptBandwidth) {
+TEST_P(Protocol, ClientEncrypt_RLWE) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
@@ -232,7 +240,7 @@ TEST_P(Protocol, EncryptBandwidth) {
 }
 
 // Higher bandwidth method, does not require HomExpand
-TEST_P(Protocol, EncryptOneHot) {
+TEST_P(Protocol, ClientEncrypt_RGSW) {
     DEBUG_TIMER("Client: Encrypt");
     RunEncryptOneHot<RGSW>();
 }
@@ -243,20 +251,14 @@ TEST_P(Protocol, EncryptOneHot) {
 
 TEST_P(Protocol, ServerWrite) {
     RunEncryptOneHot<RGSW>();
+    RunServerWrite();
+    RecordMatrixNoise();
 
-    DEBUG_TIMER("Server: Write");
-    for (auto& client : clients) {
-        // TODO: rename failed -> failed
-        client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
-
-        // Track noise growth in the write matrix (L) as each user writes.
-        // L holds RGSW ciphertexts, so convert to RLWE via external product with rlwe(1).
-        const auto L_slot = L_mat[0][0];
-        PRINT_MAX_NOISE(cc, L_slot, jointSk);
-
-        // Verify (not)failed = 0
-        Plaintext dec = MPDecryptFull(cc, client.failed, n, jointPk, secrets);
-        ASSERT_EQ(dec->GetCoefPackedValue()[0], 0);
+    // Verify (not)failed = 0. EXPECT, not ASSERT: a fatal assertion returns from the
+    // test body, and the remaining clients then go unchecked.
+    for (const auto& client : clients) {
+        const Plaintext dec = MPDecryptFull(cc, client.failed, n, jointPk, secrets);
+        EXPECT_EQ(dec->GetCoefPackedValue()[0], 0) << "client " << client.id;
     }
 }
 
@@ -300,7 +302,9 @@ TEST_P(Protocol, Decryption) {
     ASSERT_EQ(numValues, 0);
 }
 
-// 1u, 2u, 3u
-INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u), [](const auto& info) { return "N" + std::to_string(1u << info.param); });
+// `param_info`, not `info`: INSTANTIATE_TEST_SUITE_P expands this lambda inside a
+// function whose own parameter is named `info`, which -Wshadow rejects.
+INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u, 2u, 3u),
+                         [](const auto& param_info) { return "N" + std::to_string(1u << param_info.param); });
 
 }  // namespace spar::test
