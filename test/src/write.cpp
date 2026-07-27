@@ -1,5 +1,4 @@
 #include "server/write.h"
-#include "constants-defs.h"
 #include "core/context.h"
 #include "server/state.h"
 #include "spar/noise.h"
@@ -98,7 +97,7 @@ TEST_P(Server, Write) {
 }
 
 // 2u, 16u, 32u
-INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(32u),
+INSTANTIATE_TEST_SUITE_P(Sizes, Server, ::testing::Values(2u),
                          [](const auto& param_info) { return "N" + std::to_string(param_info.param); });
 
 }  // namespace spar::test

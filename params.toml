@@ -51,7 +51,7 @@ scheme = "bv"
 ## N and double effective Q)
 [hybrid-parity]
 plaintext_modulus = 65537
-ring_dim = 16384
+ring_dim = 32768
 limbs = 7
 first_mod_size = 60
 scaling_mod_size = 60
