@@ -9,11 +9,8 @@
 #   SPAR_PARAMS_FILE=<path>  override this file's location (default: baked in at
 #                            configure time as an absolute path)
 
-
-# The canonical set. N = 2^14, |Q| = 360 bits, ~155 bits of security.
-# Security history at N = 2^14, sigma = 3.19 (rough core-SVP, LWE.estimate.rough):
-#   |Q| = 180 -> 339.6    |Q| = 355 -> 157.6    |Q| = 357 -> 156.7
-#   |Q| = 360 -> 155.3    |Q| = 420 -> 131.5
+## Default parameters (table 4.1)
+## 132.5-bit security
 [standard]
 
 plaintext_modulus = 65537   # Plaintext modulus t. NTT-friendly at N = 2^14, so SIMD packing works.
@@ -49,7 +46,8 @@ scheme = "bv"
 ## Double ring dimension to achieve approximate parity between security
 ## in BV and Hybrid gadgets (hybrid is slightly more secure with double
 ## N and double effective Q)
-[hybrid-parity]
+## 132.5-bit security
+[hybrid-N]
 plaintext_modulus = 65537
 ring_dim = 32768
 limbs = 7
@@ -59,7 +57,20 @@ standard_deviation = 3.19
 ell = 2
 scheme = "hybrid"
 
+## Security parity by halving Q
+## 114.4-bit security
+[hybrid-Q]
+plaintext_modulus = 65537
+ring_dim = 16384
+limbs = 4
+first_mod_size = 60
+scaling_mod_size = 60
+standard_deviation = 3.19
+ell = 2
+scheme = "hybrid"
+
 ## Test with smaller plaintext modulus t, since BGV scales the error by t
+## 131.5-bit security
 [small-t]
 plaintext_modulus = 256
 ring_dim = 16384
@@ -68,4 +79,26 @@ first_mod_size = 60
 scaling_mod_size = 60
 standard_deviation = 3.19
 ell = 2
+scheme = "bv"
+
+## Standard with larger decomposition parameter to investigate noise growth
+[ell-3]
+plaintext_modulus = 65537
+ring_dim = 16384
+limbs = 7
+first_mod_size = 60
+scaling_mod_size = 60
+standard_deviation = 3.19
+ell = 3
+scheme = "bv"
+
+## Standard with even larger decomposition parameter to investigate noise growth
+[ell-4]
+plaintext_modulus = 65537
+ring_dim = 16384
+limbs = 7
+first_mod_size = 60
+scaling_mod_size = 60
+standard_deviation = 3.19
+ell = 4
 scheme = "bv"
