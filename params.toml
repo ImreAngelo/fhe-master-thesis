@@ -10,7 +10,7 @@
 #                            configure time as an absolute path)
 
 ## Default parameters (table 4.1)
-## 132.5-bit security
+## 131.5-bit security
 [standard]
 
 plaintext_modulus = 65537   # Plaintext modulus t. NTT-friendly at N = 2^14, so SIMD packing works.
@@ -32,7 +32,7 @@ scaling_mod_size = 60
 
 # Absolute error stddev. 1-to-1 with OpenFHE SetStandardDeviation() and with the
 # estimator's Xe = DiscreteGaussian(stddev=...).
-standard_deviation = 3.19
+standard_deviation = 3.19   
 
 # BV gadget digit count: `a` is decomposed into `ell` digits. Larger ell means
 # less noise and linearly more work. Ignored by the hybrid gadget, which
