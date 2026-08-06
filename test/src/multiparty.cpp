@@ -23,8 +23,9 @@ struct Client {
     uint32_t id;
     lbcrypto::KeyPair<Poly> kpShard;  // (joint pk after i's contribution, sk_i)
     // Defaulted: clients[0] is aggregate-initialized from {id, kpShard} alone and these
-    // three are filled in later by the protocol steps.
-    std::vector<std::vector<RGSW>> indices{};
+    // two are filled in later by the protocol steps. The encrypted one-hot index
+    // vectors deliberately do not live here: all n clients' vectors alive at once
+    // is 3n^2 RGSWs, which OOMs above n = 8 (see EncryptClientInputs).
     RLWE value{};
     RGSW failed{};
 };
@@ -169,29 +170,39 @@ class Protocol : public ::testing::TestWithParam<uint32_t> {
     }
 
     // Helpers so later phases can reproduce earlier ones in their own TEST_P.
+
+    // Fills client.value and returns the client's three encrypted one-hot index
+    // vectors. Returned rather than stored on the client so the caller controls
+    // their lifetime: one client's vectors are 3n RGSWs (~7 MB each at the
+    // standard params), so keeping all n clients' alive at once is 3n^2 RGSWs.
     template <typename T>
-    void RunEncryptOneHot() {
-        std::random_device rd;
-        std::mt19937 gen(rd());
+    std::vector<std::vector<T>> EncryptClientInputs(Client& client, std::mt19937& gen) {
         std::uniform_int_distribution<uint32_t> n_dist(0, n - 1);
         const auto bounds = static_cast<int64_t>(plaintextModulus) / 2;
 
-        for (auto& client : clients) {
-            client.indices = {
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-                client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
-            };
-            client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
-        }
+        client.value = cc->Encrypt(jointPk, cc->MakeCoefPackedPlaintext({(client.id + 1) % bounds}));
+        return {
+            client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+            client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+            client::EncryptOneHot<T>(cc, jointPk, n, n_dist(gen)),
+        };
     }
 
     // TODO: rename failed -> notWritten
-    void RunServerWrite() {
+    // Encrypts each client's inputs immediately before its write and drops them
+    // with the iteration, keeping the peak at one client's 3n RGSWs. Noise is
+    // unchanged versus encrypting everything up front: the same fresh
+    // encryptions feed the same writes in the same order.
+    void RunEncryptAndWrite() {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+
         for (auto& client : clients) {
+            const auto indices = EncryptClientInputs<RGSW>(client, gen);
+
             {
                 DEBUG_TIMER("Server: Write");
-                client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, client.indices);
+                client.failed = server::Write<3, 3>(cc, jointPk, client.value, n, L_mat, I_mat, indices);
             }
 
             // Track noise growth in the write matrix (L) as each user writes.
@@ -241,8 +252,12 @@ TEST_P(Protocol, ClientEncrypt_RLWE) {
 
 // Higher bandwidth method, does not require HomExpand
 TEST_P(Protocol, ClientEncrypt_RGSW) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
     DEBUG_TIMER("Client: Encrypt");
-    RunEncryptOneHot<RGSW>();
+    // Return value dropped per client, so the timing test stays O(n) in memory too.
+    for (auto& client : clients) EncryptClientInputs<RGSW>(client, gen);
 }
 
 //--------------------//
@@ -250,8 +265,7 @@ TEST_P(Protocol, ClientEncrypt_RGSW) {
 //--------------------//
 
 TEST_P(Protocol, ServerWrite) {
-    RunEncryptOneHot<RGSW>();
-    RunServerWrite();
+    RunEncryptAndWrite();
     RecordMatrixNoise();
 
     // Verify (not)failed = 0. EXPECT, not ASSERT: a fatal assertion returns from the
@@ -267,8 +281,7 @@ TEST_P(Protocol, ServerWrite) {
 //------------//
 
 TEST_P(Protocol, Decryption) {
-    RunEncryptOneHot<RGSW>();
-    RunServerWrite();
+    RunEncryptAndWrite();
 
     std::vector<std::vector<RLWE>> partials;
     {
@@ -304,7 +317,7 @@ TEST_P(Protocol, Decryption) {
 
 // `param_info`, not `info`: INSTANTIATE_TEST_SUITE_P expands this lambda inside a
 // function whose own parameter is named `info`, which -Wshadow rejects.
-INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u, 2u, 3u),
+INSTANTIATE_TEST_SUITE_P(sPAR, Protocol, ::testing::Values(1u, 2u, 3u, 4u),
                          [](const auto& param_info) { return "N" + std::to_string(1u << param_info.param); });
 
 }  // namespace spar::test
